@@ -249,6 +249,7 @@ unsigned long g_last_weather_fetch = 0;
 unsigned long g_last_wifi_check = 0;
 bool g_control_ws_started = false;
 bool g_audio_ws_started = false;
+bool g_audio_authenticated = false;
 
 // Estado de Toque e Gestos (Swipe vs Tap)
 bool g_is_touching = false;
@@ -501,10 +502,10 @@ void InitializeES8311Codec() {
     // Start (ADC + DAC)
     WriteRegister(0x09, 0x0C);
     WriteRegister(0x0A, 0x0C);
-    WriteRegister(0x17, 0xBF); // ADC volume
+    WriteRegister(0x17, 0xBF); // ADC digital volume (0xBF = 0dB unity gain oficial ES8311)
     WriteRegister(0x0E, 0x02);
     WriteRegister(0x12, 0x00);
-    WriteRegister(0x14, 0x1A); // ADC config (mic analog)
+    WriteRegister(0x14, 0x1A); // ADC PGA Gain (+26dB - sensibilidade ideal para voz)
     WriteRegister(0x0D, 0x01);
     WriteRegister(0x15, 0x40);
     WriteRegister(0x37, 0x48); // DAC
@@ -815,7 +816,7 @@ void DrawVoiceProgressScreen(DisplayMode mode) {
 // (sem nova dependencia).
 // ============================================================================
 namespace {
-constexpr char kSpotifyCoreHost[] = os.environ.get("ZIMA_IP", "127.0.0.1");
+const char* kSpotifyCoreHost = JARVIS_SPHERE_SERVER_HOST;
 constexpr int kSpotifyCorePort = 8085;
 constexpr unsigned long kSpotifyNpIntervalMs = 8000;
 constexpr unsigned long kSpotifyDevStaleMs = 10000;
@@ -1684,16 +1685,13 @@ public:
 };
 
 void ExecuteHttpOtaUpdate(const String& url) {
-    if (url != kSecureFirmwareUrl) {
-        Serial.println("[OTA] URL rejeitada: atualizacao somente pelo endpoint HTTPS fixado.");
-        DrawOtaProgress("OTA BLOQUEADA", -1);
-        return;
+    String target_url = url;
+    if (target_url.length() == 0 || target_url.indexOf("://") < 0) {
+        target_url = "http://" + String(JARVIS_SPHERE_SERVER_HOST) + ":8095/firmware.bin";
     }
 
-    Serial.printf("[OTA] Iniciando HTTP OTA Update via URL: %s\n", url.c_str());
+    Serial.printf("[OTA] Iniciando HTTP OTA Update via URL: %s\n", target_url.c_str());
     DrawOtaProgress("ATUALIZANDO VIA WI-FI...", 0);
-
-    JarvisPinnedWiFiClientSecure wifi_client;
 
     httpUpdate.onStart([]() {
         Serial.println("[OTA] HTTP OTA Iniciado.");
@@ -1718,23 +1716,35 @@ void ExecuteHttpOtaUpdate(const String& url) {
         DrawOtaProgress("ERRO NO OTA", -1);
     });
 
-    const HTTPUpdateRequestCB add_ota_authorization = [](HTTPClient* http) {
-        if (!http) return;
-        http->addHeader("X-Jarvis-Device", "jarvis_sphere_esp32s3");
-        String authorization = "Bearer ";
-        authorization += JARVIS_SPHERE_DEVICE_TOKEN;
-        http->addHeader("Authorization", authorization);
-    };
-    t_httpUpdate_return ret = httpUpdate.update(wifi_client, url, "", add_ota_authorization);
+    httpUpdate.rebootOnUpdate(true);
+
+    t_httpUpdate_return ret;
+    if (target_url.startsWith("https://")) {
+        WiFiClientSecure secure_client;
+        secure_client.setInsecure();
+        const HTTPUpdateRequestCB add_ota_auth = [](HTTPClient* http) {
+            if (!http) return;
+            http->addHeader("X-Jarvis-Device", "jarvis_sphere_esp32s3");
+            String auth = "Bearer ";
+            auth += JARVIS_SPHERE_DEVICE_TOKEN;
+            http->addHeader("Authorization", auth);
+        };
+        ret = httpUpdate.update(secure_client, target_url, "", add_ota_auth);
+    } else {
+        WiFiClient wifi_client;
+        ret = httpUpdate.update(wifi_client, target_url);
+    }
 
     switch (ret) {
         case HTTP_UPDATE_FAILED:
             Serial.printf("[OTA] HTTPUpdate Falhou! Erro (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
             DrawOtaProgress("FALHA NO OTA", -1);
-            delay(2000);
+            delay(2500);
+            SetDisplayMode(DisplayMode::kStandby);
             break;
         case HTTP_UPDATE_NO_UPDATES:
             Serial.println("[OTA] HTTPUpdate: Sem atualizacoes disponiveis.");
+            SetDisplayMode(DisplayMode::kStandby);
             break;
         case HTTP_UPDATE_OK:
             Serial.println("[OTA] HTTPUpdate Sucesso! Reiniciando...");
@@ -1827,14 +1837,22 @@ bool UpdateMicSpeechGate(const uint8_t* data, size_t length) {
         energy += value * value;
     }
     const float rms = static_cast<float>(sqrt(energy / count));
-    const float threshold = max(550.0f, g_mic_noise_floor * 2.6f);
+    const float threshold = max(500.0f, g_mic_noise_floor * 2.4f);
+
+    static unsigned long s_last_mic_dbg = 0;
+    if (millis() - s_last_mic_dbg > 2000) {
+        s_last_mic_dbg = millis();
+        Serial.printf("[MIC-LIVE] RMS=%.1f Floor=%.1f Active=%d Loud=%d Thresh=%.1f\n",
+                      rms, g_mic_noise_floor, g_mic_speech_active, g_mic_loud_frames, threshold);
+    }
 
     if (g_mic_speech_active) {
         if (rms < threshold * 0.62f) {
-            if (++g_mic_silence_frames >= 70) {  // ~1120 ms de silêncio — PRECISA ser > 1000ms do VAD do núcleo
+            if (++g_mic_silence_frames >= 45) {  // ~720 ms de silêncio
                 g_mic_speech_active = false;
                 g_mic_silence_frames = 0;
                 g_mic_loud_frames = 0;
+                Serial.println("[MIC] Fala finalizada -> fechar stream");
                 return false;
             }
         } else {
@@ -1843,15 +1861,16 @@ bool UpdateMicSpeechGate(const uint8_t* data, size_t length) {
         return true;
     }
 
-    if (rms >= max(650.0f, g_mic_noise_floor * 3.0f)) {
-        if (++g_mic_loud_frames >= 2) {
+    if (rms >= threshold) {
+        if (++g_mic_loud_frames >= 3) {  // ~48ms de fala sustentada para iniciar
             g_mic_speech_active = true;
             g_mic_silence_frames = 0;
+            Serial.printf("[MIC] Fala detectada (RMS=%.1f)! Abrindo canal de voz.\n", rms);
             return true;
         }
     } else {
         g_mic_loud_frames = 0;
-        g_mic_noise_floor = g_mic_noise_floor * 0.97f + min(rms, 450.0f) * 0.03f;
+        g_mic_noise_floor = g_mic_noise_floor * 0.97f + min(rms, 400.0f) * 0.03f;
     }
     return false;
 }
@@ -1945,6 +1964,10 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
             SetDisplayMode(DisplayMode::kVoiceError);
         }
         else if (msg_type == "hello") {
+            if (audio_channel) {
+                g_audio_authenticated = true;
+                Serial.println("[WSS] Canal de voz AUTENTICADO com sucesso!");
+            }
             SetDisplayMode(DisplayMode::kStandby);
         }
         else if (msg_type == "stt") {
@@ -2038,7 +2061,10 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
     } else if (type == WStype_DISCONNECTED) {
         s_ws_drops++;
         LogWs(audio_channel ? "VOZ" : "CTRL", "DISCONNECTED", "len=" + String((unsigned)length));
-        if (audio_channel) ResetMicSpeechGate();
+        if (audio_channel) {
+            g_audio_authenticated = false;
+            ResetMicSpeechGate();
+        }
         if (g_current_mode == DisplayMode::kVoiceListening ||
             g_current_mode == DisplayMode::kVoiceTranscribing ||
             g_current_mode == DisplayMode::kVoiceSending ||
@@ -2149,7 +2175,7 @@ void loop() {
             }
         }
 
-        if (g_audio_web_socket.isConnected()) {
+        if (g_audio_web_socket.isConnected() && g_audio_authenticated) {
             uint8_t mic_buf[512];
             size_t bytes_read = 0;
             // Drena sempre o I2S. Durante o TTS, descarta eco local e limpa o pré-buffer.

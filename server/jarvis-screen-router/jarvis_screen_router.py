@@ -54,9 +54,9 @@ SAMPLE_RATE = 16000
 
 BYTES_PER_SEC = SAMPLE_RATE * 2  # s16le mono
 
-VAD_RMS = int(os.environ.get("VAD_RMS", "1800"))
+VAD_RMS = int(os.environ.get("VAD_RMS", "1200"))
 
-SILENCE_SEC = float(os.environ.get("VAD_SILENCE_SEC", "1.5"))
+SILENCE_SEC = float(os.environ.get("VAD_SILENCE_SEC", "0.85"))
 
 MIN_UTTERANCE_SEC = 0.5
 
@@ -83,8 +83,8 @@ recording_state: Dict[str, Dict[str, Any]] = {}
 
 # ---------------- WAKE WORD LOCAL (openWakeWord "hey_jarvis") ----------------
 
-# Limiar mais conservador para reduzir ativações acidentais do wake-word.
-OWW_THRESHOLD = float(os.environ.get("OWW_THRESHOLD", "0.50"))
+# Limiar balanceado (0.55) para reconhecimento fluido e sem falsos positivos.
+OWW_THRESHOLD = float(os.environ.get("OWW_THRESHOLD", "0.55"))
 
 _oww = None
 
@@ -433,7 +433,7 @@ async def process_utterance(ws: web.WebSocketResponse, device_id: str, pcm: byte
 
     logging.info(f"[VOZ] Utterance {len(pcm)} bytes ({len(pcm)/BYTES_PER_SEC:.1f}s) de {device_id} -> transcrevendo...")
 
-    pcm_f = pcm  # sem filtro: o high-pass estava atrapalhando o Whisper
+    pcm_f = _highpass_pcm(pcm, cutoff=120.0)  # Filtro passa-altas 120Hz: remove hum elétrico de 60Hz e ruído de coolers
 
     # DEBUG: salva a última utterance p/ inspeção de qualidade de áudio
 
@@ -489,8 +489,13 @@ async def process_utterance(ws: web.WebSocketResponse, device_id: str, pcm: byte
                 text = _strip_wake_word(text)
 
                 if not text:
-
-                    text = "Pois não?"
+                    # O usuário apenas chamou "Jarvis" e pausou antes de falar o comando.
+                    # NÃO processamos como "Pois não?" antes do tempo; mantemos a esfera ouvindo!
+                    logging.info(f"[VOZ] {device_id}: Chamou apenas 'Jarvis'. Mantendo modo escuta para o comando.")
+                    await ws.send_str(json.dumps({"type": "wakeup"}))
+                    await ws.send_str(json.dumps({"type": "emotion", "emotion": "listening"}))
+                    _start_followup_timeout(ws, device_id)
+                    return
 
             logging.info(f"[VOZ] STT: '{text}'")
 
@@ -629,33 +634,42 @@ def handle_binary(ws: web.WebSocketResponse, device_id: str, data: bytes):
 
             st["silence_start"] = now
 
-        elif (now - st["silence_start"]) >= SILENCE_SEC:
+    # Trava de Teto Máximo e Corte de Silêncio:
+    # 1. Silêncio detectado por mais de SILENCE_SEC (0.85s)
+    # 2. Hard Ceiling: se atingir MAX_UTTERANCE_SEC (15s), corta obrigatoriamente (nunca grava infinito)
+    is_silence_cut = st["speaking"] and st["silence_start"] > 0 and (now - st["silence_start"]) >= SILENCE_SEC
+    is_max_cut = st["speaking"] and len(st["buf"]) >= int(MAX_UTTERANCE_SEC * BYTES_PER_SEC)
 
-            pcm = bytes(st["buf"])
+    if is_silence_cut or is_max_cut:
 
-            st["buf"] = bytearray()
+        pcm = bytes(st["buf"])
 
-            st["speaking"] = False
+        st["buf"] = bytearray()
 
-            st["silence_start"] = 0.0
+        st["speaking"] = False
 
-            within_wake = (time.time() - wake_state.get(device_id, 0.0)) <= FOLLOWUP_SEC
+        st["silence_start"] = 0.0
 
-            if not within_wake:
+        if is_max_cut:
+            logging.info(f"[VOZ] {device_id}: Corte forçado por tempo máximo ({MAX_UTTERANCE_SEC}s).")
 
-                logging.info(f"[VOZ] {device_id}: sem 'Jarvis' ativo — utterance ignorada (sem STT).")
+        within_wake = (time.time() - wake_state.get(device_id, 0.0)) <= FOLLOWUP_SEC
 
-            elif processing_state.get(device_id):
+        if not within_wake:
 
-                logging.info(f"[VOZ] {device_id} ocupado processando — utterance descartada.")
+            logging.info(f"[VOZ] {device_id}: sem 'Jarvis' ativo — utterance ignorada (sem STT).")
 
-            else:
+        elif processing_state.get(device_id):
 
-                processing_state[device_id] = True
+            logging.info(f"[VOZ] {device_id} ocupado processando — utterance descartada.")
 
-                wake_state[device_id] = time.time()
+        else:
 
-                asyncio.create_task(process_utterance(ws, device_id, pcm))
+            processing_state[device_id] = True
+
+            wake_state[device_id] = time.time()
+
+            asyncio.create_task(process_utterance(ws, device_id, pcm))
 
     else:
 
@@ -1054,7 +1068,8 @@ async def handle_ota_trigger(request: web.Request) -> web.Response:
 
     try:
 
-        url = f"${ZIMA_ROUTER_URL:-http://127.0.0.1:8095}/firmware.bin"
+        host = request.headers.get("Host", "45.167.187.80:8095")
+        url = os.environ.get("ZIMA_ROUTER_URL", f"http://{host}/firmware.bin")
 
         if request.can_read_body:
 
