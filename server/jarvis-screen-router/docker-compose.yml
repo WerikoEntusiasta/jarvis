@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  jarvis-screen-router:
+    container_name: jarvis-screen-router
+    build: .
+    restart: always
+    ports:
+      - "8095:8095"
+    volumes:
+      - /DATA/AppData/jarvis-screen-router/firmware.bin:/app/firmware.bin

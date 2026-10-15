@@ -1,0 +1,64 @@
+{
+  "id": "/",
+  "name": "J.A.R.V.I.S. High-Tech Interface",
+  "short_name": "J.A.R.V.I.S.",
+  "description": "Stark Industries Stark OS & J.A.R.V.I.S. Control HUD",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
+  "background_color": "#01091d",
+  "theme_color": "#00f0ff",
+  "categories": ["utilities", "productivity"],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Radar de Voos 3D",
+      "short_name": "Radar",
+      "description": "Abrir o radar aéreo holográfico em tempo real",
+      "url": "/?open=flights"
+    },
+    {
+      "name": "Finanças Pluggy",
+      "short_name": "Finanças",
+      "description": "Abrir o panorama financeiro do Banco Inter",
+      "url": "/?open=finance"
+    },
+    {
+      "name": "Briefing Matinal",
+      "short_name": "Briefing",
+      "description": "Executar o briefing executivo do dia",
+      "url": "/?open=briefing"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

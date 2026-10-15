@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  jarvis-memory-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jarvis-memory-core
+    ports:
+      - "8095:8090"
+    volumes:
+      - ./jarvis_memory.db:/app/jarvis_memory.db
+      - ./brain_dashboard.html:/app/brain_dashboard.html
+    restart: always
+    environment:
+      - PORT=8090
+      - PYTHONUNBUFFERED=1

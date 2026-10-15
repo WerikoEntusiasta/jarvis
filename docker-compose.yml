@@ -1,0 +1,82 @@
+name: jarvis-hud
+
+services:
+  jarvis-hud:
+    container_name: jarvis-hud
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jarvis-hud:latest
+    restart: unless-stopped
+    env_file:
+      - ./sphere-runtime.env
+    network_mode: bridge
+    labels:
+      icon: http://${ZIMA_IP:-127.0.0.1}:8085/icon-512.png
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8085"
+        protocol: tcp
+      - mode: ingress
+        target: 8081
+        published: "8087"
+        protocol: tcp
+      - mode: ingress
+        target: 8082
+        published: "8086"
+        protocol: tcp
+      - mode: ingress
+        target: 8096
+        published: "8096"
+        protocol: tcp
+    environment:
+      - PORT=8080
+      - MCP_PORT=8081
+      - ENROLLMENT_PORT=8082
+      - SPHERE_WS_PORT=8096
+      - SPHERE_WS_CERTFILE=/app/sphere-tls/fullchain.pem
+      - SPHERE_WS_KEYFILE=/app/sphere-tls/privkey.pem
+      - SPHERE_VAD_MODEL=/opt/jarvis/models/silero_vad.onnx
+      - SPHERE_WAKEWORD_CACHE=/opt/jarvis/models/wakeword
+      - SPHERE_WAKEWORD_MODEL=${SPHERE_WAKEWORD_MODEL:-}
+      - SPHERE_WAKEWORD_THRESHOLD=${SPHERE_WAKEWORD_THRESHOLD:-0.35}
+      - SPHERE_FOLLOWUP_SECONDS=${SPHERE_FOLLOWUP_SECONDS:-8}
+      - WHISPER_MODEL=${WHISPER_MODEL:-Systran/faster-whisper-small}
+      - WHISPER_TIMEOUT_SECONDS=${WHISPER_TIMEOUT_SECONDS:-25}
+      - SPHERE_OPENCLAW_STREAM_URL=${SPHERE_OPENCLAW_STREAM_URL:-}
+      - SPHERE_OPENCLAW_STREAM_TOKEN=${SPHERE_OPENCLAW_STREAM_TOKEN:-}
+      - SPHERE_OPENCLAW_MODEL=${SPHERE_OPENCLAW_MODEL:-openclaw/jarvis}
+      - ENROLLMENT_PORTAL_ENABLED=${ENROLLMENT_PORTAL_ENABLED:-true}
+      - ENROLLMENT_PASSWORD=${ENROLLMENT_PASSWORD:-}
+      - MASTER_ACCESS_KEY=${MASTER_ACCESS_KEY:-}
+      - ZIMA_IP=${ZIMA_IP:-127.0.0.1}
+      - ZIMA_USER=${ZIMA_USER:-root}
+      - ZIMA_PASS=${ZIMA_PASS:-}
+      - PLUGGY_CLIENT_ID=${PLUGGY_CLIENT_ID:-}
+      - PLUGGY_CLIENT_SECRET=${PLUGGY_CLIENT_SECRET:-}
+      - PLUGGY_ITEM_ID=${PLUGGY_ITEM_ID:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - ELEVENLABS_FALLBACK_KEY=${ELEVENLABS_FALLBACK_KEY:-}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID:-}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET:-}
+      - SPOTIFY_REFRESH_TOKEN=${SPOTIFY_REFRESH_TOKEN:-}
+      - SPOTIFY_DEFAULT_DEVICE=${SPOTIFY_DEFAULT_DEVICE:-}
+    volumes:
+      - ./sphere-tls:/app/sphere-tls:ro
+      - type: bind
+        source: /DATA/AppData/jarvis-hud
+        target: /app
+
+x-casaos:
+  hostname: ""
+  index: /
+  is_uncontrolled: false
+  main: jarvis-hud
+  port_map: "8085"
+  scheme: http
+  store_app_id: jarvis-hud
+  title:
+    custom: J.A.R.V.I.S. High-Tech HUD
+  icon: http://${ZIMA_IP:-127.0.0.1}:8085/icon-512.png
+

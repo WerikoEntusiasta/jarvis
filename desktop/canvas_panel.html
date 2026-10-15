@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>J.A.R.V.I.S. Canvas</title>
+<style>
+  :root { --cyan: #00f0ff; --sky: #38bdf8; --green: #10b981; --amber: #fbbf24; --red: #f43f5e;
+          --bg: #01091d; --panel: rgba(4, 12, 28, 0.92); --text: #e2f3ff; --muted: #7fb1cc; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(1000px 600px at 50% -10%, rgba(0,240,255,0.10), transparent 60%),
+      linear-gradient(165deg, #01091d, #030e22 55%, #010b16);
+    color: var(--text); font-family: 'Segoe UI', Inter, monospace; min-height: 100vh;
+    padding: 26px 26px 40px; overflow-x: hidden;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,240,255,0.02) 0 1px, transparent 1px 3px);
+  }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  header .arc {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, rgba(0,240,255,.9), rgba(0,140,255,.25) 55%, transparent 70%);
+    box-shadow: 0 0 22px rgba(0,240,255,.7); animation: pulse 2.4s infinite;
+  }
+  @keyframes pulse { 50% { box-shadow: 0 0 10px rgba(0,240,255,.35); } }
+  .t { font-size: 17px; font-weight: 800; color: var(--cyan); letter-spacing: 2.5px; text-shadow: 0 0 16px rgba(0,240,255,.55); }
+  .s { font-size: 11px; color: var(--muted); letter-spacing: 2px; margin-top: 3px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid rgba(0,240,255,.26); border-radius: 14px;
+    padding: 14px 16px 12px; box-shadow: 0 6px 26px rgba(0,0,0,.45);
+    animation: fadein .28s ease-out;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
+  .card h3 {
+    font-size: 11px; letter-spacing: 2px; color: var(--sky); font-weight: 800;
+    text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .line { height: 1px; background: linear-gradient(90deg, var(--cyan), transparent); opacity: .5; margin-bottom: 10px; }
+  .metric { display: flex; align-items: baseline; gap: 8px; }
+  .metric .big { font-size: 30px; font-weight: 800; color: var(--cyan); text-shadow: 0 0 18px rgba(0,240,255,.45); }
+  .metric .unit { color: var(--muted); font-size: 12px; }
+  .metric label.sub { display: block; margin-top: 2px; }
+  .kvlist div { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; border-bottom: 1px dashed rgba(0,240,255,.12); }
+  .kvlist div span:last-child { color: var(--cyan); font-weight: 700; }
+  .text { font-size: 13px; line-height: 1.55; color: #d8ecff; white-space: pre-wrap; }
+  .term {
+    background: rgba(0, 0, 0, .5); border: 1px solid rgba(0,240,255,.18); border-radius: 10px;
+    font: 11.5px/1.6 'Consolas', monospace; color: #9fdcEB; padding: 10px 12px;
+    max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--sky); text-align: left; border-bottom: 1px solid rgba(0,240,255,.3); padding: 6px 4px; letter-spacing: 1px; }
+  td { padding: 5px 4px; border-bottom: 1px dashed rgba(0,240,255,.1); color: #cfe8ff; }
+  tr { animation: fadein .2s ease-out; }
+  button {
+    background: linear-gradient(90deg, rgba(0,240,255,.18), rgba(56,189,248,.18));
+    border: 1px solid rgba(0,240,255,.4); color: var(--text); border-radius: 10px;
+    font-size: 11.5px; font-weight: 700; font-family: inherit; padding: 6px 14px; cursor: pointer; margin: 0 6px 6px 0;
+  }
+  button:hover { background: rgba(0,240,255,.3); box-shadow: 0 0 12px rgba(0,240,255,.3); }
+  .bars { display: flex; align-items: flex-end; gap: 5px; height: 90px; padding: 4px 0; }
+  .bars i { flex: 1; background: linear-gradient(180deg, var(--cyan), rgba(56,189,248,.3)); border-radius: 3px 3px 0 0; min-height: 3px; box-shadow: 0 0 8px rgba(0,240,255,.35); }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 0; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="arc"></div>
+  <div>
+    <div class="t" id="cTitle">PAINEL J.A.R.V.I.S.</div>
+    <div class="s" id="cSub">CANVAS HOLOGRÁFICO · NÓ WINDOWS</div>
+  </div>
+</header>
+<div class="grid" id="grid"><div class="empty">carregando canvas…</div></div>
+
+<script>
+function qs(id){ return document.getElementById(id); }
+
+function el(tag, txt, cls) {
+  const e = document.createElement(tag);
+  if (txt !== undefined && txt !== null) e.textContent = txt;
+  if (cls) e.className = cls;
+  return e;
+}
+
+function card(title, wide) {
+  const c = document.createElement('div');
+  c.className = 'card' + (wide ? ' wide' : '');
+  const h = el('h3', '◈ ' + (title || 'SEÇÃO'));
+  c.appendChild(h);
+  const l = el('div'); l.className = 'line'; c.appendChild(l);
+  return c;
+}
+
+function renderMetric(p) {
+  const c = card(p.title || p.label || 'Métrica');
+  const m = el('div'); m.className = 'metric';
+  m.appendChild(el('span', String(p.value ?? '—'), 'big'));
+  m.appendChild(el('span', p.unit || '', 'unit'));
+  c.appendChild(m);
+  if (p.sub) c.appendChild(el('div', p.sub, 'sub'));
+  return c;
+}
+
+function renderKV(p) {
+  const c = card(p.title || 'Detalhes', p.wide);
+  const list = el('div'); list.className = 'kvlist';
+  (p.items || p.data || {}).entries ? null : null;
+  const src = p.items || p.data || {};
+  if (Array.isArray(src)) {
+    src.forEach(it => {
+      const r = el('div');
+      r.appendChild(el('span', it.label || it.name || it.key || ''));
+      r.appendChild(el('span', String(it.value ?? it.val ?? '')));
+      list.appendChild(r);
+    });
+  } else if (typeof src === 'object') {
+    Object.entries(src).forEach(([k, v]) => {
+      const r = el('div');
+      r.appendChild(el('span', k));
+      r.appendChild(el('span', String(v)));
+      list.appendChild(r);
+    });
+  }
+  if (list.children.length) c.appendChild(list);
+  return c;
+}
+
+function renderText(p) {
+  const c = card(p.title || 'Informação', p.wide);
+  c.appendChild(el('div', p.content || p.text || p.message || '', 'text'));
+  return c;
+}
+
+function renderTerm(p) {
+  const c = card(p.title || 'Terminal', true);
+  const t = el('div', p.content || p.text || p.stdout || '', 'term');
+  c.appendChild(t);
+  return c;
+}
+
+function renderList(p) {
+  const c = card(p.title || 'Lista', p.wide);
+  (p.items || []).forEach(it => {
+    const r = el('div');
+    r.style.cssText = 'display:flex;justify-content:space-between;padding:4px 0;font-size:12.5px;border-bottom:1px dashed rgba(0,240,255,.12)';
+    r.appendChild(el('span', it.name || it.label || String(it)));
+    r.appendChild(el('span', String(it.value ?? it.status ?? ''), 'div'));
+    r.lastChild.style.color = '#00f0ff';
+    c.appendChild(r);
+  });
+  return c;
+}
+
+function renderChart(p) {
+  const c = card(p.title || 'Série', p.wide);
+  const data = (p.data || p.values || []).map(v => Number(v) || 0);
+  if (data.length) {
+    const bar = el('div'); bar.className = 'bars';
+    data.slice(0, 26).forEach(v => {
+      const i = el('i');
+      i.style.height = Math.max(3, Math.min(100, v)) + '%';
+      bar.appendChild(i);
+    });
+    c.appendChild(bar);
+  } else {
+    c.appendChild(el('div', 'sem dados de série', 'sub'));
+  }
+  return c;
+}
+
+function renderTable(p) {
+  const c = card(p.title || 'Tabela', true);
+  const cols = p.columns || (p.rows && p.rows[0] ? Object.keys(p.rows[0]) : []);
+  if (cols && cols.length) {
+    const table = el('table');
+    const trh = el('tr');
+    cols.forEach(hn => trh.appendChild(el('th', String(hn).toUpperCase())));
+    table.appendChild(trh);
+    (p.rows || []).slice(0, 40).forEach(row => {
+      const tr = el('tr');
+      cols.forEach(hn => tr.appendChild(el('td', String(row[hn] ?? '—'))));
+      table.appendChild(tr);
+    });
+    c.appendChild(table);
+  }
+  return c;
+}
+
+function renderButtons(p) {
+  const c = card(p.title || 'Ações', p.wide);
+  (p.actions || []).forEach(a => {
+    const b = document.createElement('button');
+    b.textContent = a.label || a.action;
+    b.onclick = () => {
+      fetch('/api/canvas/action', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ action: a.action, target: a.target || '' })
+      }).then(r => r.json()).then(j => console.log(j)).catch(() => {});
+    };
+    c.appendChild(b);
+  });
+  return c;
+}
+
+function renderCustomHtml(rawHtml, title) {
+  const c = card(title || 'PAINEL INTERATIVO', true);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'w-full overflow-auto text-sm';
+  wrapper.innerHTML = rawHtml;
+  c.appendChild(wrapper);
+  return c;
+}
+
+function autoBlock(p) {
+  if (p.html || p.raw_html || p.custom_html) return renderCustomHtml(p.html || p.raw_html || p.custom_html, p.title);
+  if (p.value !== undefined && (p.big || p.type === 'metric')) return renderMetric(p);
+  if (p.stdout || p.type === 'terminal') return renderTerm(p);
+  if (p.type === 'chart' || Array.isArray(p.values)) return renderChart(p);
+  if (p.items && p.title) return renderKV(p);
+  if (p.columns && p.rows) return renderTable(p);
+  return renderText(p);
+}
+
+async function boot() {
+  const pid = new URLSearchParams(window.location.search).get('pid');
+  if (!pid) { qs('grid').innerHTML = '<div class="empty">sem painel (pid ausente)</div>'; return; }
+  try {
+    const r = await fetch('/api/canvas/payload?pid=' + encodeURIComponent(pid));
+    const data = await r.json();
+    const payload = data.payload || {};
+    qs('cTitle').textContent = (payload.title || data.title || 'PAINEL J.A.R.V.I.S.').toUpperCase();
+    qs('cSub').textContent = ((payload.category || 'CANVAS') + ' · ' + (payload.subtitle || 'canvas holográfico')).toUpperCase();
+    const grid = qs('grid');
+    grid.innerHTML = '';
+
+    // Se o payload do OpenClaw contiver HTML/CSS bruto diretamente no topo
+    if (payload.html || payload.raw_html || payload.custom_html) {
+      grid.appendChild(renderCustomHtml(payload.html || payload.raw_html || payload.custom_html, payload.title));
+      return;
+    }
+
+    const blocks = payload.blocks || payload.sections || [];
+    if (Array.isArray(blocks) && blocks.length) {
+      blocks.forEach(b => {
+        if (!b || typeof b !== 'object') return;
+        grid.appendChild(autoBlock(b));
+      });
+    } else {
+      // fallback: mostra campos string/número
+      Object.entries(payload).forEach(([k, v]) => {
+        if (k === 'title' || k === 'layout' || k === 'category' || k === 'subtitle') return;
+        if (typeof v === 'string' || typeof v === 'number') {
+          const c = card(k);
+          c.appendChild(el('div', String(v), 'text'));
+          grid.appendChild(c);
+        }
+      });
+    }
+    if (!grid.children.length) grid.innerHTML = '<div class="empty">painel vazio</div>';
+  } catch (e) {
+    qs('grid').innerHTML = '<div class="empty">painel expirado ou servidor indisponível</div>';
+  }
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Central de Nós</title>
+<style>
+  :root {
+    --bg: #01091d; --panel: rgba(6, 14, 30, 0.85); --line: rgba(0, 240, 255, 0.28);
+    --cyan: #00f0ff; --sky: #38bdf8; --green: #10b981; --amber: #fbbf24;
+    --red: #f43f5e; --text: #e2f3ff; --muted: #7fb1cc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -20%, rgba(0,240,255,0.08), transparent 60%),
+                linear-gradient(180deg, #01091d, #020b1c 60%, #010813);
+    color: var(--text); font-family: 'Segoe UI', Inter, monospace; min-height: 100vh;
+    padding: 28px 22px 60px; letter-spacing: .3px;
+  }
+  header { text-align: center; margin-bottom: 22px; }
+  h1 { font-size: 22px; font-weight: 800; color: var(--cyan); text-shadow: 0 0 18px rgba(0,240,255,.6); letter-spacing: 4px; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 6px; letter-spacing: 2px; }
+  .sub a { color: var(--sky); text-decoration: none; }
+  .sub a:hover { text-shadow: 0 0 8px rgba(56,189,248,.8); }
+  .wrap { max-width: 1380px; margin: 0 auto; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px; box-shadow: 0 0 22px rgba(0, 240, 255, 0.07) inset, 0 8px 30px rgba(0,0,0,.45);
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 12px; font-weight: 800; color: var(--sky); letter-spacing: 2.4px; text-transform: uppercase; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { color: var(--muted); text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 10.5px; letter-spacing: 1.5px; text-transform: uppercase; }
+  td { padding: 9px 8px; border-bottom: 1px solid rgba(0,240,255,.08); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .node-id { font-family: 'Consolas', monospace; font-size: 11px; color: var(--muted); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: 1px; }
+  .badge.ok { color: var(--green); background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.4); }
+  .badge.na { color: var(--muted); background: rgba(127,177,204,.08); border: 1px solid rgba(127,177,204,.25); }
+  .perms { display: flex; flex-wrap: wrap; gap: 5px 12px; max-width: 560px; }
+  .perms label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; font-size: 11px; color: var(--muted); }
+  .perms input { accent-color: var(--cyan); width: 13px; height: 13px; }
+  .btn {
+    background: linear-gradient(90deg, rgba(0,240,255,.14), rgba(56,189,248,.14));
+    border: 1px solid var(--line); color: var(--text); border-radius: 10px;
+    padding: 7px 14px; font-size: 11.5px; font-weight: 700; cursor: pointer; letter-spacing: 1px; font-family: inherit;
+  }
+  .btn:hover { background: rgba(0,240,255,.22); box-shadow: 0 0 14px rgba(0,240,255,.35); }
+  input[type=password], input[type=text] {
+    background: rgba(2,10,24,.8); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 8px 12px; font-size: 12px; outline: none; font-family: inherit;
+  }
+  input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(0,240,255,.25); }
+  .secret-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .health { display: flex; flex-wrap: wrap; gap: 10px 22px; font-size: 12px; }
+  .health .item { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: #555; }
+  .dot.ok { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .dot.bad { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast { background: rgba(4,12,26,.95); border: 1px solid var(--line); border-left: 3px solid var(--cyan); border-radius: 10px; padding: 10px 16px; font-size: 12.5px; max-width: 380px; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+  .toast.err { border-left-color: var(--red); }
+  .toast.win { border-left-color: var(--green); }
+  footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 26px; letter-spacing: 1.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>J.A.R.V.I.S. · CENTRAL DE NÓS</h1>
+  <div class="sub">REGISTRO · PERMISSÕES · CONTROLE — <a href="/infra">saúde da infraestrutura ↗</a> · <a href="/node" target="_blank">painel desta máquina ↗</a></div>
+</header>
+
+<div class="wrap">
+  <!-- SAÚDE RÁPIDA -->
+  <div class="card">
+    <h2>Saúde da Ponte</h2>
+    <div class="health" id="health">carregando…</div>
+  </div>
+
+  <!-- REGISTRO + PERMISSÕES -->
+  <div class="card">
+    <h2>Nós Registrados — Permissões por Nó</h2>
+    <div class="secret-row">
+      <input type="password" id="secret" placeholder="X-Bridge-Secret (obrigatório para salvar)" style="min-width:280px">
+      <button class="btn" onclick="registrar()">＋ Registrar nó</button>
+      <button class="btn" onclick="refresh()">↻ Atualizar</button>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:220px">Nó</th><th style="width:90px">Tipo</th>
+        <th style="width:110px">Visto</th><th>Permissões (marque/desmarque → Salvar)</th><th style="width:90px"></th>
+      </tr></thead>
+      <tbody id="nodesBody"><tr><td colspan="5" style="color:var(--muted)">carregando…</td></tr></tbody>
+    </table>
+    <div class="hint">
+      Interruptores gravam <b>node_permissions.json</b> no núcleo e o nó respeita na próxima execução — sem precisar reiniciar.
+      Ações destrutivas (system.run, power, fechar apps) exigem a permissão correspondente ATIVA aqui.
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<footer>J.A.R.V.I.S. NODES v1.1 · registro autenticado via X-Bridge-Secret</footer>
+
+<script>
+const PERMS = ["voice_whisper","camera_vision","screen_capture","keyboard_mouse","clipboard","apps","windows_mgmt","media","telemetry","system_commands","power","web_automation"];
+const LABELS = {
+  voice_whisper:"Voz/Whisper", camera_vision:"Câmera", screen_capture:"Captura de tela",
+  keyboard_mouse:"Teclado/Mouse", clipboard:"Clipboard", apps:"Apps",
+  windows_mgmt:"Janelas", media:"Mídia", telemetry:"Telemetria",
+  system_commands:"CMD/PS", power:"Power", web_automation:"Web"
+};
+const qs = id => document.getElementById(id);
+let NODES = {};
+
+function toast(msg, cls='') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + cls; t.textContent = msg;
+  qs('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+function dot(cls){ return `<span class="dot ${cls}"></span>`; }
+function ago(ts){ if(!ts) return '—'; const s = Math.max(0, Math.floor(Date.now()/1000 - ts)); return s<60? s+'s' : s<3600? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h'; }
+function agoStr(s){ if(!s) return '—'; const t = new Date(String(s).replace(' ','T')+'Z'); if(isNaN(t)) return s; const d = Math.floor((Date.now()-t.getTime())/1000); return d<90? d+'s' : d<5400? Math.floor(d/60)+'min' : Math.floor(d/3600)+'h'; }
+
+async function refresh(){
+  try {
+    const [infra, nodes] = await Promise.all([
+      fetch('/api/infra').then(r=>r.json()).catch(()=>null),
+      fetch('/api/nodes').then(r=>r.json()).catch(()=>null)
+    ]);
+    // Saúde
+    const B = infra && infra.bridge, S = (infra && infra.services) || {};
+    const items = [
+      ['Ponte Windows', B && B.node_connected],
+      ['Agente (OpenClaw)', S.openclaw_gateway],
+      ['MCP', S.mcp_hud],
+      ['WS Esfera', S.sphere_ws]
+    ];
+    qs('health').innerHTML = items.map(([n,on]) => `<span class="item">${dot(on?'ok':'bad')} ${n}${(B && n==='Ponte Windows' && B.seconds_since_poll!=null)? ' <span style="color:var(--muted)">('+B.seconds_since_poll+'s)</span>':''}</span>`).join('');
+    // Nós
+    NODES = (nodes && nodes.nodes) || {};
+    renderNodes();
+  } catch(e) {
+    qs('health').innerHTML = '<span style="color:var(--red)">núcleo inacessível</span>';
+  }
+}
+
+function renderNodes(){
+  const ids = Object.keys(NODES);
+  const tb = qs('nodesBody');
+  if (!ids.length) { tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Nenhum nó registrado ainda — os nós se registram sozinhos ao conectar (heartbeat 60s).</td></tr>'; return; }
+  tb.innerHTML = ids.map(id => {
+    const n = NODES[id];
+    const perms = n.permissions || {};
+    const boxes = PERMS.map(p => `<label title="${LABELS[p]||p}"><input type="checkbox" data-p="${p}" ${perms[p]!==false?'checked':''}> ${LABELS[p]||p}</label>`).join('');
+    return `<tr data-id="${id}">
+      <td><b>${n.name || id}</b><div class="node-id">${id}</div></td>
+      <td><span class="badge na">${n.type || '?'}</span></td>
+      <td class="node-id">${n.last_seen ? agoStr(n.last_seen) : '—'}</td>
+      <td><div class="perms">${boxes}</div></td>
+      <td><button class="btn" onclick="salvar('${id}')">Salvar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function salvar(id){
+  const sec = qs('secret').value.trim();
+  if (!sec) { toast('Informe o X-Bridge-Secret para salvar.', 'err'); return; }
+  const tr = document.querySelector(`tr[data-id="${id}"]`); if (!tr) return;
+  const perms = {};
+  tr.querySelectorAll('[data-p]').forEach(c => { perms[c.getAttribute('data-p')] = c.checked; });
+  const r = await fetch('/api/nodes/update', { method:'POST',
+    headers: {'Content-Type':'application/json','X-Bridge-Secret': sec},
+    body: JSON.stringify({ id, permissions: perms }) });
+  const d = await r.json().catch(()=>({}));
+  toast(d.ok ? `Permissões salvas: ${id}` : `Falha: ${d.error || r.status}`, d.ok ? 'win' : 'err');
+}
+
+async function registrar(){
+  const sec = qs('secret').value.trim();
+  if (!sec) { toast('Informe o X-Bridge-Secret.', 'err'); return; }
+  const id = (prompt('ID do nó (ex.: jarvis-pc-hostname):','') || '').trim();
+  if (!id) return;
+  const r = await fetch('/api/nodes/register', { method:'POST',
+    headers: {'Content-Type':'application/json','X-Bridge-Secret': sec},
+    body: JSON.stringify({ id, name: id, type: id.includes('sphere') ? 'esfera' : 'pc' }) });
+  const d = await r.json().catch(()=>({}));
+  toast(d.ok ? `Registrado: ${id}` : `Falha: ${d.error || r.status}`, d.ok ? 'win' : 'err');
+  refresh();
+}
+
+refresh(); setInterval(refresh, 6000);
+</script>
+</body>
+</html>

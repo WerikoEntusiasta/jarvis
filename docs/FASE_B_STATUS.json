@@ -1,0 +1,53 @@
+{
+ "stages": [
+  {
+   "detail": "web/, config/, scripts/, tests/, models/; raiz com 26 arquivos; smoke HTTP 200",
+   "id": "B1",
+   "status": "done",
+   "title": "Organização da raiz"
+  },
+  {
+   "detail": "zero literais; rotação BRIDGE verificada (novo 200/antigo 403); defaults removidos do código",
+   "id": "B2",
+   "status": "done",
+   "title": "Higiene env"
+  },
+  {
+   "detail": "quarentena de mortos/duplicados/quebrados (21 arquivos); imports limpos; TTS em logs/; bats portáteis; compile 3.11 OK",
+   "id": "B3",
+   "status": "done",
+   "title": "App Windows perfeito"
+  },
+  {
+   "detail": "migrado e validado (transcribe+TTS); agente respondendo",
+   "id": "B4",
+   "status": "done",
+   "title": "Windows → Core"
+  },
+  {
+   "detail": "layout web/config; push+restart healthy; Whisper ok; OpenClaw HTTPS ok, agente responde; Lucia API via /api/lucia (12 rotas leitura)",
+   "id": "B5",
+   "status": "done",
+   "title": "Core no Zima"
+  },
+  {
+   "detail": "ÚLTIMA: /nodes + /api/nodes|register|update no ar; node_registration espelha no Core",
+   "id": "B8",
+   "status": "done",
+   "title": "Página de nodes (FINAL)"
+  },
+  {
+   "detail": "agent jarvis responde via 9router/jarvisflash; E2E /api/chat 200; allowlist 221 modelos",
+   "id": "B9",
+   "status": "done",
+   "title": "OpenClaw saudável"
+  },
+  {
+   "detail": "turno 8s no ar; whisper small+prompt; aguarda veredito do usuário",
+   "id": "B10",
+   "status": "doing",
+   "title": "Esfera voz E2E"
+  }
+ ],
+ "updated": "2026-10-12"
+}

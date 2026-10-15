@@ -1,0 +1,278 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>J.A.R.V.I.S. â€” Infraestrutura</title>
+<style>
+:root{
+  --bg:#0d0e13; --panel:#14161d; --panel2:#191b24; --line:#262936;
+  --cyan:#00f0ff; --cyan-dim:rgba(0,240,255,.12); --ok:#34d399; --warn:#fbbf24;
+  --bad:#ff777f; --txt:#f4f4f7; --muted:#9c9eaa; --mono:'Consolas',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:18px}
+.wrap{max-width:1180px;margin:0 auto}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:1.25rem;letter-spacing:.14em;color:var(--cyan);font-weight:800}
+h1 small{color:var(--muted);font-weight:400;letter-spacing:.05em;font-size:.75rem;display:block;margin-top:2px}
+.pill{padding:6px 14px;border-radius:999px;font-size:.78rem;font-weight:700;letter-spacing:.08em;border:1px solid var(--line);background:var(--panel)}
+.pill.ok{color:var(--ok);border-color:rgba(52,211,153,.4)}
+.pill.warn{color:var(--warn);border-color:rgba(251,191,36,.4)}
+.pill.bad{color:var(--bad);border-color:rgba(255,119,127,.4)}
+.meta{color:var(--muted);font-size:.72rem;font-family:var(--mono)}
+/* Fluxo */
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px;overflow-x:auto}
+.flow svg{display:block;min-width:760px;width:100%}
+/* Cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+.card h3{font-size:.72rem;letter-spacing:.14em;color:var(--muted);display:flex;align-items:center;gap:7px;margin-bottom:10px;text-transform:uppercase}
+.dot{width:9px;height:9px;border-radius:50%;background:#555;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+.dot.ok{background:var(--ok);box-shadow:0 0 10px rgba(52,211,153,.7)}
+.dot.bad{background:var(--bad);box-shadow:0 0 10px rgba(255,119,127,.7)}
+.dot.warn{background:var(--warn);box-shadow:0 0 10px rgba(251,191,36,.7)}
+.big{font-size:1.35rem;font-weight:800;letter-spacing:.03em}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:.8rem;padding:3px 0;color:var(--muted)}
+.row b{color:var(--txt);font-weight:600;text-align:right}
+.bar{height:5px;border-radius:3px;background:var(--panel2);margin:7px 0 2px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:3px;background:var(--cyan);transition:width .6s}
+/* Tabelas / listas */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:16px}
+.panel h3{font-size:.72rem;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{color:var(--muted);text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase}
+td{padding:7px 8px;border-bottom:1px solid rgba(38,41,54,.5);vertical-align:middle}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.68rem;font-weight:700;letter-spacing:.05em}
+.badge.ok{color:var(--ok);background:rgba(52,211,153,.1)}
+.badge.bad{color:var(--bad);background:rgba(255,119,127,.1)}
+.badge.na{color:var(--muted);background:rgba(156,158,170,.1)}
+.mono{font-family:var(--mono);font-size:.74rem}
+input,button,select{font-family:inherit}
+input[type=text],input[type=password]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 10px;font-size:.8rem;outline:none}
+input:focus{border-color:var(--cyan)}
+button{background:var(--cyan-dim);color:var(--cyan);border:1px solid var(--cyan);border-radius:8px;padding:7px 14px;font-weight:700;font-size:.75rem;letter-spacing:.06em;cursor:pointer}
+button:hover{background:rgba(0,240,255,.22)}
+.perms{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.72rem;color:var(--muted)}
+.perms label{display:inline-flex;gap:3px;align-items:center;cursor:pointer}
+.perms input{accent-color:var(--cyan)}
+.hint{color:var(--muted);font-size:.7rem;margin-top:8px}
+.secret-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.empty{color:var(--muted);font-size:.78rem;padding:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>J.A.R.V.I.S. // INFRAESTRUTURA<small>nÃºcleo Â· agentes Â· ponte Â· esfera Â· nÃ³s</small></h1>
+    <div style="text-align:right">
+      <div class="pill" id="overall">SINCRONIZANDOâ€¦</div>
+      <div class="meta" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- FLUXO -->
+  <div class="flow">
+    <svg viewBox="0 0 760 150" id="flowSvg">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+        </marker>
+      </defs>
+      <g font-family="Consolas,monospace" font-size="11" text-anchor="middle">
+        <!-- nodes -->
+        <g id="n-voz"><rect x="10" y="55" width="110" height="42" rx="10" fill="#191b24" stroke="#262936"/><text x="65" y="74" fill="#f4f4f7">VOCÃŠ</text><text x="65" y="88" fill="#9c9eaa" font-size="9">voz Â· whatsapp</text></g>
+        <g id="n-agent"><rect x="170" y="55" width="120" height="42" rx="10" fill="#191b24" stroke="#262936"/><text x="230" y="74" fill="#f4f4f7">AGENTE</text><text x="230" y="88" fill="#9c9eaa" font-size="9">openclaw Â· mcp</text></g>
+        <g id="n-core"><rect x="340" y="55" width="100" height="42" rx="10" fill="#191b24" stroke="#262936"/><text x="390" y="74" fill="#00f0ff">CORE</text><text x="390" y="88" fill="#9c9eaa" font-size="9">fila Â· ponte</text></g>
+        <g id="n-pc"><rect x="510" y="15" width="130" height="42" rx="10" fill="#191b24" stroke="#262936"/><text x="575" y="34" fill="#f4f4f7">NÃ“ WINDOWS</text><text x="575" y="48" fill="#9c9eaa" font-size="9">controle total do PC</text></g>
+        <g id="n-esfera"><rect x="510" y="95" width="130" height="42" rx="10" fill="#191b24" stroke="#262936"/><text x="575" y="114" fill="#f4f4f7">ESFERA</text><text x="575" y="128" fill="#9c9eaa" font-size="9">voz Â· spotify Â· rosto</text></g>
+        <!-- links -->
+        <line id="l1" x1="120" y1="76" x2="168" y2="76" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+        <line id="l2" x1="290" y1="76" x2="338" y2="76" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+        <line id="l3" x1="440" y1="66" x2="508" y2="42" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+        <line id="l4" x1="440" y1="86" x2="508" y2="110" stroke="#555" stroke-width="2" marker-end="url(#arr)"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- CARDS -->
+  <div class="grid">
+    <div class="card"><h3><span class="dot" id="d-core"></span>NÃºcleo (Core)</h3>
+      <div class="big" id="coreLat">â€”</div>
+      <div class="row"><span>CPU</span><b id="mCpu">â€”</b></div><div class="bar"><i id="bCpu"></i></div>
+      <div class="row"><span>RAM</span><b id="mRam">â€”</b></div><div class="bar"><i id="bRam"></i></div>
+      <div class="row"><span>Disco /DATA</span><b id="mDisk">â€”</b></div><div class="bar"><i id="bDisk"></i></div>
+    </div>
+    <div class="card"><h3><span class="dot" id="d-agent"></span>Agente (OpenClaw)</h3>
+      <div class="big" id="agentSt">â€”</div>
+      <div class="row"><span>Gateway WSS</span><b id="agentGw">â€”</b></div>
+      <div class="row"><span>Modelo</span><b>jarvisflash Â· 9router</b></div>
+      <div class="hint">Decide e executa: voz, WhatsApp, ferramentas MCP.</div>
+    </div>
+    <div class="card"><h3><span class="dot" id="d-mcp"></span>MCP jarvis-hud</h3>
+      <div class="big" id="mcpSt">â€”</div>
+      <div class="row"><span>Porta</span><b class="mono">8087 (sse)</b></div>
+      <div class="row"><span>Ferramentas</span><b>executar_comando_windows +</b></div>
+      <div class="hint">Ponte de ferramentas agente â†’ Core.</div>
+    </div>
+    <div class="card"><h3><span class="dot" id="d-pc"></span>NÃ³ Windows</h3>
+      <div class="big" id="pcSt">â€”</div>
+      <div class="row"><span>Ãšltimo poll</span><b id="pcPoll">â€”</b></div>
+      <div class="row"><span>Fila pendente</span><b id="pcPend">â€”</b></div>
+      <div class="hint">App desktop com PIN Â· guard de instÃ¢ncia Ãºnica.</div>
+    </div>
+    <div class="card"><h3><span class="dot" id="d-esfera"></span>Esfera</h3>
+      <div class="big" id="esfSt">â€”</div>
+      <div class="row"><span>WS (8096)</span><b id="esfWs">â€”</b></div>
+      <div class="row"><span>Registrada</span><b id="esfSeen">â€”</b></div>
+      <div class="hint">Voz â†’ Whisper â†’ agente Â· Spotify Â· rosto.</div>
+    </div>
+  </div>
+
+  <!-- ÃšLTIMOS COMANDOS -->
+  <div class="panel">
+    <h3>Ãšltimos comandos da ponte</h3>
+    <table><thead><tr><th>ID</th><th>AÃ§Ã£o</th><th>Resultado</th><th>Quando</th></tr></thead>
+    <tbody id="recentBody"><tr><td colspan="4" class="empty">Sem comandos ainda.</td></tr></tbody></table>
+  </div>
+
+  <!-- CENTRAL DO NÃ“ -->
+  <div class="panel">
+    <h3>Central do NÃ³ Â· registro e permissÃµes</h3>
+    <div class="secret-row">
+      <input type="password" id="secret" placeholder="X-Bridge-Secret (segredo da ponte)" style="min-width:260px">
+      <button onclick="registrar()">Registrar este dispositivo</button>
+    </div>
+    <table><thead><tr><th>NÃ³</th><th>Tipo</th><th>Visto</th><th>PermissÃµes (ative/desative e salve)</th><th></th></tr></thead>
+    <tbody id="nodesBody"></tbody></table>
+    <div class="hint">Interruptores alteram as permissÃµes na hora â€” o JARVIS respeita na prÃ³xima execuÃ§Ã£o. PermissÃµes â€œappsâ€, â€œteclado_mouseâ€ e â€œsystem_commandsâ€ controlam o que o agente pode fazer no PC.</div>
+  </div>
+
+  <div class="meta" style="text-align:center;padding:8px" id="foot">atualiza a cada 5s Â· servido pelo nÃºcleo</div>
+</div>
+
+<script>
+const PERMS = ["voice_whisper","camera_vision","screen_capture","keyboard_mouse","clipboard","apps","windows_mgmt","media","telemetry","system_commands","power","web_automation"];
+const $ = id => document.getElementById(id);
+const st = { infra:null, system:null, latency:null };
+
+function setDot(id, on, warn){ const d=$(id); d.className='dot '+(on?'ok':(warn?'warn':'bad')); }
+function setLink(id, on){ const l=$(id); if(l) l.setAttribute('stroke', on?'#00f0ff':'#555'); }
+function ago(ts){ if(!ts) return 'â€”'; const s=Math.max(0,Math.floor(Date.now()/1000-ts)); return s<60? s+'s' : s<3600? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h'; }
+
+async function jget(url, opts){ const r = await fetch(url, opts); return r.json(); }
+
+async function refresh(){
+  const t0 = performance.now();
+  const jobs = [
+    jget('/api/infra').then(d=>{ st.infra=d; st.latency=Math.round(performance.now()-t0); }).catch(()=>{ st.infra=null; }),
+    jget('/api/status').then(d=>{ st.system=d && d.system; }).catch(()=>{ st.system=null; })
+  ];
+  await Promise.allSettled(jobs);
+  render();
+}
+
+function render(){
+  const I = st.infra, S = st.system;
+  // NÃºcleo
+  const coreOk = !!I;
+  setDot('d-core', coreOk);
+  $('coreLat').textContent = coreOk ? (st.latency+' ms') : 'OFFLINE';
+  $('coreLat').style.color = coreOk ? 'var(--ok)' : 'var(--bad)';
+  if(S){
+    const cpu = S.cpu_pct ?? S.cpu, ram = S.ram_pct ?? S.ram, disk = S.disk && (S.disk.pct ?? S.disk.pct_used);
+    $('mCpu').textContent = cpu!=null ? cpu+'%' : 'â€”'; $('bCpu').style.width = (cpu||0)+'%';
+    $('mRam').textContent = ram!=null ? ram+'%' : 'â€”'; $('bRam').style.width = (ram||0)+'%';
+    $('mDisk').textContent = disk!=null ? disk+'%' : 'â€”'; $('bDisk').style.width = (disk||0)+'%';
+  }
+  // Agente / MCP / Esfera-WS
+  const svc = (I && I.services) || {};
+  setDot('d-agent', !!svc.openclaw_gateway); setLink('l2', !!svc.openclaw_gateway); setLink('l1', true);
+  $('agentSt').textContent = svc.openclaw_gateway ? 'ONLINE' : 'OFFLINE';
+  $('agentSt').style.color = svc.openclaw_gateway ? 'var(--ok)' : 'var(--bad)';
+  $('agentGw').textContent = svc.openclaw_gateway ? '24192 âœ“' : 'sem resposta';
+  setDot('d-mcp', !!svc.mcp_hud);
+  $('mcpSt').textContent = svc.mcp_hud ? 'ATIVO' : 'OFFLINE';
+  $('mcpSt').style.color = svc.mcp_hud ? 'var(--ok)' : 'var(--bad)';
+  setDot('d-esfera', !!svc.sphere_ws); setLink('l4', !!svc.sphere_ws);
+  $('esfSt').textContent = svc.sphere_ws ? 'OUVINDO' : 'WS FORA';
+  $('esfSt').style.color = svc.sphere_ws ? 'var(--ok)' : 'var(--bad)';
+  $('esfWs').textContent = svc.sphere_ws ? 'TLS 8096 âœ“' : '8096 âœ—';
+  // Ponte Windows
+  const B = (I && I.bridge) || {};
+  const pcOn = !!B.node_connected;
+  setDot('d-pc', pcOn); setLink('l3', pcOn);
+  $('pcSt').textContent = pcOn ? 'CONECTADO' : 'OFFLINE';
+  $('pcSt').style.color = pcOn ? 'var(--ok)' : 'var(--bad)';
+  $('pcPoll').textContent = B.seconds_since_poll!=null ? B.seconds_since_poll+'s atrÃ¡s' : 'â€”';
+  $('pcPend').textContent = String(B.pending ?? 'â€”');
+  // Esfera no registry
+  let esfSeen = null;
+  (I && I.nodes || []).forEach(n=>{ if((n.id||'').includes('sphere') || (n.type||'')==='esfera') esfSeen = n.last_seen; });
+  $('esfSeen').textContent = esfSeen ? String(esfSeen).slice(5,16) : 'â€”';
+  // Fluxo: cor do nÃ³ agente/core
+  [['n-core',coreOk],['n-agent',!!svc.openclaw_gateway],['n-pc',pcOn],['n-esfera',!!svc.sphere_ws]].forEach(([id,on])=>{
+    const g=$(id); if(g) g.querySelector('rect').setAttribute('stroke', on?'#00f0ff':'#262936');
+  });
+  // Ãšltimos comandos
+  const rec = (I && I.recent) || [];
+  const tb = $('recentBody');
+  tb.innerHTML = rec.length ? rec.slice().reverse().map(c=>{
+    const b = c.ok==null ? '<span class="badge na">na fila</span>' : (c.ok ? '<span class="badge ok">OK</span>' : '<span class="badge bad">FALHOU</span>');
+    return `<tr><td class="mono">#${c.id}</td><td class="mono">${(c.action||'?')}</td><td>${b}</td><td class="mono">${ago(c.ts)} atrÃ¡s</td></tr>`;
+  }).join('') : '<tr><td colspan="4" class="empty">Sem comandos ainda.</td></tr>';
+  // Registry + permissÃµes
+  renderNodes((I && I.nodes) || []);
+  // Overall
+  const parts = [coreOk, !!svc.openclaw_gateway, !!svc.mcp_hud, pcOn, !!svc.sphere_ws];
+  const okN = parts.filter(Boolean).length, pill = $('overall');
+  if(okN === parts.length){ pill.textContent='â— TUDO OPERACIONAL'; pill.className='pill ok'; }
+  else if(okN >= parts.length-1){ pill.textContent='â— DEGRADADO ('+okN+'/'+parts.length+')'; pill.className='pill warn'; }
+  else { pill.textContent='â— INDISPONÃVEL ('+okN+'/'+parts.length+')'; pill.className='pill bad'; }
+  $('foot').textContent = 'atualiza a cada 5s Â· Ãºltima varredura ' + new Date().toLocaleTimeString('pt-BR');
+}
+
+function renderNodes(nodes){
+  const tb = $('nodesBody');
+  tb.innerHTML = nodes.length ? nodes.map((n,i)=>{
+    const perms = n.permissions || {};
+    const boxes = PERMS.map(p=>`<label><input type="checkbox" data-p="${p}" data-i="${i}" ${perms[p]!==false?'checked':''}> ${p}</label>`).join('');
+    return `<tr data-id="${n.id||''}"><td><b>${n.name||n.id||'â€”'}</b><div class="mono" style="color:var(--muted)">${n.id||''}</div></td>
+      <td>${n.type||'â€”'}</td><td class="mono">${n.last_seen ? ago2(n.last_seen) : 'â€”'}</td>
+      <td><div class="perms">${boxes}</div></td>
+      <td><button onclick="salvar(${i})">Salvar</button></td></tr>`;
+  }).join('') : '<tr><td colspan="5" class="empty">Nenhum nÃ³ registrado.</td></tr>';
+}
+function ago2(s){ // last_seen vem como "YYYY-MM-DD HH:MM:SS"
+  if(!s) return 'â€”'; const t = new Date(s.replace(' ','T')+'Z');
+  if(isNaN(t)) return s; const d = Math.floor((Date.now()-t.getTime())/1000);
+  return d<90? d+'s' : d<5400? Math.floor(d/60)+'min' : Math.floor(d/3600)+'h';
+}
+async function salvar(i){
+  const tr = $('nodesBody').querySelectorAll('tr')[i]; if(!tr) return;
+  const id = tr.getAttribute('data-id'); if(!id) return;
+  const perms = {}; tr.querySelectorAll('[data-p]').forEach(c=>{ perms[c.getAttribute('data-p')] = c.checked; });
+  const sec = $('secret').value.trim();
+  if(!sec){ alert('Informe o X-Bridge-Secret para salvar.'); return; }
+  const r = await fetch('/api/infra/update', { method:'POST', headers:{'Content-Type':'application/json','X-Bridge-Secret':sec},
+    body: JSON.stringify({ id, permissions: perms }) });
+  const d = await r.json().catch(()=>({}));
+  alert(d.ok ? 'PermissÃµes salvas para '+id : 'Falha ao salvar: '+(d.error||r.status));
+}
+async function registrar(){
+  const sec = $('secret').value.trim(); if(!sec){ alert('Informe o X-Bridge-Secret.'); return; }
+  const id = 'jarvis-pc-' + (prompt('ID do dispositivo (ex.: hostname):','')||'').trim().toLowerCase();
+  if(!id || id==='jarvis-pc-') return;
+  const r = await fetch('/api/infra/register', { method:'POST', headers:{'Content-Type':'application/json','X-Bridge-Secret':sec},
+    body: JSON.stringify({ id, name: id, type:'pc' }) });
+  const d = await r.json().catch(()=>({}));
+  alert(d.ok ? 'Registrado: '+id : 'Falha: '+(d.error||r.status));
+  refresh();
+}
+
+setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString('pt-BR'); }, 1000);
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>
+

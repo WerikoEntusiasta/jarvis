@@ -1,0 +1,37 @@
+# ============================================================
+# J.A.R.V.I.S. - Dependências
+# Core (todos os nós, inclui Docker/ZimaOS)
+# ============================================================
+paramiko>=3.4.0
+edge-tts>=6.1.0
+mcp>=1.2.0,<2
+psutil>=5.9.0
+numpy>=1.26.0
+Pillow>=10.2.0
+websockets>=12.0
+ddgs>=9.0.0
+pywebpush>=1.14.0
+av>=12.0.0
+
+# ============================================================
+# Nó Windows (desktop, voz local, automação nativa)
+# ============================================================
+pywebview>=5.0; sys_platform == 'win32'
+pystray>=0.19; sys_platform == 'win32'
+pywin32>=306; sys_platform == 'win32'
+pyautogui>=0.9.54; sys_platform == 'win32'
+pyperclip>=1.8.2; sys_platform == 'win32'
+pycaw>=20230407; sys_platform == 'win32'
+sounddevice>=0.4.6; sys_platform == 'win32'
+faster-whisper>=1.0.0; sys_platform == 'win32'
+# Voz da esfera (Linux/ZimaOS): wake word local no servidor e VAD Silero CPU.
+# A frase "Jarvis" pura ainda aceita um modelo próprio em SPHERE_WAKEWORD_MODEL.
+openwakeword>=0.6.0,<0.7; sys_platform == 'linux'
+onnxruntime>=1.18,<2; sys_platform == 'linux'
+
+# ============================================================
+# Visão computacional (nós Windows com câmera local)
+# No Docker/ZimaOS a visão opera em fallback headless (DummyVision)
+# ============================================================
+opencv-python>=4.9.0; sys_platform == 'win32'
+mediapipe>=0.10.9; sys_platform == 'win32'

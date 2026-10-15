@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS Dynamic Island</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * {
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: transparent;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding-top: 6px;
+      height: 100vh;
+      width: 100vw;
+    }
+    
+    /* Dynamic Island pill container */
+    .island-container {
+      background: rgba(8, 12, 22, 0.94);
+      border: 1px solid rgba(0, 210, 255, 0.45);
+      border-radius: 9999px;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.85), 0 0 18px rgba(0, 210, 255, 0.35);
+      transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Compact Pill State (Reator Arc Reactor) */
+    .island-compact {
+      width: 190px;
+      height: 40px;
+      padding: 0 12px;
+      gap: 10px;
+    }
+
+    /* Expanded Island State (Quando o Jarvis fala ou traz dados) */
+    .island-expanded {
+      width: 440px;
+      height: 110px;
+      border-radius: 26px;
+      padding: 14px 18px;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: space-between;
+      border-color: rgba(0, 230, 255, 0.7);
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.95), 0 0 30px rgba(0, 210, 255, 0.5);
+    }
+
+    /* Drag handle area */
+    .drag-region {
+      -webkit-app-region: drag;
+    }
+    .no-drag {
+      -webkit-app-region: no-drag;
+    }
+
+    /* Reactor Glow Animation */
+    @keyframes reactor-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .reactor-ring {
+      animation: reactor-spin 6s linear infinite;
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.15); opacity: 1; }
+    }
+    .reactor-core {
+      animation: pulse-glow 2.2s ease-in-out infinite;
+    }
+
+    /* Soundwave bars */
+    .soundbar {
+      width: 2.5px;
+      background: #00e5ff;
+      border-radius: 2px;
+      animation: sound-bounce 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes sound-bounce {
+      0% { height: 4px; }
+      100% { height: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Dynamic Island Component -->
+  <div id="island" class="island-container island-compact drag-region" onclick="handleIslandClick(event)">
+    
+    <!-- Top Row / Compact View -->
+    <div class="flex items-center justify-between w-full">
+      <!-- Arc Reactor Mini Icon -->
+      <div class="relative w-7 h-7 flex-shrink-0 flex items-center justify-center">
+        <!-- Outer cyber ring -->
+        <svg class="absolute inset-0 w-full h-full reactor-ring text-cyan-400" viewBox="0 0 36 36">
+          <circle cx="18" cy="18" r="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="7, 4" />
+        </svg>
+        <!-- Center glowing nucleus -->
+        <div class="w-3.5 h-3.5 rounded-full bg-cyan-300 shadow-[0_0_12px_#00f0ff] reactor-core flex items-center justify-center">
+          <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
+        </div>
+      </div>
+
+      <!-- Compact Text / Status -->
+      <div id="compact-content" class="flex-1 ml-2.5 flex items-center justify-between overflow-hidden">
+        <span id="compact-title" class="text-xs font-bold text-cyan-200 tracking-wider truncate uppercase">JARVIS</span>
+        <div id="compact-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981] ml-2 animate-pulse"></div>
+      </div>
+
+      <!-- Waveform (visível quando falando) -->
+      <div id="waveform" class="hidden items-center space-x-1 ml-2 h-5">
+        <div class="soundbar" style="animation-delay: 0.1s;"></div>
+        <div class="soundbar" style="animation-delay: 0.3s;"></div>
+        <div class="soundbar" style="animation-delay: 0.2s;"></div>
+        <div class="soundbar" style="animation-delay: 0.4s;"></div>
+      </div>
+    </div>
+
+    <!-- Expanded Body View (Hidden in compact mode) -->
+    <div id="expanded-content" class="hidden flex-col justify-between w-full h-full pt-1.5 no-drag">
+      <div class="flex items-center justify-between border-b border-cyan-500/20 pb-1">
+        <div class="flex items-center space-x-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+          <span id="expanded-badge" class="text-[9px] font-mono font-bold tracking-widest text-cyan-300 uppercase">FEEDBACK EM TEMPO REAL</span>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="openFullHUD(event)" class="text-[9px] text-cyan-300 hover:text-white px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/40">HUD Completo ↗</button>
+          <button onclick="collapseIsland(event)" class="text-[10px] text-slate-400 hover:text-white px-1">✕</button>
+        </div>
+      </div>
+
+      <p id="expanded-message" class="text-xs text-slate-100 leading-snug line-clamp-2 my-1">
+        J.A.R.V.I.S. pronto para receber instruções.
+      </p>
+
+      <div class="flex items-center justify-between text-[9px] text-sky-400 font-mono pt-1">
+        <span id="expanded-footer-info">SENSORES NOMINAIS</span>
+        <span id="expanded-clock">--:--</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let isExpanded = false;
+    let autoCollapseTimer = null;
+
+    function handleIslandClick(e) {
+      if (e.target.closest('.no-drag') && !e.target.closest('#island')) return;
+      if (!isExpanded) {
+        expandIsland();
+      } else {
+        collapseIsland();
+      }
+    }
+
+    function expandIsland(autoCollapseMs = 0) {
+      const island = document.getElementById('island');
+      const compact = document.getElementById('compact-content');
+      const expanded = document.getElementById('expanded-content');
+
+      island.classList.remove('island-compact');
+      island.classList.add('island-expanded');
+      compact.classList.add('hidden');
+      expanded.classList.remove('hidden');
+      expanded.classList.add('flex');
+      isExpanded = true;
+
+      // Chama bridge Python para redimensionar a janela nativa do Windows
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.resize_window(460, 130);
+      }
+
+      if (autoCollapseTimer) clearTimeout(autoCollapseTimer);
+      if (autoCollapseMs > 0) {
+        autoCollapseTimer = setTimeout(() => {
+          collapseIsland();
+        }, autoCollapseMs);
+      }
+    }
+
+    function collapseIsland(e) {
+      if (e) e.stopPropagation();
+      const island = document.getElementById('island');
+      const compact = document.getElementById('compact-content');
+      const expanded = document.getElementById('expanded-content');
+
+      island.classList.remove('island-expanded');
+      island.classList.add('island-compact');
+      compact.classList.remove('hidden');
+      expanded.classList.add('hidden');
+      expanded.classList.remove('flex');
+      isExpanded = false;
+
+      // Restaura tamanho mínimo compacto (pílula no topo)
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.resize_window(210, 52);
+      }
+    }
+
+    function openFullHUD(e) {
+      if (e) e.stopPropagation();
+      if (window.pywebview && window.pywebview.api) {
+        window.pywebview.api.open_full_hud();
+      }
+    }
+
+    function setDynamicIslandState(data) {
+      // Atualiza o relógio
+      const now = new Date();
+      document.getElementById('expanded-clock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (data.type === 'speech' || data.type === 'voice') {
+        document.getElementById('waveform').classList.remove('hidden');
+        document.getElementById('waveform').classList.add('flex');
+        document.getElementById('expanded-badge').textContent = 'TRANSMISSÃO DE VOZ (ELEVENLABS)';
+        document.getElementById('expanded-message').textContent = data.text || 'Processando síntese de voz...';
+        document.getElementById('compact-title').textContent = 'FALANDO...';
+        expandIsland(7000); // Recolhe após falar
+      } else if (data.type === 'gesture') {
+        document.getElementById('waveform').classList.add('hidden');
+        document.getElementById('expanded-badge').textContent = 'GESTO DETECTADO';
+        document.getElementById('expanded-message').textContent = `Comando visual: ${data.gesture || 'Reconhecido'}`;
+        document.getElementById('compact-title').textContent = data.gesture || 'GESTO';
+        expandIsland(4000);
+      } else if (data.type === 'info' || data.type === 'card') {
+        document.getElementById('waveform').classList.add('hidden');
+        document.getElementById('expanded-badge').textContent = data.title || 'ATUALIZAÇÃO';
+        document.getElementById('expanded-message').textContent = data.message || '';
+        document.getElementById('compact-title').textContent = data.title || 'JARVIS';
+        expandIsland(6000);
+      } else if (data.type === 'idle') {
+        document.getElementById('waveform').classList.add('hidden');
+        document.getElementById('compact-title').textContent = 'JARVIS';
+        collapseIsland();
+      }
+    }
+
+    // Conexão SSE com o backend Jarvis (Porta 8080)
+    function connectSSE() {
+      try {
+        const es = new EventSource('http://localhost:8080/events');
+        es.onmessage = (event) => {
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.type === 'vision.gesture') {
+              setDynamicIslandState({ type: 'gesture', gesture: parsed.gesture });
+            } else if (parsed.type === 'speech' || parsed.type === 'voice') {
+              setDynamicIslandState({ type: 'speech', text: parsed.text });
+            } else if (parsed.type === 'card' || parsed.type === 'widget') {
+              setDynamicIslandState({ type: 'card', title: parsed.title, message: parsed.summary || parsed.subtitle });
+            }
+          } catch(err) {}
+        };
+        es.onerror = () => {
+          setTimeout(connectSSE, 4000);
+        };
+      } catch(e) {
+        setTimeout(connectSSE, 4000);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      connectSSE();
+      setInterval(() => {
+        const now = new Date();
+        const el = document.getElementById('expanded-clock');
+        if (el) el.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

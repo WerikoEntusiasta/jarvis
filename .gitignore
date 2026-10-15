@@ -1,0 +1,72 @@
+# Environment & Secrets (CRITICAL: NEVER COMMIT)
+.env
+.env.*
+!.env.example
+*.env
+sphere-runtime.env
+firmware_jarvis_custom/include/jarvis_sphere_secrets.h
+sphere-tls/
+auth/spotify_token.json
+auth/*.key
+auth/*.json
+auth/*.db
+auth/tts_cache/
+!auth/.gitkeep
+
+# PlatformIO & Embedded Builds
+**/.pio/
+**/.pio/*
+.pio/
+.piolibdeps/
+firmware_jarvis_custom/.pio/
+firmware_esp_sr_spike/.pio/
+spotpear_official_release/
+xiaozhi-esp32/
+*.bin
+*.elf
+
+# Python Cache & Environment
+__pycache__/
+**/__pycache__/
+*.py[cod]
+**/*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Logs & Screenshots
+logs/*
+!logs/.gitkeep
+
+# 5S: runtime configs com segredos/estado (nunca versionar)
+config/*.json
+
+# PyInstaller & Build Artifacts
+build/
+build_/
+build_dist/
+build_tmp/
+pack_jarvis_windows/
+dist/
+*.spec
+
+# 5S: temporarios e quarentena (2026-10-12)
+temp_rec_*.webm
+temp_rec_*.wav
+response_*.mp3
+push_subscriptions.json
+firmware_temp*/
+_quarentena_5S/
+
+# Database & Storage
+*.db-journal
+*.sqlite3-journal
+memory/jarvis_memory.db
+scratch/
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

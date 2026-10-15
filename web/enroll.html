@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>J.A.R.V.I.S. // Portal de Cadastro Biométrico Neural</title>
+  <link rel="icon" type="image/png" href="/icon-512.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Face-API Neural Network Weights -->
+  <script src="/models/face-api/face-api.js"></script>
+  <script>
+    if (typeof faceapi === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"><\/script>');
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Rajdhani', sans-serif;
+      background: radial-gradient(circle at 50% 20%, #03122c 0%, #010614 60%, #000206 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    
+    .font-hud { font-family: 'Orbitron', monospace; }
+    .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+
+    .glow-cyan {
+      box-shadow: 0 0 35px rgba(0, 240, 255, 0.35);
+    }
+    .glow-border {
+      border: 1px solid rgba(0, 240, 255, 0.4);
+    }
+    .glow-border-amber {
+      border: 1px solid rgba(245, 158, 11, 0.5);
+    }
+    .glow-border-emerald {
+      border: 1px solid rgba(52, 211, 153, 0.5);
+    }
+
+    /* Grid Holográfico Animado */
+    .cyber-bg {
+      background-image: 
+        linear-gradient(to right, rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+      background-size: 30px 30px;
+    }
+
+    /* Scanline Sweep */
+    .scanline {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(to bottom, transparent 50%, rgba(0, 240, 255, 0.08) 51%, transparent 52%);
+      background-size: 100% 8px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    @keyframes radarSweep {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .animate-radar {
+      animation: radarSweep 6s linear infinite;
+    }
+
+    body.face-light-active {
+      background: #ffffff !important;
+      color: #0f172a !important;
+    }
+    body.face-light-active .glow-border,
+    body.face-light-active .bg-slate-950\/90 {
+      background: #ffffff !important;
+      box-shadow: 0 0 160px 80px rgba(255, 255, 255, 1), 0 10px 40px rgba(0, 0, 0, 0.15) !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.face-light-active h1,
+    body.face-light-active h2,
+    body.face-light-active p,
+    body.face-light-active label {
+      color: #0f172a !important;
+    }
+  </style>
+</head>
+<body class="cyber-bg relative flex flex-col justify-between p-4 sm:p-8">
+  <div class="scanline"></div>
+
+  <!-- Header Superior -->
+  <header class="w-full max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 py-4 border-b border-cyan-500/30">
+    <div class="flex items-center space-x-3">
+      <div class="relative w-10 h-10 rounded-full border border-cyan-400 p-1 flex items-center justify-center bg-cyan-950/40 glow-cyan">
+        <img src="/icon-512.png" alt="Reactor" class="w-full h-full object-contain animate-spin" style="animation-duration: 20s;">
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-hud font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-cyan-500">
+          STARK PROTOCOL // BIOMETRICS
+        </h1>
+        <p class="text-xs font-mono-code text-cyan-400/80 tracking-wider">
+          PORTAL DEDICADO DE CADASTRO NEURAL FACIAL (PORTA 8086 / 8082)
+        </p>
+      </div>
+    </div>
+    
+    <!-- Status Pill -->
+    <div class="flex items-center space-x-2 font-mono-code text-xs px-3 py-1.5 rounded-full bg-slate-900/80 border border-cyan-400/40">
+      <span id="header-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span id="header-status-text" class="text-cyan-300 font-bold tracking-wider">PORTAL ATIVO</span>
+    </div>
+  </header>
+
+  <!-- Container Principal -->
+  <main class="w-full max-w-4xl mx-auto my-6 flex-1 flex flex-col items-center justify-center">
+
+    <!-- ESTÁGIO 1: AUTENTICAÇÃO COM SENHA DE 12 DÍGITOS -->
+    <section id="step-auth" class="w-full max-w-md bg-slate-950/90 rounded-2xl p-6 sm:p-8 glow-border glow-cyan flex flex-col items-center text-center">
+      <div class="w-14 h-14 rounded-2xl bg-cyan-950/80 border border-cyan-400/50 flex items-center justify-center mb-4 text-cyan-400">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      </div>
+      <h2 class="text-lg font-hud font-bold text-white tracking-wider mb-1">ACESSO RESTRITO AO CADASTRO</h2>
+      <p class="text-xs text-slate-400 mb-6 font-mono-code">
+        Digite a Chave de Segurança de 12 Dígitos configurada no ambiente do Docker (<code class="text-cyan-300">ENROLLMENT_PASSWORD</code>).
+      </p>
+
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="w-full space-y-4">
+        <div class="relative">
+          <input 
+            type="password" 
+            id="enroll-password-input" 
+            maxlength="12" 
+            placeholder="•••••••••••• (12 dígitos)" 
+            autocomplete="off"
+            required
+            class="w-full bg-slate-900/90 border border-cyan-500/50 rounded-xl px-4 py-3 text-center text-xl font-mono-code tracking-[0.3em] text-cyan-200 placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all">
+          <button 
+            type="button" 
+            onclick="togglePasswordVisibility()" 
+            class="absolute right-3 top-3.5 text-slate-500 hover:text-cyan-300">
+            <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </button>
+        </div>
+
+        <div id="auth-error-msg" class="hidden text-xs text-rose-400 font-mono-code font-bold"></div>
+
+        <button 
+          type="submit" 
+          id="auth-submit-btn" 
+          class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-hud font-extrabold tracking-wider shadow-[0_0_20px_rgba(0,240,255,0.4)] active:scale-[0.98] transition-all">
+          DESBLOQUEAR TERMINAL
+        </button>
+      </form>
+    </section>
+
+    <!-- ESTÁGIO 2: PAINEL DE CADASTRO FACIAL BIOMÉTRICO (LIBERADO APÓS SENHA) -->
+    <section id="step-enroll" class="hidden w-full max-w-3xl flex flex-col gap-6">
+
+      <!-- Card do Scanner Facial -->
+      <div class="bg-slate-950/90 rounded-3xl p-6 sm:p-8 glow-border glow-cyan flex flex-col items-center">
+        
+        <div class="w-full flex items-center justify-between pb-4 mb-4 border-b border-cyan-500/20">
+          <div>
+            <h2 class="text-lg font-hud font-bold text-white tracking-wider">MAPEAMENTO BIOMÉTRICO 128D</h2>
+            <p class="text-xs font-mono-code text-slate-400">Extração vetorial anatômica profunda via FaceNet / ResNet-34</p>
+          </div>
+          <button onclick="handleLogout()" class="text-xs font-mono-code text-rose-400 hover:text-rose-300 px-3 py-1.5 rounded-lg border border-rose-500/40 hover:bg-rose-950/40">
+            Bloquear Terminal
+          </button>
+        </div>
+
+        <!-- Formulário de Operador -->
+        <div class="w-full grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 font-mono-code text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1.5 font-bold">NOME DO OPERADOR:</label>
+            <input 
+              type="text" 
+              id="operator-name-input" 
+              value="Senhor Werik" 
+              placeholder="Ex: Senhor Werik, Assistente, etc." 
+              class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-white font-sans text-sm focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1.5 font-bold">NÍVEL DE PERMISSÃO:</label>
+            <select 
+              id="operator-role-select" 
+              class="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2.5 text-white font-sans text-sm focus:outline-none">
+              <option value="Proprietário">Proprietário (Acesso Total Stark)</option>
+              <option value="Operador Autorizado">Operador Autorizado</option>
+              <option value="Convidado Temporário">Convidado Temporário</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Toggle Luz Facial (Softbox / Iluminação Branca) -->
+        <button type="button" id="enroll-light-btn" onclick="toggleEnrollLight()" class="mb-4 px-4 py-1.5 rounded-full border border-yellow-400/70 bg-yellow-950/40 text-yellow-300 hover:bg-yellow-900/60 transition-all text-xs font-mono-code flex items-center space-x-2 shadow-[0_0_15px_rgba(250,204,21,0.25)] cursor-pointer">
+          <span class="text-sm">💡</span>
+          <span id="enroll-light-label">LUZ FACIAL: DESLIGADA</span>
+        </button>
+
+        <!-- Viewfinder da Câmera -->
+        <div class="relative w-full max-w-md aspect-[4/3] rounded-2xl bg-black overflow-hidden border-2 border-cyan-400/60 shadow-[0_0_30px_rgba(0,210,255,0.2)] mb-4">
+          <video id="enroll-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+          <canvas id="enroll-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+
+          <div id="video-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 bg-slate-950/80">
+            <svg class="w-12 h-12 text-cyan-500/50 animate-pulse mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <p class="text-xs font-mono-code text-cyan-300">INICIALIZANDO SENSOR ÓPTICO...</p>
+          </div>
+
+          <!-- Badge flutuante de detecção -->
+          <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between px-3 py-1.5 rounded-xl bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 text-[11px] font-mono-code">
+            <span id="enroll-status-text" class="text-cyan-300 font-bold truncate">CARREGANDO MODELO NEURAL...</span>
+            <span id="enroll-status-dot" class="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0 ml-2"></span>
+          </div>
+        </div>
+
+        <!-- Barra de Progresso de Amostragem -->
+        <div id="sample-progress-container" class="hidden w-full max-w-md mb-4 font-mono-code text-xs">
+          <div class="flex justify-between text-slate-400 mb-1">
+            <span id="sample-progress-label">Coleta de Amostras Neurais</span>
+            <span id="sample-progress-percent">0%</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-slate-900 overflow-hidden border border-slate-700">
+            <div id="sample-progress-bar" class="h-full bg-gradient-to-r from-sky-500 to-cyan-400 transition-all duration-300 w-0"></div>
+          </div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="w-full max-w-md flex flex-col sm:flex-row gap-3">
+          <button 
+            type="button" 
+            id="start-capture-btn" 
+            onclick="startBiometricCapture()" 
+            class="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-hud font-extrabold tracking-wider shadow-[0_0_20px_rgba(0,210,255,0.4)] active:scale-95 transition-all flex items-center justify-center space-x-2">
+            <span>📷</span>
+            <span>CAPTURAR ROSTO (4 AMOSTRAS)</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Card de Perfis Cadastrados e Gerenciamento -->
+      <div class="bg-slate-950/90 rounded-3xl p-6 sm:p-8 border border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+          <h3 class="text-sm font-hud font-bold text-slate-300 tracking-wider flex items-center space-x-2">
+            <span>🛡️</span>
+            <span>OPERADORES BIOMÉTRICOS REGISTRADOS NO J.A.R.V.I.S.</span>
+          </h3>
+          <span id="profiles-count-badge" class="px-2.5 py-0.5 rounded-full bg-cyan-950 border border-cyan-400/40 text-cyan-300 text-xs font-mono-code font-bold">0 perfis</span>
+        </div>
+
+        <div id="profiles-list-container" class="space-y-3 font-mono-code text-xs">
+          <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-500 text-center">
+            Nenhum perfil carregado.
+          </div>
+        </div>
+
+        <!-- Seção de Blindagem / Desativação do Portal -->
+        <div class="mt-6 pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/40 rounded-2xl p-4 border border-amber-500/20">
+          <div class="text-left">
+            <h4 class="text-xs font-hud font-bold text-amber-300 flex items-center space-x-1.5 mb-1">
+              <span>⚠️</span>
+              <span>BLINDAGEM DO SISTEMA (DESATIVAÇÃO DO PORTAL)</span>
+            </h4>
+            <p class="text-[11px] text-slate-400 max-w-lg font-mono-code">
+              Após cadastrar os rostos autorizados, desative este portal para que ninguém mais possa acessar a porta de cadastro. Você pode reativar a qualquer momento no Docker com <code class="text-cyan-300">ENROLLMENT_PORTAL_ENABLED=true</code>.
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onclick="togglePortalState(false)" 
+            class="whitespace-nowrap px-4 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-rose-200 text-xs font-hud font-bold tracking-wider active:scale-95 transition-all">
+            BLOQUEAR PORTAL AGORA
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ESTÁGIO 3: TELA DE PORTAL DESATIVADO -->
+    <section id="step-disabled" class="hidden w-full max-w-md bg-slate-950/90 rounded-2xl p-8 border border-rose-500/50 shadow-[0_0_40px_rgba(244,63,94,0.3)] flex flex-col items-center text-center">
+      <div class="w-16 h-16 rounded-full bg-rose-950/80 border border-rose-500 flex items-center justify-center mb-4 text-rose-400">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+      </div>
+      <h2 class="text-lg font-hud font-bold text-white tracking-wider mb-2">PORTAL DE CADASTRO DESATIVADO</h2>
+      <p class="text-xs text-slate-400 mb-6 font-mono-code leading-relaxed">
+        Este portal foi desativado por diretriz de segurança para proteger o sistema J.A.R.V.I.S. contra novos cadastros não autorizados.
+      </p>
+
+      <div class="w-full p-4 rounded-xl bg-slate-900 border border-slate-800 text-left font-mono-code text-xs text-slate-300 mb-6 space-y-2">
+        <div class="text-cyan-400 font-bold">PARA REATIVAR O PORTAL:</div>
+        <div>1. No Docker Compose do ZimaOS ou Windows, defina:</div>
+        <div class="p-2 rounded bg-black text-emerald-400 font-bold">ENROLLMENT_PORTAL_ENABLED=true</div>
+        <div>2. Ou execute a reinicialização do container.</div>
+      </div>
+
+      <button 
+        type="button" 
+        onclick="requestPortalReactivation()" 
+        class="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-mono-code font-bold transition-colors">
+        Reativar via Senha de 12 Dígitos
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full max-w-4xl mx-auto text-center py-4 border-t border-slate-800/80 text-[11px] font-mono-code text-slate-500">
+    J.A.R.V.I.S. BIOMETRIC SECURITY SYSTEM • STARK ENTERPRISES DEFENSE GRID • ALL RIGHTS RESERVED
+  </footer>
+
+  <script>
+    let currentAuthToken = '';
+    let isFaceApiLoaded = false;
+    let enrollStream = null;
+    let isScanning = false;
+    let reticleAnimId = null;
+    let reticleAngle = 0;
+    let detectedFaceBox = null;
+
+    // Inicialização ao carregar
+    window.onload = async () => {
+      checkPortalStatus();
+    };
+
+    async function checkPortalStatus() {
+      try {
+        const res = await fetch('/api/enroll/status');
+        const data = await res.json();
+        if (data.enabled === false) {
+          showStep('step-disabled');
+          const dot = document.getElementById('header-status-dot');
+          const txt = document.getElementById('header-status-text');
+          if (dot) dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+          if (txt) { txt.innerText = 'PORTAL DESATIVADO'; txt.className = 'text-rose-400 font-bold tracking-wider'; }
+          return;
+        }
+      } catch(e) {}
+
+      // Verifica se já tinha sessão autenticada nesta janela
+      const savedKey = sessionStorage.getItem('jarvis_enroll_key');
+      if (savedKey && savedKey.length === 12) {
+        currentAuthToken = savedKey;
+        await unlockEnrollmentPortal();
+      } else {
+        showStep('step-auth');
+      }
+    }
+
+    function showStep(stepId) {
+      ['step-auth', 'step-enroll', 'step-disabled'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('hidden', id !== stepId);
+      });
+    }
+
+    function togglePasswordVisibility() {
+      const input = document.getElementById('enroll-password-input');
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('enroll-password-input');
+      const errEl = document.getElementById('auth-error-msg');
+      const btn = document.getElementById('auth-submit-btn');
+      const key = input ? input.value.trim() : '';
+
+      if (key.length !== 12) {
+        errEl.innerText = 'A senha de cadastro deve conter exatamente 12 dígitos.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'AUTENTICANDO...';
+
+      try {
+        const res = await fetch('/api/enroll/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: key })
+        });
+        const data = await res.json();
+
+        if (data.authenticated) {
+          currentAuthToken = key;
+          sessionStorage.setItem('jarvis_enroll_key', key);
+          errEl.classList.add('hidden');
+          await unlockEnrollmentPortal();
+        } else {
+          errEl.innerText = 'Senha de 12 dígitos incorreta. Acesso negado pelo Docker.';
+          errEl.classList.remove('hidden');
+        }
+      } catch(err) {
+        errEl.innerText = 'Falha ao conectar com o serviço de autenticação.';
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'DESBLOQUEAR TERMINAL';
+      }
+    }
+
+    async function unlockEnrollmentPortal() {
+      showStep('step-enroll');
+      await startCamera();
+      await initNeuralEngine();
+      await loadRegisteredProfiles();
+    }
+
+    function handleLogout() {
+      if (isEnrollLightActive) toggleEnrollLight();
+      sessionStorage.removeItem('jarvis_enroll_key');
+      currentAuthToken = '';
+      stopCamera();
+      showStep('step-auth');
+    }
+
+    let isEnrollLightActive = false;
+    function toggleEnrollLight() {
+      isEnrollLightActive = !isEnrollLightActive;
+      const label = document.getElementById('enroll-light-label');
+      if (isEnrollLightActive) {
+        document.body.classList.add('face-light-active');
+        if (label) label.innerText = 'LUZ FACIAL: LIGADA (CLARIDADE)';
+      } else {
+        document.body.classList.remove('face-light-active');
+        if (label) label.innerText = 'LUZ FACIAL: DESLIGADA';
+      }
+    }
+
+    async function startCamera() {
+      try {
+        const video = document.getElementById('enroll-video');
+        const placeholder = document.getElementById('video-placeholder');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        enrollStream = stream;
+        if (video) {
+          video.srcObject = stream;
+          video.onloadedmetadata = () => {
+            if (placeholder) placeholder.classList.add('hidden');
+            startReticleAnimation();
+          };
+        }
+      } catch(e) {
+        console.error("[Camera Error]", e);
+        const st = document.getElementById('enroll-status-text');
+        if (st) st.innerText = 'CÂMERA NÃO DETECTADA OU PERMISSÃO NEGADA';
+      }
+    }
+
+    function stopCamera() {
+      if (enrollStream) {
+        enrollStream.getTracks().forEach(t => t.stop());
+        enrollStream = null;
+      }
+      if (reticleAnimId) {
+        cancelAnimationFrame(reticleAnimId);
+        reticleAnimId = null;
+      }
+    }
+
+    async function initNeuralEngine() {
+      const st = document.getElementById('enroll-status-text');
+      const dot = document.getElementById('enroll-status-dot');
+      if (typeof faceapi === 'undefined') return;
+
+      try {
+        st.innerText = 'CARREGANDO PESOS NEURAIS 128D...';
+        const localPath = '/models/face-api';
+        try {
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(localPath),
+            faceapi.nets.faceLandmark68Net.loadFromUri(localPath),
+            faceapi.nets.faceRecognitionNet.loadFromUri(localPath)
+          ]);
+        } catch(locErr) {
+          const cdnPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model';
+          await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(cdnPath),
+            faceapi.nets.faceLandmark68Net.loadFromUri(cdnPath),
+            faceapi.nets.faceRecognitionNet.loadFromUri(cdnPath)
+          ]);
+        }
+        isFaceApiLoaded = true;
+        st.innerText = 'SENSOR NEURAL PRONTO • POSICIONE O ROSTO';
+        dot.className = 'w-2 h-2 rounded-full bg-cyan-400 animate-pulse';
+        startFaceDetectionWatcher();
+      } catch(err) {
+        console.warn("[Neural Load Error]", err);
+        st.innerText = 'ERRO AO INICIALIZAR REDE NEURAL.';
+        dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      }
+    }
+
+    function startFaceDetectionWatcher() {
+      setInterval(async () => {
+        if (!isFaceApiLoaded || isScanning) return;
+        const video = document.getElementById('enroll-video');
+        if (!video || !video.videoWidth || video.readyState < 2) return;
+
+        try {
+          const det = await faceapi.detectSingleFace(
+            video,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
+          );
+          const st = document.getElementById('enroll-status-text');
+          const dot = document.getElementById('enroll-status-dot');
+
+          if (det) {
+            detectedFaceBox = det.box;
+            if (st) st.innerText = 'ROSTO LOCALIZADO • PRONTO PARA CAPTURAR';
+            if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]';
+          } else {
+            detectedFaceBox = null;
+            if (st) st.innerText = 'AGUARDANDO OPERADOR... NENHUM ROSTO DETECTADO';
+            if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+          }
+        } catch(e) {}
+      }, 350);
+    }
+
+    function startReticleAnimation() {
+      const canvas = document.getElementById('enroll-canvas');
+      const video = document.getElementById('enroll-video');
+      if (!canvas || !video) return;
+
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        reticleAngle += 0.02;
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const hasFace = !!detectedFaceBox;
+
+        const mainColor = hasFace ? '#00f0ff' : 'rgba(245, 158, 11, 0.7)';
+        const ringColor = hasFace ? 'rgba(0, 240, 255, 0.5)' : 'rgba(245, 158, 11, 0.35)';
+
+        // Círculo central rotativo
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(reticleAngle);
+        ctx.strokeStyle = ringColor;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 110, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Ticks
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 110, Math.sin(a) * 110);
+          ctx.lineTo(Math.cos(a) * 118, Math.sin(a) * 118);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // 4 Brackets Stark
+        const boxSize = 95;
+        const cLen = 22;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 2.5;
+
+        // Top-Left
+        ctx.beginPath();
+        ctx.moveTo(cx - boxSize, cy - boxSize + cLen);
+        ctx.lineTo(cx - boxSize, cy - boxSize);
+        ctx.lineTo(cx - boxSize + cLen, cy - boxSize);
+        ctx.stroke();
+
+        // Top-Right
+        ctx.beginPath();
+        ctx.moveTo(cx + boxSize - cLen, cy - boxSize);
+        ctx.lineTo(cx + boxSize, cy - boxSize);
+        ctx.lineTo(cx + boxSize, cy - boxSize + cLen);
+        ctx.stroke();
+
+        // Bottom-Left
+        ctx.beginPath();
+        ctx.moveTo(cx - boxSize, cy + boxSize - cLen);
+        ctx.lineTo(cx - boxSize, cy + boxSize);
+        ctx.lineTo(cx - boxSize + cLen, cy + boxSize);
+        ctx.stroke();
+
+        // Bottom-Right
+        ctx.beginPath();
+        ctx.moveTo(cx + boxSize - cLen, cy + boxSize);
+        ctx.lineTo(cx + boxSize, cy + boxSize);
+        ctx.lineTo(cx + boxSize, cy + boxSize - cLen);
+        ctx.stroke();
+
+        reticleAnimId = requestAnimationFrame(draw);
+      }
+      draw();
+    }
+
+    async function startBiometricCapture() {
+      if (isScanning) return;
+      const video = document.getElementById('enroll-video');
+      const nameInput = document.getElementById('operator-name-input');
+      const roleSelect = document.getElementById('operator-role-select');
+      const btn = document.getElementById('start-capture-btn');
+      const progContainer = document.getElementById('sample-progress-container');
+      const progBar = document.getElementById('sample-progress-bar');
+      const progPercent = document.getElementById('sample-progress-percent');
+      const progLabel = document.getElementById('sample-progress-label');
+      const st = document.getElementById('enroll-status-text');
+
+      const opName = (nameInput ? nameInput.value.trim() : '') || 'Senhor Werik';
+      const opRole = roleSelect ? roleSelect.value : 'Proprietário';
+
+      if (!video || !video.videoWidth) {
+        alert("Ative a câmera para iniciar o escaneamento.");
+        return;
+      }
+
+      if (!isFaceApiLoaded) {
+        alert("Aguarde o carregamento do modelo neural FaceNet.");
+        return;
+      }
+
+      isScanning = true;
+      btn.disabled = true;
+      progContainer.classList.remove('hidden');
+
+      const samples = [];
+      const totalSamples = 4;
+
+      for (let i = 1; i <= totalSamples; i++) {
+        progLabel.innerText = `AMOSTRANDO VETOR NEURAL (${i}/${totalSamples})... OLHE PARA A CÂMERA`;
+        const pct = Math.round((i / totalSamples) * 100);
+        progBar.style.width = pct + '%';
+        progPercent.innerText = pct + '%';
+        st.innerText = `COLETANDO AMOSTRA ${i}/${totalSamples}...`;
+
+        await new Promise(r => setTimeout(r, 650));
+
+        try {
+          const det = await faceapi.detectSingleFace(
+            video,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
+          ).withFaceLandmarks().withFaceDescriptor();
+
+          if (det && det.descriptor) {
+            samples.push(det.descriptor);
+          }
+        } catch(e) {
+          console.warn("[Sample Extraction Error]", e);
+        }
+      }
+
+      if (samples.length < 2) {
+        alert("Não foi possível capturar amostras suficientes do rosto com clareza. Mantenha-se estável e tente novamente.");
+        isScanning = false;
+        btn.disabled = false;
+        progContainer.classList.add('hidden');
+        return;
+      }
+
+      // Calcula a média das 128 dimensões
+      st.innerText = 'CALCULANDO ASSINATURA ANATÔMICA MÉDIA...';
+      const avgDescriptor = new Float32Array(128);
+      for (let d = 0; d < 128; d++) {
+        let sum = 0;
+        for (let s = 0; s < samples.length; s++) {
+          sum += samples[s][d];
+        }
+        avgDescriptor[d] = sum / samples.length;
+      }
+
+      // Envia ao backend
+      st.innerText = 'GRAVANDO NO BANCO DE DADOS BIOMÉTRICO...';
+      try {
+        const res = await fetch('/api/enroll/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Enroll-Key': currentAuthToken
+          },
+          body: JSON.stringify({
+            name: opName,
+            role: opRole,
+            descriptor: Array.from(avgDescriptor)
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          st.innerText = `BIOMETRIA DE ${opName.toUpperCase()} REGISTRADA COM SUCESSO!`;
+          alert(`Sucesso! O perfil biométrico de ${opName} foi cadastrado e agora pode desbloquear o J.A.R.V.I.S.`);
+          await loadRegisteredProfiles();
+        } else {
+          alert("Erro ao salvar cadastro: " + (data.error || "Acesso negado."));
+        }
+      } catch(err) {
+        alert("Erro na conexão com o servidor ao gravar perfil.");
+      } finally {
+        isScanning = false;
+        btn.disabled = false;
+        setTimeout(() => {
+          progContainer.classList.add('hidden');
+          progBar.style.width = '0%';
+        }, 1500);
+      }
+    }
+
+    async function loadRegisteredProfiles() {
+      const container = document.getElementById('profiles-list-container');
+      const badge = document.getElementById('profiles-count-badge');
+      if (!container) return;
+
+      try {
+        const res = await fetch('/api/enroll/profiles', {
+          headers: { 'X-Enroll-Key': currentAuthToken }
+        });
+        const data = await res.json();
+        const profiles = data.profiles || [];
+
+        badge.innerText = `${profiles.length} ${profiles.length === 1 ? 'perfil' : 'perfis'}`;
+
+        if (profiles.length === 0) {
+          container.innerHTML = `
+            <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-500 text-center">
+              Nenhum perfil biométrico registrado ainda. Use o formulário acima para cadastrar.
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = profiles.map(p => `
+          <div class="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/40 transition-colors">
+            <div class="flex items-center space-x-3">
+              <div class="w-9 h-9 rounded-lg bg-cyan-950/80 border border-cyan-400/40 flex items-center justify-center text-cyan-300 font-hud font-bold">
+                ${p.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div class="text-white font-bold text-sm font-sans flex items-center space-x-2">
+                  <span>${p.name}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-cyan-950 text-cyan-300 border border-cyan-500/30">${p.role || 'Operador'}</span>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                  Cadastrado em: ${p.registered_at || 'Data não gravada'} • 128D Neural Vector Ativo
+                </div>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onclick="deleteProfile('${p.id || p.name}')" 
+              class="px-2.5 py-1.5 rounded-lg border border-rose-500/30 text-rose-400 hover:bg-rose-950/40 hover:border-rose-400 transition-colors text-[11px]">
+              Excluir
+            </button>
+          </div>
+        `).join('');
+      } catch(e) {
+        console.warn("[Profiles Load Error]", e);
+      }
+    }
+
+    async function deleteProfile(profileId) {
+      if (!confirm(`Deseja realmente remover o operador "${profileId}" do reconhecimento facial?`)) return;
+
+      try {
+        const res = await fetch('/api/enroll/delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Enroll-Key': currentAuthToken
+          },
+          body: JSON.stringify({ id: profileId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadRegisteredProfiles();
+        } else {
+          alert("Erro ao excluir: " + (data.error || "Operação não permitida."));
+        }
+      } catch(e) {
+        alert("Erro de conexão ao excluir perfil.");
+      }
+    }
+
+    async function togglePortalState(targetEnabled) {
+      const msg = targetEnabled 
+        ? "Deseja reativar o portal de cadastro?"
+        : "ATENÇÃO: Desativar o portal impedirá novos cadastros até que você altere a variável ENROLLMENT_PORTAL_ENABLED no Docker. Deseja prosseguir?";
+      if (!confirm(msg)) return;
+
+      try {
+        const res = await fetch('/api/enroll/toggle', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Enroll-Key': currentAuthToken
+          },
+          body: JSON.stringify({ enabled: targetEnabled })
+        });
+        const data = await res.json();
+        if (data.success) {
+          checkPortalStatus();
+        }
+      } catch(e) {
+        alert("Erro ao alterar estado do portal.");
+      }
+    }
+
+    async function requestPortalReactivation() {
+      const key = prompt("Digite a Chave de 12 Dígitos para reativar o portal de cadastro:");
+      if (!key) return;
+
+      try {
+        const res = await fetch('/api/enroll/toggle', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Enroll-Key': key
+          },
+          body: JSON.stringify({ enabled: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert("Portal de cadastro reativado com sucesso!");
+          currentAuthToken = key;
+          sessionStorage.setItem('jarvis_enroll_key', key);
+          checkPortalStatus();
+        } else {
+          alert("Chave de 12 dígitos incorreta.");
+        }
+      } catch(e) {
+        alert("Erro ao comunicar com o servidor.");
+      }
+    }
+  </script>
+</body>
+</html>

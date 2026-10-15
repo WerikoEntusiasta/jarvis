@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. — Central de Controle do Nó</title>
+<style>
+  :root {
+    --bg: #01091d; --panel: rgba(6, 14, 30, 0.85); --line: rgba(0, 240, 255, 0.28);
+    --cyan: #00f0ff; --sky: #38bdf8; --green: #10b981; --amber: #fbbf24;
+    --red: #f43f5e; --text: #e2f3ff; --muted: #7fb1cc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -20%, rgba(0,240,255,0.08), transparent 60%),
+                linear-gradient(180deg, #01091d, #020b1c 60%, #010813);
+    color: var(--text); font-family: 'Segoe UI', Inter, monospace; min-height: 100vh;
+    padding: 28px 22px 60px; letter-spacing: .3px;
+  }
+  header { text-align: center; margin-bottom: 26px; }
+  h1 {
+    font-size: 22px; font-weight: 800; color: var(--cyan);
+    text-shadow: 0 0 18px rgba(0,240,255,.6); letter-spacing: 4px;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 6px; letter-spacing: 2px; }
+  .subtitle b { color: var(--sky); }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(335px, 1fr));
+    gap: 16px; max-width: 1380px; margin: 0 auto;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px 18px 16px; box-shadow: 0 0 22px rgba(0, 240, 255, 0.07) inset, 0 8px 30px rgba(0,0,0,.45);
+    backdrop-filter: blur(6px); position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: .55;
+  }
+  .card h2 {
+    font-size: 12px; font-weight: 800; color: var(--sky); letter-spacing: 2.4px;
+    text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .ok { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  .bad { background: var(--red); box-shadow: 0 0 10px var(--red); }
+  .warn { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .val { color: var(--muted); font-size: 12px; }
+  .btn {
+    background: linear-gradient(90deg, rgba(0,240,255,.14), rgba(56,189,248,.14));
+    border: 1px solid var(--line); color: var(--text); border-radius: 10px;
+    padding: 8px 14px; font-size: 12px; font-weight: 700; cursor: pointer; letter-spacing: 1px;
+    transition: all .15s; font-family: inherit;
+  }
+  .btn:hover { background: rgba(0,240,255,.22); box-shadow: 0 0 14px rgba(0,240,255,.35); }
+  .btn:disabled { opacity: .45; cursor: wait; }
+  .switch { position: relative; width: 46px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; inset: 0; border-radius: 24px;
+    background: rgba(244,63,94,.28); border: 1px solid rgba(244,63,94,.55); transition: .2s;
+  }
+  .slider::before {
+    content: ""; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px;
+    border-radius: 50%; background: #ffb4c2; transition: .2s;
+  }
+  .switch input:checked + .slider { background: rgba(16,185,129,.3); border-color: rgba(16,185,129,.65); }
+  .switch input:checked + .slider::before { transform: translateX(22px); background: #34d399; box-shadow: 0 0 8px #34d399; }
+  .toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast {
+    background: rgba(4,12,26,.95); border: 1px solid var(--line); border-left: 3px solid var(--cyan);
+    border-radius: 10px; padding: 10px 16px; font-size: 12.5px; max-width: 380px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5); animation: pop .18s ease-out;
+  }
+  .toast.err { border-left-color: var(--red); }
+  .toast.win { border-left-color: var(--green); }
+  @keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .log {
+    background: rgba(0,0,0,.45); border: 1px solid rgba(0,240,255,.16); border-radius: 12px;
+    font: 11.5px/1.55 'Consolas', monospace; color: #9fdcEB; padding: 12px 14px;
+    max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-all;
+  }
+  .shot { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: none; margin-top: 10px; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+  .kv b { color: var(--text); font-weight: 600; }
+  .danger { border-color: rgba(244,63,94,.45); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+  footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 30px; letter-spacing: 1.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>J.A.R.V.I.S. · NODE CONTROL</h1>
+  <div class="sub">CENTRAL DE CONTROLE — <b id="nodeLabel">carregando…</b></div>
+</header>
+
+<div class="grid">
+  <!-- NÚCLEO -->
+  <div class="card">
+    <h2><span class="dot" id="coreDot"></span>Núcleo (ZimaOS)</h2>
+    <div class="row"><span class="val">Ponte de comandos</span><b id="bridgeStatus">—</b></div>
+    <div class="row"><span class="val">Último poll</span><b id="pollAge">—</b></div>
+    <div class="row"><span class="val">Fila pendente</span><b id="queueLen">—</b></div>
+    <button class="btn" id="btnRoundtrip" style="width:100%;margin-top:6px">⇄ TESTAR ROUNDTRIP NÚCLEO→NÓ</button>
+    <div class="hint">Dispara <b>system.info</b> no núcleo e mede o ciclo completo até o comando executar nesta máquina.</div>
+  </div>
+
+  <!-- VOZ -->
+  <div class="card">
+    <h2><span class="dot" id="voiceDot"></span>Voz / Whisper</h2>
+    <div class="row"><span class="val">Motor</span><b id="whisperMode">—</b></div>
+    <button class="btn" id="btnMic" style="width:100%">🎙 TESTAR MICROFONE (1.5s)</button>
+    <button class="btn" id="btnSpeak" style="width:100%;margin-top:6px">🗣 TESTAR TRANSCRIÇÃO (fale 3s)</button>
+    <div class="hint">A ilha escuta o microfone continuamente. Status de permissão controla se o JARVIS pode ouvir.</div>
+  </div>
+
+  <!-- PERMISSÕES -->
+  <div class="card">
+    <h2><span class="dot"></span>Permissões do Nó</h2>
+    <div id="permsList"></div>
+    <div class="hint">Interruptores alteram <b>node_permissions.json</b> na hora — o JARVIS respeita na próxima execução.</div>
+  </div>
+
+  <!-- CAPTURA -->
+  <div class="card">
+    <h2><span class="dot" id="screenshotDot"></span>Captura de Tela</h2>
+    <button class="btn" id="btnShot" style="width:100%">📸 CAPTURAR AGORA</button>
+    <img id="shotImg" class="shot" alt="screenshot">
+  </div>
+
+  <!-- MOUSE -->
+  <div class="card">
+    <h2><span class="dot" id="mouseDot"></span>Teclado & Mouse</h2>
+    <div class="row"><span class="val">Posição atual</span><b id="mousePos">—</b></div>
+    <button class="btn" id="btnMouse" style="width:100%">🖱 CURSOR IR AO CENTRO E VOLTAR</button>
+  </div>
+
+  <!-- AUTOSTART -->
+  <div class="card">
+    <h2><span class="dot" id="bootDot"></span>Inicialização</h2>
+    <div class="row"><span class="val">Iniciar com o Windows</span>
+      <label class="switch"><input type="checkbox" id="autostartTgl"><span class="slider"></span></label>
+    </div>
+    <div class="row"><span class="val">Comando registrado</span><b id="autostartCmd" style="word-break:break-all">—</b></div>
+    <div class="kv">
+      <div>Node ID: <b id="kvNode">—</b></div>
+      <div>Porta HUD: <b id="kvPort">—</b></div>
+    </div>
+  </div>
+
+  <!-- COMPORTAMENTO -->
+  <div class="card">
+    <h2><span class="dot" id="voiceDot"></span>Comportamento da Ilha / Voz</h2>
+    <div class="row"><span class="val">Wake word "Jarvis" (só fala com ativação)</span>
+      <label class="switch"><input type="checkbox" id="wakeTgl"><span class="slider"></span></label>
+    </div>
+    <div class="row"><span class="val">Perguntar antes de exibir painéis</span>
+      <label class="switch"><input type="checkbox" id="askTgl"><span class="slider"></span></label>
+    </div>
+    <div class="hint">Wake ON: o JARVIS só ativa quando ouve "Jarvis" (follow-up 8s). Ask ON: painéis/canvas pedem [Ver agora]; OFF abre na hora.</div>
+  </div>
+
+  <!-- LOG -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <h2><span class="dot" id="logDot"></span>Log da Ponte — comandos recebidos/executados</h2>
+    <div class="log" id="logBox">aguardando…</div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<footer>J.A.R.V.I.S. NODE v1.0 · A Núcleo permanece na ZimaOS — este painel governa apenas esta máquina.</footer>
+
+<script>
+const qs = id => document.getElementById(id);
+function toast(msg, cls = '') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + cls; t.textContent = msg;
+  qs('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 4200);
+}
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  return r.json().catch(() => ({}));
+}
+function setDot(id, on, warn) { qs(id).className = 'dot ' + (on ? 'ok' : (warn ? 'warn' : 'bad')); }
+
+function renderPerms(perms) {
+  const box = qs('permsList'); box.innerHTML = '';
+  Object.entries(perms).forEach(([cat, on]) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = `<span class="val">${labelFor(cat)}</span>
+      <label class="switch"><input type="checkbox" ${on ? 'checked' : ''} data-cat="${cat}"><span class="slider"></span></label>`;
+    row.querySelector('input').addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      const res = await api('/api/node/permission', { method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ category: cat, enabled }) });
+      toast(res.message || JSON.stringify(res), enabled ? 'win' : 'err');
+    });
+    box.appendChild(row);
+  });
+}
+const LABELS = {
+  voice_whisper: "Voz / Whisper", camera_vision: "Câmera e Gestos", screen_capture: "Captura de tela",
+  keyboard_mouse: "Teclado e Mouse", clipboard: "Clipboard", apps: "Abrir/Fechar apps",
+  windows_mgmt: "Janelas", media: "Mídia e Volume", telemetry: "Telemetria",
+  system_commands: "PowerShell/CMD livre", power: "Desligar/Reiniciar/Suspender"
+};
+const labelFor = c => LABELS[c] || c;
+
+let lastPerms = null;
+async function refresh() {
+  const st = await api('/api/node/status');
+  if (!st.ok) return;
+  qs('nodeLabel').textContent = `${st.node_id} · ${st.hostname}`;
+  qs('kvNode').textContent = st.node_id;
+  qs('kvPort').textContent = st.port;
+  // Núcleo
+  setDot('coreDot', st.bridge.connected);
+  qs('bridgeStatus').textContent = st.bridge.connected ? 'CONECTADO' : 'OFFLINE';
+  qs('bridgeStatus').style.color = st.bridge.connected ? '#10b981' : '#f43f5e';
+  qs('pollAge').textContent = st.bridge.seconds_since_poll != null ? st.bridge.seconds_since_poll + 's' : 'nunca';
+  qs('queueLen').textContent = st.bridge.pending;
+  // Whisper
+  const localOk = st.whisper.runtime_local;
+  qs('whisperMode').textContent = localOk ? 'Whisper LOCAL ativo' : `Fallback → ${st.whisper.fallback}`;
+  setDot('voiceDot', st.whisper.importable || !localOk, true);
+  // Permissões
+  if (JSON.stringify(st.permissions) !== JSON.stringify(lastPerms)) {
+    lastPerms = JSON.parse(JSON.stringify(st.permissions));
+    renderPerms(st.permissions);
+  }
+  // Autostart
+  qs('autostartTgl').checked = st.autostart;
+  // Log
+  const lg = await api('/api/node/log');
+  qs('logBox').textContent = (lg.log || '').trim() || '—';
+  (st.recent_commands || []).length;
+}
+qs('autostartTgl').addEventListener('change', async (e) => {
+  const res = await api('/api/node/autostart', { method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ enabled: e.target.checked }) });
+  toast(res.ok ? (e.target.checked ? 'Autostart REGISTRADO no Windows' : 'Autostart removido') : 'Falha ao registrar autostart', res.ok ? 'win' : 'err');
+});
+setTimeout(async () => {
+  const s = await api('/api/node/settings');
+  if (s.ok) {
+    qs('wakeTgl').checked = !!s.settings.wake_word_enabled;
+    qs('askTgl').checked = !!s.settings.ask_before_show;
+  }
+}, 200);
+async function toggleSetting(key, el, label) {
+  const cur = await api('/api/node/settings');
+  const next = !!(!el.parentElement.querySelector('input').checked);
+  const base = (cur.settings || {}); base[key] = next;
+  const res = await api('/api/node/settings', { method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ settings: base }) });
+  toast(res.ok ? `${label}: ${next ? 'ATIVADO' : 'DESATIVADO'}` : 'Falha ao salvar', res.ok ? 'win' : 'err');
+}
+qs('wakeTgl').addEventListener('change', e => toggleSetting('wake_word_enabled', e.target.closest('label'), 'Wake word'));
+qs('askTgl').addEventListener('change', e => toggleSetting('ask_before_show', e.target.closest('label'), 'Perguntar antes'));
+qs('btnRoundtrip').addEventListener('click', async (e) => {
+  e.target.disabled = true; e.target.textContent = '⇄ medindo ciclo…';
+  const res = await api('/api/node/test/bridge', { method: 'POST' });
+  toast(res.message || res.error || 'sem resposta', res.ok ? 'win' : 'err');
+  e.target.disabled = false; e.target.textContent = '⇄ TESTAR ROUNDTRIP NÚCLEO→NÓ';
+});
+qs('btnMic').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const res = await api('/api/node/test/mic', { method: 'POST' });
+  toast(res.message || res.error, res.ok ? 'win' : 'err');
+  e.target.disabled = false;
+});
+qs('btnSpeak').addEventListener('click', async (e) => {
+  e.target.disabled = true; e.target.textContent = '🗣 escutando… fale!';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mr = new MediaRecorder(stream);
+    const chunks = []; mr.ondataavailable = d => chunks.push(d.data);
+    mr.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const r = await fetch('/api/transcribe', { method: 'POST', body: blob, headers: {'Content-Type':'audio/webm'} });
+      const j = await r.json();
+      toast(j.text ? `Transcrito: "${j.text}"` : (j.error || 'nada detectado'), j.text ? 'win' : 'err');
+      stream.getTracks().forEach(t => t.stop());
+      e.target.disabled = false; e.target.textContent = '🗣 TESTAR TRANSCRIÇÃO (fale 3s)';
+    };
+    mr.start(); setTimeout(() => mr.stop(), 3000);
+  } catch (err) {
+    toast('Microfone do navegador negado: ' + err.message, 'err');
+    e.target.disabled = false; e.target.textContent = '🗣 TESTAR TRANSCRIÇÃO (fale 3s)';
+  }
+});
+qs('btnShot').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const res = await api('/api/node/test/screenshot', { method: 'POST' });
+  if (res.ok) { qs('shotImg').src = res.image; qs('shotImg').style.display = 'block'; toast(`Capturado (${res.w}×${res.h})`, 'win'); }
+  else toast(res.error, 'err');
+  e.target.disabled = false;
+});
+qs('btnMouse').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  const res = await api('/api/node/test/mouse', { method: 'POST' });
+  toast(res.message || res.error, res.ok ? 'win' : 'err');
+  e.target.disabled = false;
+});
+refresh(); setInterval(refresh, 4000);
+</script>
+</body>
+</html>
