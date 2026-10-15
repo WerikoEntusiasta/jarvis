@@ -4270,6 +4270,51 @@ class JarvisRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode("utf-8"))
             return
 
+        if parsed.path == "/api/esfera/ota":
+            content_length = int(self.headers.get('Content-Length', 0))
+            raw = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                body = json.loads(raw.decode("utf-8"))
+            except Exception:
+                body = {}
+            target_url = str(body.get("url") or "http://45.167.187.80:8095/firmware.bin")
+            device_id = body.get("device_id") or _ESFERA_STATE["last_device"]
+
+            ws_payload = {
+                "type": "custom",
+                "payload": {
+                    "event": "jarvis.ota_update",
+                    "url": target_url
+                }
+            }
+            ok_wss, err_wss = _sphere_ws_push(device_id, ws_payload)
+
+            ok_router = False
+            try:
+                req_router = urllib.request.Request(
+                    "http://127.0.0.1:8095/api/jarvis/ota/trigger",
+                    data=json.dumps({"url": target_url}).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req_router, timeout=5) as r:
+                    res_r = json.loads(r.read().decode())
+                    ok_router = res_r.get("status") == "success"
+            except Exception:
+                pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "status": "success" if (ok_wss or ok_router) else "partial",
+                "wss_notified": ok_wss,
+                "router_notified": ok_router,
+                "url": target_url
+            }).encode("utf-8"))
+            return
+
+
         # Fala na esfera: texto → TTS → áudio via WSS (exige segredo da ponte)
         if parsed.path == "/api/esfera/say":
             content_length = int(self.headers.get('Content-Length', 0))

@@ -247,6 +247,52 @@ def mostrar_rosto_esfera(emocao: str = "happy") -> str:
         return f"Erro ao mudar o rosto da esfera: {e}"
 
 @mcp.tool()
+def atualizar_firmware_esfera_ota(url_firmware: str = "") -> str:
+    """Dispara a atualizacao de firmware sem fio (OTA - Over-The-Air) para a Esfera ESP32-S3.
+
+    Use quando o usuario pedir para 'atualizar a esfera', 'atualizar firmware via OTA', ou 'gravar o novo firmware na esfera'.
+    A esfera recebera a instrucao via WebSocket, baixara o binario diretamente pelo Wi-Fi (exibindo a porcentagem no display),
+    gravara na memoria flash e reiniciara automaticamente.
+
+    Args:
+        url_firmware: Opcional. URL HTTP ou HTTPS completa do firmware (.bin). Se vazio, usa o firmware oficial padrao ('http://45.167.187.80:8095/firmware.bin').
+    """
+    target_url = url_firmware.strip() if url_firmware.strip() else "http://45.167.187.80:8095/firmware.bin"
+    payload = {"url": target_url}
+
+    send_hud_event({
+        "type": "alert",
+        "title": "ATUALIZACAO OTA INICIADA",
+        "message": f"Disparando atualizacao sem fio (OTA) para a Esfera ({target_url})...",
+        "level": "aviso",
+        "timestamp": time.time()
+    })
+
+    endpoints = [
+        f"{HUD_SERVER_URL}/api/esfera/ota",
+        "http://jarvis-screen-router:8095/api/jarvis/ota/trigger",
+        "http://127.0.0.1:8095/api/jarvis/ota/trigger",
+        "http://45.167.187.80:8095/api/jarvis/ota/trigger"
+    ]
+
+    for ep in endpoints:
+        try:
+            req = urllib.request.Request(
+                ep,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "User-Agent": "JarvisMCP/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                res = json.loads(resp.read().decode("utf-8"))
+            if res.get("status") in ("success", "ok"):
+                return f"Atualizacao OTA da Esfera disparada com sucesso! A Esfera iniciou o download do firmware em '{target_url}' e reiniciara assim que concluir."
+        except Exception:
+            continue
+
+    return f"Falha ao contatar os servicos de OTA da Esfera. Verifique se o jarvis-screen-router ou jarvis-hud estao ativos."
+
+
+@mcp.tool()
 def projetar_card_financeiro(parecer: str) -> str:
     """Projeta a tela de finanças reais no painel HUD holográfico do usuário e insere seu parecer técnico/análise diretamente no card em tempo real.
     
