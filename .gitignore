@@ -5,6 +5,7 @@
 *.env
 sphere-runtime.env
 firmware_jarvis_custom/include/jarvis_sphere_secrets.h
+contexto_para_agentes.md
 sphere-tls/
 auth/spotify_token.json
 auth/*.key
