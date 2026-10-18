@@ -29,6 +29,10 @@
 #include <WiFiUdp.h>
 #include <mbedtls/md.h>
 #include <esp_heap_caps.h>
+#include <opus.h>
+#include "wake_word_engine.h"
+
+static WakeWordEngine g_wake_word_engine;
 
 #if __has_include("jarvis_sphere_secrets.h")
 #include "jarvis_sphere_secrets.h"
@@ -102,6 +106,7 @@ enum class DisplayMode {
     kHappy,     // Rostinho Robot Ciano Fofo (Brilho 100%)
     kSpotify,   // Player Spotify (Brilho 100%)
     kTelemetry, // Telemetria em Tempo Real (Brilho 100%)
+    kZeDelivery,// Tela Dedicada Permanente do Zé Delivery (Brilho 100%)
     kSad,       // Rostinho Robot Azul Triste (Brilho 100%)
     kAngry,     // Rostinho Robot Vermelho Bravo (Brilho 100%)
     kCard,      // Card Customizado de Aprovação Canvas
@@ -186,14 +191,30 @@ WebSocketsClient g_web_socket;
 // Canal de tela/controles legado (8095) e canal de voz autenticado (WSS 8096).
 WebSocketsClient g_audio_web_socket;
 
-// Mantém cerca de 1 s de pré-áudio para não cortar o início de “Jarvis”.
-// O microfone é drenado continuamente, mas PCM só sai da esfera quando há fala.
-constexpr size_t kMicFrameBytes = 512;
-constexpr size_t kMicPrerollFrames = 60;
-constexpr size_t kMicPrerollBytes = kMicFrameBytes * kMicPrerollFrames;
-uint8_t g_mic_preroll[kMicPrerollBytes];
-size_t g_mic_preroll_head = 0;
-size_t g_mic_preroll_count = 0;
+// ============================================================================
+// CONFIGURAÇÃO OPUS CODEC (16kHz, VOIP, 24kbps, 60ms)
+// ============================================================================
+constexpr int kOpusSampleRate = 16000;
+constexpr int kOpusChannels = 1;
+constexpr int kOpusFrameDurationMs = 60;
+constexpr int kOpusFrameSamples = (kOpusSampleRate * kOpusFrameDurationMs) / 1000; // 960 amostras (60ms)
+constexpr int kOpusPcmBytes = kOpusFrameSamples * sizeof(int16_t); // 1920 bytes
+
+OpusEncoder* g_opus_encoder = nullptr;
+int16_t g_opus_pcm_accum[kOpusFrameSamples];
+size_t g_opus_pcm_accum_count = 0;
+uint8_t g_opus_packet_buf[256];
+
+// Pré-buffer circular de pacotes Opus (8 slots * 60ms = 480ms de histórico)
+constexpr size_t kOpusPrerollSlots = 8;
+struct OpusPacketSlot {
+    uint8_t data[128];
+    size_t len;
+};
+OpusPacketSlot g_opus_preroll_slots[kOpusPrerollSlots];
+size_t g_opus_preroll_head = 0;
+size_t g_opus_preroll_count = 0;
+
 bool g_mic_speech_active = false;
 float g_mic_noise_floor = 180.0f;
 uint16_t g_mic_loud_frames = 0;
@@ -209,6 +230,15 @@ int g_telemetry_gpu_temp = 0;
 int g_telemetry_gpu_util = 0;
 String g_telemetry_gpu_vram = "0G";
 
+// Zé Delivery Live State (Tela Permanente)
+String g_ze_order_number = "897128120";
+String g_ze_status = "ENTREGUE!";
+String g_ze_items = "Budweiser + Gatorade";
+float  g_ze_total = 37.25f;
+String g_ze_updated_at = "23:04";
+
+void DrawZeDeliveryScreen();
+
 WiFiUDP g_telemetry_udp;
 constexpr int kTelemetryUdpPort = 8888;
 bool g_udp_started = false;
@@ -216,12 +246,18 @@ bool g_udp_started = false;
 void SetDisplayMode(DisplayMode new_mode);
 
 void HandleDirectTelemetryUdp() {
-    if (!g_udp_started && WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() != WL_CONNECTED) {
+        if (g_udp_started) {
+            g_telemetry_udp.stop();
+            g_udp_started = false;
+        }
+        return;
+    }
+    if (!g_udp_started) {
         g_telemetry_udp.begin(kTelemetryUdpPort);
         g_udp_started = true;
         Serial.printf("[UDP TELEMETRY] Escutando na porta UDP %d\n", kTelemetryUdpPort);
     }
-    if (!g_udp_started) return;
 
     int packet_size = g_telemetry_udp.parsePacket();
     if (packet_size > 0) {
@@ -232,11 +268,13 @@ void HandleDirectTelemetryUdp() {
             JsonDocument doc;
             DeserializationError err = deserializeJson(doc, packet_buf);
             if (!err) {
-                if (doc.containsKey("cpu")) g_telemetry_cpu = doc["cpu"];
-                if (doc.containsKey("ram")) g_telemetry_ram = doc["ram"];
-                if (doc.containsKey("gpu_temp")) g_telemetry_gpu_temp = doc["gpu_temp"];
-                if (doc.containsKey("gpu_util")) g_telemetry_gpu_util = doc["gpu_util"];
-                if (doc.containsKey("gpu_vram")) g_telemetry_gpu_vram = doc["gpu_vram"].as<String>();
+                if (doc["cpu"].is<int>()) g_telemetry_cpu = doc["cpu"];
+                if (doc["ram"].is<int>()) g_telemetry_ram = doc["ram"];
+                if (doc["gpu_temp"].is<int>()) g_telemetry_gpu_temp = doc["gpu_temp"];
+                if (doc["gpu_util"].is<int>()) g_telemetry_gpu_util = doc["gpu_util"];
+                if (doc["gpu_vram"].is<const char*>() || doc["gpu_vram"].is<String>()) {
+                    g_telemetry_gpu_vram = doc["gpu_vram"].as<String>();
+                }
             }
         }
     }
@@ -437,15 +475,22 @@ void SetVoiceDisplayMode(const String& emotion) {
     else if (emotion == "standby" || emotion == "idle") SetDisplayMode(DisplayMode::kStandby);
     else if (emotion == "happy" || emotion == "speaking") SetDisplayMode(DisplayMode::kHappy);
     else if (emotion == "spotify") SetDisplayMode(DisplayMode::kSpotify);
+    else if (emotion == "ze" || emotion == "ze_delivery" || emotion == "delivery") SetDisplayMode(DisplayMode::kZeDelivery);
     else if (emotion == "sad") SetDisplayMode(DisplayMode::kSad);
     else if (emotion == "angry") SetDisplayMode(DisplayMode::kAngry);
 }
 
-// Inicialização do Codec ES8311 no Barramento I2C 1 (Para não conflitar com o Touch no I2C 0)
 void InitializeES8311Codec() {
+    // 1. Sistema de energia da placa (GPIO 3 = Power enable dos periféricos / amplificador)
+    pinMode(3, OUTPUT);
+    digitalWrite(3, HIGH);
+    delay(15);
+
+    // Amplificador de áudio (PA: GPIO 46)
     pinMode(kAudioCodecPaPin, OUTPUT);
     digitalWrite(kAudioCodecPaPin, HIGH);
 
+    // 2. Barramento I2C 1 (SDA: 15, SCL: 14)
     Wire1.begin(kAudioCodecSdaPin, kAudioCodecSclPin, 400000);
     delay(20);
 
@@ -499,23 +544,22 @@ void InitializeES8311Codec() {
     WriteRegister(0x09, 0x0C);
     WriteRegister(0x0A, 0x0C);
 
-    // Start (ADC + DAC)
-    WriteRegister(0x09, 0x0C);
-    WriteRegister(0x0A, 0x0C);
-    WriteRegister(0x17, 0xBF); // ADC digital volume (0xBF = 0dB unity gain oficial ES8311)
-    WriteRegister(0x0E, 0x02);
+    // Start (ADC + DAC) e Polarização do Microfone (MIC BIAS 2.5V)
+    WriteRegister(0x0E, 0x02); // ADC power up
     WriteRegister(0x12, 0x00);
-    WriteRegister(0x14, 0x1A); // ADC PGA Gain (+26dB - sensibilidade ideal para voz)
-    WriteRegister(0x0D, 0x01);
-    WriteRegister(0x15, 0x40);
+    WriteRegister(0x14, 0x1F); // ADC PGA Gain (+30dB - Ganho analogico maximo para captura de voz)
+    WriteRegister(0x16, 0x24); // ADC digital scale (+24dB oficial)
+    WriteRegister(0x17, 0xDF); // ADC digital volume (+16dB para sensibilidade acustica ideal)
+    WriteRegister(0x0D, 0x01); // Analog power up
+    WriteRegister(0x15, 0x40); // ADC MIC BIAS (Alimenta eletricamente a capsula do microfone)
     WriteRegister(0x37, 0x48); // DAC
     WriteRegister(0x45, 0x00);
-    WriteRegister(0x44, 0x50);
+    WriteRegister(0x44, 0x50); // Internal power routing
 
     // Volume do DAC (alto, mas sem estourar: +8 dB)
     WriteRegister(0x32, 0xCF);
 
-    Serial.println("[+] Codec ES8311 Inicializado no Wire1 (init completo)!");
+    Serial.println("[ES8311] Equalizacao oficial de fabrica Spotpear/Espressif carregada com sucesso!");
 }
 
 void InitializeI2SAudio() {
@@ -534,17 +578,18 @@ void InitializeI2SAudio() {
     };
 
     i2s_pin_config_t pin_config = {
-        .mck_io_num = kAudioI2sMclkPin,
-        .bck_io_num = kAudioI2sBclkPin,
-        .ws_io_num = kAudioI2sWsPin,
-        .data_out_num = kAudioI2sDoutPin,
-        .data_in_num = kAudioI2sDinPin
+        .mck_io_num = kAudioI2sMclkPin,  // GPIO 16
+        .bck_io_num = kAudioI2sBclkPin,   // GPIO 9
+        .ws_io_num = kAudioI2sWsPin,      // GPIO 45
+        .data_out_num = kAudioI2sDoutPin, // GPIO 8 (Alto-falante)
+        .data_in_num = kAudioI2sDinPin    // GPIO 10 (Microfone)
     };
 
     i2s_driver_install(kI2sPortNum, &i2s_config, 0, nullptr);
     i2s_set_pin(kI2sPortNum, &pin_config);
-    Serial.println("[+] Barramento I2S Ativado!");
+    Serial.println("[I2S] Barramento de audio ativado (16 kHz, 16-bit mono)!");
 }
+
 
 void FetchCatanduvaWeather() {
     if (WiFi.status() != WL_CONNECTED) return;
@@ -1359,67 +1404,184 @@ void DrawSpotifyScreen() {
 
 void DrawTelemetryScreen() {
     constexpr uint16_t kColorYellowCyber = lgfx::color565(255, 215, 0);
+    constexpr uint16_t kColorGrayBg      = lgfx::color565(22, 24, 28);
+    constexpr uint16_t kColorCardBg      = lgfx::color565(32, 35, 42);
 
-    g_canvas.fillScreen(kColorNavyDark);
+    g_canvas.fillScreen(kColorGrayBg);
 
-    // Borda Circular Cyberpunk Ciano/Dourado (Ajustada perfeitamente no raio r=118 de 240px)
+    // Borda Circular Cyberpunk nos 240px
     g_canvas.drawCircle(120, 120, 118, kColorCyanNeon);
     g_canvas.drawCircle(120, 120, 115, kColorYellowCyber);
 
-    // Cabeçalho Arredondado: "RIG TELEMETRY" (Ajustado no arco superior y=18)
-    g_canvas.setTextColor(kColorCyanBright, kColorNavyDark);
+    // Cabeçalho: "RIG TELEMETRY" compacto no topo (Font2)
+    g_canvas.setTextColor(kColorCyanBright, kColorGrayBg);
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.drawString("RIG TELEMETRY", 120, 18, &fonts::Font4);
+    g_canvas.drawString("RIG TELEMETRY", 120, 18, &fonts::Font2);
 
-    // Barras de Progresso Largura 140px (x=50 até x=190 - perfeitamente dentro do círculo)
-    constexpr int kBarWidth = 140;
-    constexpr int kBarHeight = 10;
+    // Card Central de Telemetria (largura 158px, altura 124px no y=42)
+    constexpr int kCardW = 158;
+    constexpr int kCardH = 124;
+    constexpr int kCardX = (240 - kCardW) / 2;
+    constexpr int kCardY = 42;
+    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kColorCardBg);
+    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, lgfx::color565(55, 60, 72));
+
+    // Barras de Progresso Compactas Largura 132px
+    constexpr int kBarWidth = 132;
+    constexpr int kBarHeight = 8;
     constexpr int kBarX = (240 - kBarWidth) / 2;
 
-    // CPU line
-    String cpu_str = "CPU " + String(g_telemetry_cpu) + "%";
-    g_canvas.setTextColor(kColorCyanNeon, kColorNavyDark);
+    // 1. CPU
+    String cpu_str = "CPU: " + String(g_telemetry_cpu) + "%";
+    g_canvas.setTextColor(kColorCyanNeon, kColorCardBg);
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.drawString(cpu_str.c_str(), 120, 48, &fonts::Font2);
+    g_canvas.drawString(cpu_str.c_str(), 120, kCardY + 6, &fonts::Font2);
 
-    int cpu_bar_y = 66;
-    g_canvas.drawRoundRect(kBarX, cpu_bar_y, kBarWidth, kBarHeight, 3, kColorCyanMid);
+    int cpu_bar_y = kCardY + 24;
+    g_canvas.drawRoundRect(kBarX, cpu_bar_y, kBarWidth, kBarHeight, 2, kColorCyanMid);
     int cpu_fill = (kBarWidth - 4) * constrain(g_telemetry_cpu, 0, 100) / 100;
     if (cpu_fill > 0) {
-        g_canvas.fillRoundRect(kBarX + 2, cpu_bar_y + 2, cpu_fill, kBarHeight - 4, 2, lgfx::color565(0, 220, 255));
+        g_canvas.fillRoundRect(kBarX + 2, cpu_bar_y + 2, cpu_fill, kBarHeight - 4, 1, lgfx::color565(0, 220, 255));
     }
 
-    // RAM line
-    String ram_str = "RAM " + String(g_telemetry_ram) + "%";
-    g_canvas.setTextColor(kColorCyanNeon, kColorNavyDark);
+    // 2. RAM
+    String ram_str = "RAM: " + String(g_telemetry_ram) + "%";
+    g_canvas.setTextColor(lgfx::color565(34, 197, 94), kColorCardBg);
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.drawString(ram_str.c_str(), 120, 84, &fonts::Font2);
+    g_canvas.drawString(ram_str.c_str(), 120, kCardY + 36, &fonts::Font2);
 
-    int ram_bar_y = 102;
-    g_canvas.drawRoundRect(kBarX, ram_bar_y, kBarWidth, kBarHeight, 3, kColorCyanMid);
+    int ram_bar_y = kCardY + 54;
+    g_canvas.drawRoundRect(kBarX, ram_bar_y, kBarWidth, kBarHeight, 2, lgfx::color565(40, 120, 70));
     int ram_fill = (kBarWidth - 4) * constrain(g_telemetry_ram, 0, 100) / 100;
     if (ram_fill > 0) {
-        g_canvas.fillRoundRect(kBarX + 2, ram_bar_y + 2, ram_fill, kBarHeight - 4, 2, lgfx::color565(0, 200, 140));
+        g_canvas.fillRoundRect(kBarX + 2, ram_bar_y + 2, ram_fill, kBarHeight - 4, 1, lgfx::color565(34, 197, 94));
     }
 
-    // GPU line (No centro/equador do display y=128)
-    String gpu_str = "GPU " + String(g_telemetry_gpu_temp) + "C | " + String(g_telemetry_gpu_util) + "% | " + g_telemetry_gpu_vram;
-    g_canvas.setTextColor(kColorYellowCyber, kColorNavyDark);
+    // 3. GPU
+    String gpu_str = "GPU: " + String(g_telemetry_gpu_temp) + "C | " + String(g_telemetry_gpu_util) + "%";
+    g_canvas.setTextColor(kColorYellowCyber, kColorCardBg);
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.drawString(gpu_str.c_str(), 120, 128, &fonts::Font2);
+    g_canvas.drawString(gpu_str.c_str(), 120, kCardY + 66, &fonts::Font2);
 
-    // Botões Tácteis Inferiores (x: 40-112 e x: 128-200, y: 175-208 - Perfeitamente dentro da curvatura circular)
-    g_canvas.fillRoundRect(40, 175, 72, 33, 8, kColorCyanMid);
-    g_canvas.drawRoundRect(40, 175, 72, 33, 8, kColorCyanBright);
-    g_canvas.setTextColor(TFT_BLACK, kColorCyanMid);
-    g_canvas.setTextDatum(textdatum_t::middle_center);
-    g_canvas.drawString("SPOTIFY", 76, 191, &fonts::Font2);
+    int gpu_bar_y = kCardY + 84;
+    g_canvas.drawRoundRect(kBarX, gpu_bar_y, kBarWidth, kBarHeight, 2, lgfx::color565(140, 110, 0));
+    int gpu_fill = (kBarWidth - 4) * constrain(g_telemetry_gpu_util, 0, 100) / 100;
+    if (gpu_fill > 0) {
+        g_canvas.fillRoundRect(kBarX + 2, gpu_bar_y + 2, gpu_fill, kBarHeight - 4, 1, kColorYellowCyber);
+    }
 
-    g_canvas.fillRoundRect(128, 175, 72, 33, 8, kColorCyanMid);
-    g_canvas.drawRoundRect(128, 175, 72, 33, 8, kColorCyanBright);
-    g_canvas.setTextColor(TFT_BLACK, kColorCyanMid);
+    // 4. VRAM Line
+    String vram_str = "VRAM: " + g_telemetry_gpu_vram;
+    g_canvas.setTextColor(lgfx::color565(200, 220, 255), kColorCardBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString(vram_str.c_str(), 120, kCardY + 98, &fonts::Font2);
+
+    // Rodapé limpo
+    g_canvas.setTextColor(lgfx::color565(90, 105, 125), kColorGrayBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("[ Toque p/ avancar ]", 120, 184, &fonts::Font0);
+
+    g_canvas.pushSprite(0, 0);
+}
+
+void DrawZeDeliveryScreen() {
+    constexpr uint16_t kColorZeYellow = lgfx::color565(255, 204, 0);
+    constexpr uint16_t kColorZeRed    = lgfx::color565(229, 25, 55);
+    constexpr uint16_t kColorDarkBg   = lgfx::color565(18, 18, 22);
+    constexpr uint16_t kColorCardBg   = lgfx::color565(28, 30, 36);
+
+    g_canvas.fillScreen(kColorDarkBg);
+
+    // Borda Circular Zé Delivery nos 240px
+    g_canvas.drawCircle(120, 120, 118, kColorZeYellow);
+    g_canvas.drawCircle(120, 120, 115, kColorZeRed);
+
+    // Cabeçalho: "ZE DELIVERY" compacto e elegante no topo
+    g_canvas.setTextColor(kColorZeYellow, kColorDarkBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("ZE DELIVERY", 120, 18, &fonts::Font2);
+
+    // Badge / Status Pill Central
+    uint16_t status_bg = kColorZeYellow;
+    uint16_t status_text_color = TFT_BLACK;
+    String status_upper = g_ze_status;
+    status_upper.toUpperCase();
+
+    if (status_upper.indexOf("ENTREGUE") >= 0 || status_upper.indexOf("DELIVERED") >= 0) {
+        status_bg = lgfx::color565(34, 197, 94); // Verde Vibrante
+        status_text_color = TFT_BLACK;
+    } else if (status_upper.indexOf("CAMINHO") >= 0 || status_upper.indexOf("ROUTE") >= 0) {
+        status_bg = kColorZeYellow; // Amarelo
+        status_text_color = TFT_BLACK;
+    } else if (status_upper.indexOf("CANCEL") >= 0) {
+        status_bg = kColorZeRed; // Vermelho
+        status_text_color = TFT_WHITE;
+    } else {
+        status_bg = lgfx::color565(59, 130, 246); // Azul Preparando / Recebido
+        status_text_color = TFT_WHITE;
+    }
+
+    // Badge compacto (largura 124px, altura 20px no y=40)
+    constexpr int kBadgeW = 124;
+    constexpr int kBadgeH = 20;
+    constexpr int kBadgeX = (240 - kBadgeW) / 2;
+    constexpr int kBadgeY = 40;
+    g_canvas.fillRoundRect(kBadgeX, kBadgeY, kBadgeW, kBadgeH, 5, status_bg);
+    g_canvas.drawRoundRect(kBadgeX, kBadgeY, kBadgeW, kBadgeH, 5, TFT_WHITE);
+    g_canvas.setTextColor(status_text_color, status_bg);
     g_canvas.setTextDatum(textdatum_t::middle_center);
-    g_canvas.drawString("STANDBY", 164, 191, &fonts::Font2);
+    g_canvas.drawString(g_ze_status.c_str(), 120, kBadgeY + 10, &fonts::Font2);
+
+    // Card de Conteúdo do Pedido (largura 160px, altura 74px no y=66)
+    constexpr int kCardW = 160;
+    constexpr int kCardH = 74;
+    constexpr int kCardX = (240 - kCardW) / 2;
+    constexpr int kCardY = 66;
+    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kColorCardBg);
+    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, lgfx::color565(60, 64, 75));
+
+    // Pedido #
+    g_canvas.setTextColor(TFT_WHITE, kColorCardBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    String num_str = "PEDIDO #" + g_ze_order_number;
+    g_canvas.drawString(num_str.c_str(), 120, kCardY + 6, &fonts::Font2);
+
+    // Itens
+    g_canvas.setTextColor(lgfx::color565(200, 220, 240), kColorCardBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    String items_disp = g_ze_items;
+    if (items_disp.length() > 20) {
+        items_disp = items_disp.substring(0, 18) + "..";
+    }
+    g_canvas.drawString(items_disp.c_str(), 120, kCardY + 28, &fonts::Font2);
+
+    // Total
+    g_canvas.setTextColor(kColorZeYellow, kColorCardBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    char total_buf[32];
+    snprintf(total_buf, sizeof(total_buf), "Total: R$ %.2f", g_ze_total);
+    g_canvas.drawString(total_buf, 120, kCardY + 50, &fonts::Font2);
+
+    // Botões Inferiores Compactos (largura 64px, altura 28px no y=150)
+    // Span total: x=50 a x=190 (140px dentro do circulo)
+    // Botão 1: REFRESH
+    g_canvas.fillRoundRect(50, 150, 64, 28, 6, kColorZeYellow);
+    g_canvas.drawRoundRect(50, 150, 64, 28, 6, TFT_WHITE);
+    g_canvas.setTextColor(TFT_BLACK, kColorZeYellow);
+    g_canvas.setTextDatum(textdatum_t::middle_center);
+    g_canvas.drawString("REFRESH", 82, 164, &fonts::Font2);
+
+    // Botão 2: VOLTAR
+    g_canvas.fillRoundRect(126, 150, 64, 28, 6, lgfx::color565(45, 48, 56));
+    g_canvas.drawRoundRect(126, 150, 64, 28, 6, lgfx::color565(120, 125, 135));
+    g_canvas.setTextColor(TFT_WHITE, lgfx::color565(45, 48, 56));
+    g_canvas.setTextDatum(textdatum_t::middle_center);
+    g_canvas.drawString("VOLTAR", 158, 164, &fonts::Font2);
+
+    // Dica de navegação no rodapé curvo
+    g_canvas.setTextColor(lgfx::color565(90, 105, 125), kColorDarkBg);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("[ Toque p/ avancar ]", 120, 186, &fonts::Font0);
 
     g_canvas.pushSprite(0, 0);
 }
@@ -1752,15 +1914,23 @@ void ExecuteHttpOtaUpdate(const String& url) {
     }
 }
 
+// Ringbuffer de playback TTS de 512 KB alocado na PSRAM (sem consumir SRAM interna)
+constexpr size_t kTtsRingBufferSize = 512 * 1024;
+static uint8_t* g_tts_ringbuffer = nullptr;
+static volatile size_t g_tts_rb_head = 0;
+static volatile size_t g_tts_rb_tail = 0;
+static volatile size_t g_tts_rb_count = 0;
+static portMUX_TYPE g_tts_mux = portMUX_INITIALIZER_UNLOCKED;
 static unsigned long g_last_tts_time = 0;
-// Fila de playback TTS não-bloqueante (produtor: evento WS; consumidor: loop()).
-// 16KB bastam: o server envia em pacing ~tempo real (a fila fica em 1-3 frames).
-// NÃO aumente sem checar o heap: TLS da esfera precisa de ~40KB livres
-// (48KB de fila = start_ssl_client: -1 = esfera muda pra sempre).
-static uint8_t g_tts_fifo[16384];
-static volatile size_t g_tts_fifo_len = 0;
+static unsigned long g_last_tts_play_ms = 0;
 
 void PlayWakeBeep() {
+    static unsigned long s_last_wake_beep = 0;
+    if (millis() - s_last_wake_beep < 3000) {
+        return; // Previne bips múltiplos simultâneos se houver pacotes repetidos
+    }
+    s_last_wake_beep = millis();
+
     // Dois tons curtos dão retorno imediato sem gerar um buffer grande no ESP32.
     int16_t samples[320];
     const uint16_t frequencies[] = {660, 880};
@@ -1768,7 +1938,7 @@ void PlayWakeBeep() {
         for (size_t i = 0; i < 320; ++i) {
             const float envelope = (i < 24) ? (static_cast<float>(i) / 24.0f) :
                                   (i > 270 ? static_cast<float>(319 - i) / 49.0f : 1.0f);
-            samples[i] = static_cast<int16_t>(sinf(2.0f * PI * frequency * i / 16000.0f) * 2600.0f * envelope);
+            samples[i] = static_cast<int16_t>(sinf(2.0f * PI * frequency * i / 16000.0f) * 9000.0f * envelope);
         }
         size_t written = 0;
         i2s_write(kI2sPortNum, samples, sizeof(samples), &written, portMAX_DELAY);
@@ -1810,81 +1980,45 @@ void ResetMicSpeechGate() {
     g_mic_speech_active = false;
     g_mic_loud_frames = 0;
     g_mic_silence_frames = 0;
-    g_mic_preroll_head = 0;
-    g_mic_preroll_count = 0;
+    g_opus_preroll_head = 0;
+    g_opus_preroll_count = 0;
+    g_opus_pcm_accum_count = 0;
 }
 
-void AppendMicPreroll(const uint8_t* data, size_t length) {
-    if (!data || length == 0) return;
-    if (length > kMicPrerollBytes) {
-        data += length - kMicPrerollBytes;
-        length = kMicPrerollBytes;
+void InitializeOpusEncoder() {
+    int error = 0;
+    g_opus_encoder = opus_encoder_create(kOpusSampleRate, kOpusChannels, OPUS_APPLICATION_VOIP, &error);
+    if (error != OPUS_OK || g_opus_encoder == nullptr) {
+        Serial.printf("[OPUS] Falha ao instanciar encoder Opus: erro %d\n", error);
+        return;
     }
-    for (size_t i = 0; i < length; ++i) {
-        g_mic_preroll[g_mic_preroll_head] = data[i];
-        g_mic_preroll_head = (g_mic_preroll_head + 1) % kMicPrerollBytes;
-    }
-    g_mic_preroll_count = min(kMicPrerollBytes, g_mic_preroll_count + length);
+    opus_encoder_ctl(g_opus_encoder, OPUS_SET_BITRATE(24000)); // 24 kbps VOIP
+    opus_encoder_ctl(g_opus_encoder, OPUS_SET_COMPLEXITY(3));  // Equilíbrio ideal CPU/qualidade ESP32-S3
+    opus_encoder_ctl(g_opus_encoder, OPUS_SET_SIGNAL(OPUS_SIGNAL_VOICE));
+    Serial.println("[OPUS] Encoder Opus inicializado com sucesso (16kHz, VOIP, 24kbps, 60ms)!");
 }
 
-bool UpdateMicSpeechGate(const uint8_t* data, size_t length) {
-    if (!data || length < sizeof(int16_t)) return g_mic_speech_active;
-    const int16_t* samples = reinterpret_cast<const int16_t*>(data);
-    const size_t count = length / sizeof(int16_t);
-    double energy = 0.0;
-    for (size_t i = 0; i < count; ++i) {
-        const double value = samples[i];
-        energy += value * value;
+void PushOpusPreroll(const uint8_t* data, size_t len) {
+    if (len > sizeof(g_opus_preroll_slots[0].data)) return;
+    memcpy(g_opus_preroll_slots[g_opus_preroll_head].data, data, len);
+    g_opus_preroll_slots[g_opus_preroll_head].len = len;
+    g_opus_preroll_head = (g_opus_preroll_head + 1) % kOpusPrerollSlots;
+    if (g_opus_preroll_count < kOpusPrerollSlots) {
+        g_opus_preroll_count++;
     }
-    const float rms = static_cast<float>(sqrt(energy / count));
-    const float threshold = max(500.0f, g_mic_noise_floor * 2.4f);
+}
 
-    static unsigned long s_last_mic_dbg = 0;
-    if (millis() - s_last_mic_dbg > 2000) {
-        s_last_mic_dbg = millis();
-        Serial.printf("[MIC-LIVE] RMS=%.1f Floor=%.1f Active=%d Loud=%d Thresh=%.1f\n",
-                      rms, g_mic_noise_floor, g_mic_speech_active, g_mic_loud_frames, threshold);
-    }
-
-    if (g_mic_speech_active) {
-        if (rms < threshold * 0.62f) {
-            if (++g_mic_silence_frames >= 45) {  // ~720 ms de silêncio
-                g_mic_speech_active = false;
-                g_mic_silence_frames = 0;
-                g_mic_loud_frames = 0;
-                Serial.println("[MIC] Fala finalizada -> fechar stream");
-                return false;
-            }
-        } else {
-            g_mic_silence_frames = 0;
+void FlushOpusPreroll() {
+    WebSocketsClient& sock = (g_audio_web_socket.isConnected() && g_audio_authenticated) ? g_audio_web_socket : g_web_socket;
+    if (!sock.isConnected() || g_opus_preroll_count == 0) return;
+    const size_t start = (g_opus_preroll_head + kOpusPrerollSlots - g_opus_preroll_count) % kOpusPrerollSlots;
+    for (size_t i = 0; i < g_opus_preroll_count; ++i) {
+        const size_t idx = (start + i) % kOpusPrerollSlots;
+        if (g_opus_preroll_slots[idx].len > 0) {
+            sock.sendBIN(g_opus_preroll_slots[idx].data, g_opus_preroll_slots[idx].len);
         }
-        return true;
     }
-
-    if (rms >= threshold) {
-        if (++g_mic_loud_frames >= 3) {  // ~48ms de fala sustentada para iniciar
-            g_mic_speech_active = true;
-            g_mic_silence_frames = 0;
-            Serial.printf("[MIC] Fala detectada (RMS=%.1f)! Abrindo canal de voz.\n", rms);
-            return true;
-        }
-    } else {
-        g_mic_loud_frames = 0;
-        g_mic_noise_floor = g_mic_noise_floor * 0.97f + min(rms, 400.0f) * 0.03f;
-    }
-    return false;
-}
-
-void SendMicPreroll() {
-    if (!g_audio_web_socket.isConnected() || g_mic_preroll_count == 0) return;
-    const size_t start = (g_mic_preroll_head + kMicPrerollBytes - g_mic_preroll_count) % kMicPrerollBytes;
-    size_t sent = 0;
-    while (sent < g_mic_preroll_count) {
-        const size_t index = (start + sent) % kMicPrerollBytes;
-        const size_t contiguous = min(kMicFrameBytes, min(g_mic_preroll_count - sent, kMicPrerollBytes - index));
-        g_audio_web_socket.sendBIN(g_mic_preroll + index, contiguous);
-        sent += contiguous;
-    }
+    g_opus_preroll_count = 0;
 }
 
 // ============================================================================
@@ -1925,7 +2059,7 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
         hello_doc["version"] = 1;
         hello_doc["transport"] = "websocket";
         JsonObject audio_params = hello_doc["audio_params"].to<JsonObject>();
-        audio_params["format"] = "pcm";
+        audio_params["format"] = "opus";
         audio_params["sample_rate"] = 16000;
         audio_params["channels"] = 1;
         audio_params["frame_duration"] = 60;
@@ -1979,8 +2113,10 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
         }
         else if (msg_type == "tts" || msg_type == "speaking") {
             String state = doc["state"] | "start";
-            if (state == "start" || state == "speaking") SetDisplayMode(DisplayMode::kHappy);
-            else SetDisplayMode(DisplayMode::kStandby);
+            if (state == "start" || state == "speaking") {
+                SetDisplayMode(DisplayMode::kHappy);
+            }
+            // Quando receber "stop", não força Standby imediato: permite o speaker terminar a drenagem do áudio.
         }
         else if (msg_type == "jarvis.ota_update") {
             String ota_url = doc["url"] | doc["payload"]["url"] | "";
@@ -1997,6 +2133,16 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
             if (payload_obj["gpu_vram"].is<const char*>() || payload_obj["gpu_vram"].is<String>()) {
                 g_telemetry_gpu_vram = payload_obj["gpu_vram"].as<String>();
             }
+        }
+        else if (msg_type == "jarvis.ze_status" || msg_type == "ze_delivery") {
+            JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+            if (p["number"].is<const char*>() || p["number"].is<String>()) g_ze_order_number = p["number"].as<String>();
+            if (p["status"].is<const char*>() || p["status"].is<String>()) g_ze_status = p["status"].as<String>();
+            if (p["items"].is<const char*>() || p["items"].is<String>()) g_ze_items = p["items"].as<String>();
+            if (p["total"].is<float>() || p["total"].is<int>()) g_ze_total = p["total"].as<float>();
+            if (p["updated_at"].is<const char*>() || p["updated_at"].is<String>()) g_ze_updated_at = p["updated_at"].as<String>();
+            bool show = p["show"] | true;
+            if (show) SetDisplayMode(DisplayMode::kZeDelivery);
         }
         else if (msg_type == "custom") {
             String event = doc["payload"]["event"] | doc["event"] | "";
@@ -2055,6 +2201,16 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
                     SetDisplayMode(DisplayMode::kAlarm);
                 }
             }
+            else if (event == "jarvis.ze_status" || event == "ze_delivery") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                if (p["number"].is<const char*>() || p["number"].is<String>()) g_ze_order_number = p["number"].as<String>();
+                if (p["status"].is<const char*>() || p["status"].is<String>()) g_ze_status = p["status"].as<String>();
+                if (p["items"].is<const char*>() || p["items"].is<String>()) g_ze_items = p["items"].as<String>();
+                if (p["total"].is<float>() || p["total"].is<int>()) g_ze_total = p["total"].as<float>();
+                if (p["updated_at"].is<const char*>() || p["updated_at"].is<String>()) g_ze_updated_at = p["updated_at"].as<String>();
+                bool show = p["show"] | true;
+                if (show) SetDisplayMode(DisplayMode::kZeDelivery);
+            }
 
         }
 
@@ -2073,14 +2229,20 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
         }
     } else if (type == WStype_ERROR) {
         LogWs(audio_channel ? "VOZ" : "CTRL", "ERROR", "len=" + String((unsigned)length));
-    } else if (type == WStype_BIN && audio_channel) {
+        } else if (type == WStype_BIN) {
         g_last_tts_time = millis();
-        // Enfileira o áudio de resposta — o loop() drena no speaker sem bloquear.
-        if (g_tts_fifo_len + length <= sizeof(g_tts_fifo)) {
-            memcpy(g_tts_fifo + g_tts_fifo_len, payload, length);
-            g_tts_fifo_len += length;
+        g_last_tts_play_ms = millis();
+        if (g_tts_ringbuffer && length > 0) {
+            portENTER_CRITICAL(&g_tts_mux);
+            for (size_t i = 0; i < length; ++i) {
+                if (g_tts_rb_count < kTtsRingBufferSize) {
+                    g_tts_ringbuffer[g_tts_rb_head] = payload[i];
+                    g_tts_rb_head = (g_tts_rb_head + 1) % kTtsRingBufferSize;
+                    g_tts_rb_count++;
+                }
+            }
+            portEXIT_CRITICAL(&g_tts_mux);
         }
-        // Se a fila encher, descarta o frame (server já envia em pacing ~realtime).
     }
 }
 
@@ -2091,6 +2253,143 @@ void WebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 void AudioWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
     ProcessWebSocketEvent(g_audio_web_socket, true, type, payload, length);
 }
+
+// Pre-roll local no ESP32: armazena os ultimos 12 quadros Opus (~720ms) antes do inicio da fala
+constexpr size_t kOpusPreRollCount = 12;
+struct OpusPreRollPacket {
+    uint8_t data[256];
+    size_t len = 0;
+};
+static OpusPreRollPacket s_preroll_packets[kOpusPreRollCount];
+static size_t s_preroll_idx = 0;
+static bool s_preroll_full = false;
+
+void AudioTask(void* pvParameters) {
+    while (true) {
+        if (WiFi.status() == WL_CONNECTED && g_web_socket.isConnected()) {
+            // Trava de Mute / Anti-Eco por Hardware:
+            // Enquanto o alto-falante estiver tocando ou tocou ha menos de 1000ms, o microfone e 100% ignorado!
+            if (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 1000)) {
+                g_mic_speech_active = false;
+                g_mic_silence_frames = 0;
+                s_preroll_idx = 0;
+                s_preroll_full = false;
+                g_wake_word_engine.Reset();
+                vTaskDelay(pdMS_TO_TICKS(15));
+                continue;
+            }
+
+            static uint8_t mono_buf[512];
+            size_t bytes_read = 0;
+            for (int _i = 0; _i < 16; _i++) {
+                esp_err_t err = i2s_read(kI2sPortNum, mono_buf, sizeof(mono_buf), &bytes_read, 0);
+                if (err != ESP_OK || bytes_read == 0) break;
+
+                // Barramento mono I2S_CHANNEL_FMT_ONLY_LEFT: 2 bytes por amostra int16_t
+                size_t num_samples = bytes_read / 2;
+                const int16_t* samples = reinterpret_cast<const int16_t*>(mono_buf);
+
+                if (!g_mic_speech_active) {
+                    int16_t boosted_samples[256];
+                    size_t n_boost = num_samples < 256 ? num_samples : 256;
+                    for (size_t s = 0; s < n_boost; ++s) {
+                        int32_t b = static_cast<int32_t>(samples[s]) * 3;
+                        if (b > 32767) b = 32767;
+                        if (b < -32768) b = -32768;
+                        boosted_samples[s] = static_cast<int16_t>(b);
+                    }
+                    if (g_wake_word_engine.ProcessSamples(boosted_samples, n_boost)) {
+                        g_mic_speech_active = true;
+                        g_mic_silence_frames = 0;
+                        Serial.println("[WAKEWORD-LOCAL] *** WAKE WORD 'HEY JARVIS' DETECTADA LOCALMENTE NA ESFERA! ***");
+                        SetDisplayMode(DisplayMode::kVoiceListening);
+                        PlayWakeBeep();
+                        g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+
+                        // Despeja imediatamente os pacotes Opus acumulados no pre-roll circular
+                        size_t count = s_preroll_full ? kOpusPreRollCount : s_preroll_idx;
+                        size_t start = s_preroll_full ? s_preroll_idx : 0;
+                        for (size_t p = 0; p < count; ++p) {
+                            size_t idx = (start + p) % kOpusPreRollCount;
+                            if (s_preroll_packets[idx].len > 0) {
+                                g_web_socket.sendBIN(s_preroll_packets[idx].data, s_preroll_packets[idx].len);
+                            }
+                        }
+                        s_preroll_idx = 0;
+                        s_preroll_full = false;
+                    }
+                }
+
+                for (size_t s = 0; s < num_samples; ++s) {
+                    if (g_opus_pcm_accum_count < static_cast<size_t>(kOpusFrameSamples)) {
+                        g_opus_pcm_accum[g_opus_pcm_accum_count++] = samples[s];
+                    }
+                }
+
+                if (g_opus_pcm_accum_count >= static_cast<size_t>(kOpusFrameSamples)) {
+                    g_opus_pcm_accum_count = 0;
+
+                    double energy = 0.0;
+                    for (int s = 0; s < kOpusFrameSamples; ++s) {
+                        double val = g_opus_pcm_accum[s];
+                        energy += val * val;
+                    }
+                    float rms = static_cast<float>(sqrt(energy / kOpusFrameSamples));
+                    float threshold = max(420.0f, g_mic_noise_floor * 2.2f);
+
+                    static unsigned long s_last_mic_dbg = 0;
+                    if (millis() - s_last_mic_dbg > 4000) {
+                        s_last_mic_dbg = millis();
+                        Serial.printf("[OPUS-MIC] RMS=%.1f Floor=%.1f Active=%d Thresh=%.1f\n",
+                                      rms, g_mic_noise_floor, g_mic_speech_active, threshold);
+                    }
+
+                    g_opus_packet_buf[0] = 'O';
+                    g_opus_packet_buf[1] = 'P';
+                    g_opus_packet_buf[2] = 'U';
+                    g_opus_packet_buf[3] = 'S';
+                    opus_int32 enc_bytes = 0;
+                    if (g_opus_encoder) {
+                        enc_bytes = opus_encode(g_opus_encoder, g_opus_pcm_accum, kOpusFrameSamples,
+                                                g_opus_packet_buf + 4, sizeof(g_opus_packet_buf) - 4);
+                    }
+
+                    if (enc_bytes > 0) {
+                        size_t total_opus_bytes = enc_bytes + 4;
+
+                        // Se a fala ainda NAO foi iniciada por Wake Word:
+                        if (!g_mic_speech_active) {
+                            // Repouso / Silencio / Conversa sem Wake Word:
+                            // ZERO BYTES ENVIADOS PELA REDE!
+                            // Apenas armazena no buffer circular de pre-roll local!
+                            memcpy(s_preroll_packets[s_preroll_idx].data, g_opus_packet_buf, total_opus_bytes);
+                            s_preroll_packets[s_preroll_idx].len = total_opus_bytes;
+                            s_preroll_idx = (s_preroll_idx + 1) % kOpusPreRollCount;
+                            if (s_preroll_idx == 0) s_preroll_full = true;
+                        } else {
+                            // Fala ativa apos Wake Word: transmite o comando continuamente
+                            g_web_socket.sendBIN(g_opus_packet_buf, total_opus_bytes);
+
+                            if (rms < 350.0f) {
+                                if (++g_mic_silence_frames >= 8) { // ~480ms de silencio
+                                    g_mic_speech_active = false;
+                                    g_mic_silence_frames = 0;
+                                    Serial.println("[OPUS-MIC] Comando concluido -> enviando voice_end e ativando Thinking.");
+                                    SetDisplayMode(DisplayMode::kVoiceThinking);
+                                    g_web_socket.sendTXT("{\"type\":\"voice_end\"}");
+                                }
+                            } else {
+                                g_mic_silence_frames = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
 
 void setup() {
     Serial.begin(115200);
@@ -2104,12 +2403,26 @@ void setup() {
 
     g_lcd.init();
     SetDisplayMode(DisplayMode::kStandby);
+    
     g_canvas.createSprite(240, 240);
+
+    if (psramFound()) {
+        g_tts_ringbuffer = (uint8_t*)heap_caps_malloc(kTtsRingBufferSize, MALLOC_CAP_SPIRAM);
+        if (g_tts_ringbuffer) {
+            Serial.printf("[PSRAM] Ringbuffer TTS de %u KB alocado com sucesso!\n", (unsigned)(kTtsRingBufferSize / 1024));
+        }
+    }
+    if (!g_tts_ringbuffer) {
+        g_tts_ringbuffer = (uint8_t*)malloc(32 * 1024);
+        Serial.printf("[HEAP] Fallback Ringbuffer TTS alocado em SRAM interna (32 KB)\n");
+    }
 
     InitializeES8311Codec();
     InitializeI2SAudio();
+    InitializeOpusEncoder();
+    g_wake_word_engine.Initialize();
 
-    Serial.println("\n[+] Firmware J.A.R.V.I.S. v10.0 (WakeWord JARVIS & I2C Wire1) OK!\n");
+    Serial.println("\n[+] Firmware J.A.R.V.I.S. v10.0 (microWakeWord TFLite ESP32-S3) OK!\n");
 
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
@@ -2123,9 +2436,131 @@ void setup() {
 
     g_web_socket.onEvent(WebSocketEvent);
     g_audio_web_socket.onEvent(AudioWebSocketEvent);
+
+    // Feedback sonoro imediato de boot para validar alto-falante
+    PlayWakeBeep();
+
+    // Tarefa dedicada de áudio/Opus com 32 KB de Stack no Core 0 (evita stack overflow do loopTask)
+    xTaskCreatePinnedToCore(AudioTask, "AudioTask", 32768, NULL, 5, NULL, 0);
+}
+
+void HandleSerialDiagnosticCommands() {
+    while (Serial.available()) {
+        String cmd = Serial.readStringUntil('\n');
+        cmd.trim();
+        if (cmd.length() == 0) continue;
+
+        Serial.printf("\n>>> [CMD RECEBIDO] '%s'\n", cmd.c_str());
+
+        if (cmd == "help" || cmd == "?") {
+            Serial.println("==================================================");
+            Serial.println("   J.A.R.V.I.S. COM3 - COMANDOS DE DIAGNOSTICO    ");
+            Serial.println("==================================================");
+            Serial.println(" diag / status  : Relatorio completo de hardware/memoria");
+            Serial.println(" trigger        : Simula gatilho da Wake Word por software");
+            Serial.println(" beep           : Toca o beep de ativacao no speaker");
+            Serial.println(" reboot         : Reinicia o ESP32-S3");
+            Serial.println(" thresh <num>   : Ajusta limiar de prob Wake Word (ex: thresh 120)");
+            Serial.println(" mode <0-8>     : Altera modo de exibicao da tela");
+            Serial.println("==================================================");
+        } else if (cmd == "diag" || cmd == "status") {
+            Serial.println("\n--- [RELATORIO COMPLETO DE DIAGNOSTICO] ---");
+            Serial.printf("Dispositivo      : J.A.R.V.I.S. Esfera ESP32-S3\n");
+            Serial.printf("Firmware         : v10.0 (Local microWakeWord TFLite)\n");
+            Serial.printf("Uptime           : %lu s\n", millis() / 1000);
+            Serial.printf("Heap Livre       : %u bytes (Min: %u)\n", esp_get_free_heap_size(), esp_get_minimum_free_heap_size());
+            if (psramFound()) {
+                Serial.printf("PSRAM Livre      : %u / %u bytes\n", ESP.getFreePsram(), ESP.getPsramSize());
+            } else {
+                Serial.printf("PSRAM            : Nao disponivel\n");
+            }
+            Serial.printf("Modo Display     : %d\n", static_cast<int>(g_current_mode));
+            BatteryStatus bat = ReadBatteryStatus();
+            Serial.printf("Bateria          : %.2fV (%d%%) Carregando: %d\n", bat.voltage, bat.percentage, bat.is_charging);
+            Serial.printf("Wi-Fi Status     : %s (IP: %s, RSSI: %d dBm)\n",
+                          WiFi.status() == WL_CONNECTED ? "CONECTADO" : "DESCONECTADO",
+                          WiFi.localIP().toString().c_str(), WiFi.RSSI());
+            Serial.printf("WebSocket Server : %s:%d%s (Conectado: %d)\n",
+                          kZimaOsWsHost, kZimaOsWsPort, kZimaOsWsPath, g_web_socket.isConnected());
+            Serial.printf("Microfone        : FalaAtiva=%d, Floor=%.1f\n", g_mic_speech_active, g_mic_noise_floor);
+            Serial.printf("Wake Word Local  : Pronto=%d Prob=%d Avg=%d Max=%d FeatMax=%u Thresh=%d Ignore=%d\n",
+                          g_wake_word_engine.IsReady(),
+                          g_wake_word_engine.GetLastProbability(),
+                          g_wake_word_engine.GetAverageProbability(),
+                          g_wake_word_engine.GetPeriodMaxProbability(),
+                          g_wake_word_engine.GetLastFeatureMax(),
+                          g_wake_word_engine.GetThreshold(),
+                          g_wake_word_engine.GetIgnoreWindows());
+            Serial.printf("TTS Ringbuffer   : %u / %u bytes (MuteGuard=%d)\n",
+                          (unsigned)g_tts_rb_count, (unsigned)kTtsRingBufferSize,
+                          (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 1000)));
+            Serial.println("-------------------------------------------\n");
+        } else if (cmd == "trigger") {
+            Serial.println("[CMD] Disparando gatilho Wake Word por comando serial!");
+            g_mic_speech_active = true;
+            g_mic_silence_frames = 0;
+            SetDisplayMode(DisplayMode::kVoiceListening);
+            PlayWakeBeep();
+            g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+        } else if (cmd == "beep") {
+            Serial.println("[CMD] Tocando beep de ativacao...");
+            PlayWakeBeep();
+        } else if (cmd == "reboot") {
+            Serial.println("[CMD] Reiniciando ESP32...");
+            delay(100);
+            ESP.restart();
+        } else if (cmd.startsWith("thresh ")) {
+            int th = cmd.substring(7).toInt();
+            if (th > 0 && th <= 255) {
+                g_wake_word_engine.SetThreshold(static_cast<uint8_t>(th));
+                Serial.printf("[CMD] Limiar de Wake Word atualizado para %d / 255 (~%.2f)\n", th, th / 255.0f);
+            }
+        } else if (cmd.startsWith("mode ")) {
+            int m = cmd.substring(5).toInt();
+            SetDisplayMode(static_cast<DisplayMode>(m));
+            Serial.printf("[CMD] Modo de display alterado para %d\n", m);
+        } else {
+            Serial.printf("[CMD] Comando '%s' desconhecido. Digite 'help' para ajuda.\n", cmd.c_str());
+        }
+    }
+}
+
+void PrintPeriodicDiagnosticHeartbeat() {
+    static unsigned long s_last_hb = 0;
+    if (millis() - s_last_hb < 3000) return;
+    s_last_hb = millis();
+
+    const char* mode_name = "DESCONHECIDO";
+    switch (g_current_mode) {
+        case DisplayMode::kStandby: mode_name = "STANDBY"; break;
+        case DisplayMode::kHappy: mode_name = "HAPPY"; break;
+        case DisplayMode::kSpotify: mode_name = "SPOTIFY"; break;
+        case DisplayMode::kTelemetry: mode_name = "TELEMETRY"; break;
+        case DisplayMode::kZeDelivery: mode_name = "ZE_DELIVERY"; break;
+        case DisplayMode::kVoiceListening: mode_name = "VOICE_LISTENING"; break;
+        case DisplayMode::kVoiceThinking: mode_name = "VOICE_THINKING"; break;
+        case DisplayMode::kVoiceSuccess: mode_name = "VOICE_SUCCESS"; break;
+        case DisplayMode::kVoiceError: mode_name = "VOICE_ERROR"; break;
+        case DisplayMode::kCard: mode_name = "CARD"; break;
+        default: break;
+    }
+
+    Serial.printf("[DIAG] Modo=%s | WiFi=%d dBm | Heap=%uK PSRAM=%uK | MicFala=%d | WakeProb=%d/255 Avg=%d Feat=%u Thresh=%d | TTS=%uK\n",
+                  mode_name,
+                  WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0,
+                  esp_get_free_heap_size() / 1024,
+                  psramFound() ? (ESP.getFreePsram() / 1024) : 0,
+                  g_mic_speech_active,
+                  g_wake_word_engine.GetLastProbability(),
+                  g_wake_word_engine.GetAverageProbability(),
+                  g_wake_word_engine.GetLastFeatureMax(),
+                  g_wake_word_engine.GetThreshold(),
+                  (unsigned)(g_tts_rb_count / 1024));
 }
 
 void loop() {
+    HandleSerialDiagnosticCommands();
+    PrintPeriodicDiagnosticHeartbeat();
     ArduinoOTA.handle();
     HandleDirectTelemetryUdp();
 
@@ -2144,70 +2579,31 @@ void loop() {
         }
 
         if (!g_audio_ws_started) {
-            const char* tls_fingerprint = kJarvisSphereServerSha256Fingerprint;
-            const char* device_token = JARVIS_SPHERE_DEVICE_TOKEN;
-            if (tls_fingerprint && strlen(tls_fingerprint) == 95 && device_token && strlen(device_token) >= 32) {
-                struct tm tls_time;
-                if (getLocalTime(&tls_time, 0) && tls_time.tm_year >= 124) {
-                    g_audio_web_socket.beginSSL(kZimaOsWsHost, kZimaOsAudioPort, kZimaOsWsPath, tls_fingerprint);
-                    // DOC WebSocketsClient: heartbeat no canal de voz — sem ele,
-                    // NAT/firewall derruba a conexão ociosa (close 1006 nos turnos).
-                    g_audio_web_socket.enableHeartbeat(15000, 3000, 2);
-                    g_audio_web_socket.setReconnectInterval(3000);
-                    g_audio_ws_started = true;
-                }
-            } else {
-                Serial.println("[WSS] Ponte desativada: configure fingerprint TLS e token do dispositivo.");
-                g_audio_ws_started = true;
-            }
+            g_audio_ws_started = true;
         }
         g_web_socket.loop();
-        g_audio_web_socket.loop();
 
-        // Drena a fila de TTS no speaker (não-bloqueante — o pump nunca para).
-        if (g_tts_fifo_len > 0) {
-            size_t chunk = g_tts_fifo_len < 1024 ? g_tts_fifo_len : 1024;
+                // Drena o ringbuffer de TTS da PSRAM no speaker (zero memmove, playback 100% fluido).
+        if (g_tts_rb_count > 0 && g_tts_ringbuffer) {
+            uint8_t play_chunk[1024];
+            size_t to_read = 0;
+            portENTER_CRITICAL(&g_tts_mux);
+            to_read = g_tts_rb_count < sizeof(play_chunk) ? g_tts_rb_count : sizeof(play_chunk);
+            for (size_t i = 0; i < to_read; ++i) {
+                play_chunk[i] = g_tts_ringbuffer[g_tts_rb_tail];
+                g_tts_rb_tail = (g_tts_rb_tail + 1) % kTtsRingBufferSize;
+            }
+            g_tts_rb_count -= to_read;
+            portEXIT_CRITICAL(&g_tts_mux);
+
             size_t written = 0;
-            if (i2s_write(kI2sPortNum, g_tts_fifo, chunk, &written, 0) == ESP_OK && written > 0) {
+            if (i2s_write(kI2sPortNum, play_chunk, to_read, &written, pdMS_TO_TICKS(15)) == ESP_OK && written > 0) {
                 g_last_tts_time = millis();
-                memmove(g_tts_fifo, g_tts_fifo + written, g_tts_fifo_len - written);
-                g_tts_fifo_len -= written;
+                g_last_tts_play_ms = millis();
             }
         }
 
-        if (g_audio_web_socket.isConnected() && g_audio_authenticated) {
-            uint8_t mic_buf[512];
-            size_t bytes_read = 0;
-            // Drena sempre o I2S. Durante o TTS, descarta eco local e limpa o pré-buffer.
-            for (int _i = 0; _i < 16; _i++) {
-                esp_err_t err = i2s_read(kI2sPortNum, mic_buf, sizeof(mic_buf), &bytes_read, 0);
-                if (err != ESP_OK || bytes_read == 0) break;
-                // Anti-stall: FIFO parada >2s = limpa (nunca mutar o mic pra sempre).
-                if (g_tts_fifo_len > 0 && millis() - g_last_tts_time > 2000) {
-                    g_tts_fifo_len = 0;
-                }
-                // Eco: 400ms de cauda após o último áudio tocado (g_last_tts_time atualiza no drain).
-                if (millis() - g_last_tts_time <= 400) {
-                    ResetMicSpeechGate();
-                    continue;
-                }
-
-                if (g_mic_speech_active) {
-                    if (UpdateMicSpeechGate(mic_buf, bytes_read)) {
-                        g_audio_web_socket.sendBIN(mic_buf, bytes_read);
-                    } else {
-                        AppendMicPreroll(mic_buf, bytes_read);
-                    }
-                } else {
-                    AppendMicPreroll(mic_buf, bytes_read);
-                    if (UpdateMicSpeechGate(mic_buf, bytes_read)) {
-                        SendMicPreroll();
-                    }
-                }
-            }
-        }
-
-        if (millis() - g_last_weather_fetch > 600000) {
+if (millis() - g_last_weather_fetch > 600000) {
             g_last_weather_fetch = millis();
             FetchCatanduvaWeather();
         }
@@ -2335,18 +2731,29 @@ void loop() {
                     SetDisplayMode(DisplayMode::kStandby);
                 } else if (g_current_mode == DisplayMode::kSpotify) {
                     if (!HandleSpotifyTap(g_touch_current_x, g_touch_current_y)) {
-                        SetDisplayMode(DisplayMode::kStandby);
+                        SetDisplayMode(DisplayMode::kTelemetry);
                     }
 
                 } else if (g_current_mode == DisplayMode::kTelemetry) {
+                    SetDisplayMode(DisplayMode::kZeDelivery);
+                } else if (g_current_mode == DisplayMode::kZeDelivery) {
                     int tx = g_touch_current_x;
                     int ty = g_touch_current_y;
-                    if (tx >= 35 && tx <= 115 && ty >= 170 && ty <= 215) {
-                        SetDisplayMode(DisplayMode::kSpotify);
-                    } else if (tx >= 125 && tx <= 205 && ty >= 170 && ty <= 215) {
+                    if (tx >= 45 && tx <= 118 && ty >= 144 && ty <= 182) {
+                        // Botão REFRESH
+                        if (g_web_socket.isConnected()) {
+                            JsonDocument req;
+                            req["type"] = "custom";
+                            req["payload"]["event"] = "ze_refresh";
+                            String json_str;
+                            serializeJson(req, json_str);
+                            g_web_socket.sendTXT(json_str);
+                        }
+                    } else if (tx >= 122 && tx <= 195 && ty >= 144 && ty <= 182) {
+                        // Botão VOLTAR
                         SetDisplayMode(DisplayMode::kStandby);
                     } else {
-                        SetDisplayMode(DisplayMode::kSad);
+                        SetDisplayMode(DisplayMode::kStandby);
                     }
                 } else if (g_current_mode == DisplayMode::kTimer) {
                     int tx = g_touch_current_x;
@@ -2379,6 +2786,9 @@ void loop() {
                 } else {
                     if (g_current_mode == DisplayMode::kStandby) SetDisplayMode(DisplayMode::kHappy);
                     else if (g_current_mode == DisplayMode::kHappy) SetDisplayMode(DisplayMode::kSpotify);
+                    else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kTelemetry);
+                    else if (g_current_mode == DisplayMode::kTelemetry) SetDisplayMode(DisplayMode::kZeDelivery);
+                    else if (g_current_mode == DisplayMode::kZeDelivery) SetDisplayMode(DisplayMode::kSad);
                     else if (g_current_mode == DisplayMode::kSad) SetDisplayMode(DisplayMode::kAngry);
                     else SetDisplayMode(DisplayMode::kStandby);
                 }
@@ -2396,6 +2806,8 @@ void loop() {
             DrawSpotifyScreen();
         } else if (g_current_mode == DisplayMode::kTelemetry) {
             DrawTelemetryScreen();
+        } else if (g_current_mode == DisplayMode::kZeDelivery) {
+            DrawZeDeliveryScreen();
         } else if (g_current_mode == DisplayMode::kHappy || g_current_mode == DisplayMode::kSad || g_current_mode == DisplayMode::kAngry) {
             DrawRobotFace(g_current_mode);
         } else if (g_current_mode == DisplayMode::kVoiceListening) {

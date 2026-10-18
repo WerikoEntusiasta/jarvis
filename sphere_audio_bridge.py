@@ -19,8 +19,35 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Awaitable, Callable
 
+try:
+    import opuslib
+except ImportError:
+    opuslib = None
 
-AudioCallback = Callable[[str, bytes, object], Awaitable[None]]
+_opus_decoders: dict = {}
+
+def _decode_audio_frame(device_id: str, message: bytes) -> bytes:
+    if not opuslib:
+        return message
+    dec = _opus_decoders.setdefault(device_id, opuslib.Decoder(16000, 1))
+    if message.startswith(b"OPUS"):
+        raw_opus = message[4:]
+        try:
+            samples = opuslib.api.decoder.get_nb_samples(dec._state, raw_opus, len(raw_opus))
+            if samples <= 0:
+                samples = 960
+        except Exception:
+            samples = 960
+        return dec.decode(raw_opus, samples)
+    elif len(message) < 250:
+        try:
+            samples = opuslib.api.decoder.get_nb_samples(dec._state, message, len(message))
+            if samples <= 0:
+                samples = 960
+            return dec.decode(message, samples)
+        except Exception:
+            return message
+    return message
 
 # Registro acessível ao Core: device_id -> websocket autenticado.
 # Todas as escritas acontecem no loop do serve (run_coroutine_threadsafe
@@ -208,7 +235,7 @@ async def serve_sphere_audio(on_audio: AudioCallback, on_disconnect=None) -> Non
             stage = "auth"
             auth_raw = ""
             try:
-                for _ in range(50):
+                for _ in range(300):
                     msg = await asyncio.wait_for(websocket.recv(), timeout=5)
                     if isinstance(msg, str):
                         auth_raw = msg
@@ -244,12 +271,13 @@ async def serve_sphere_audio(on_audio: AudioCallback, on_disconnect=None) -> Non
             await websocket.send(json.dumps({
                 "type": "hello",
                 "transport": "websocket",
-                "audio_params": {"format": "pcm", "sample_rate": 16000, "channels": 1, "frame_duration": 16},
+                "audio_params": {"format": "opus", "sample_rate": 16000, "channels": 1, "frame_duration": 60},
             }))
             print(f"[ESFERA] Dispositivo autenticado; TLS ativo ({device_id}).")
             async for message in websocket:
                 if isinstance(message, bytes):
-                    await on_audio(device_id, message, websocket)
+                    pcm = _decode_audio_frame(device_id, message)
+                    await on_audio(device_id, pcm, websocket)
                 elif isinstance(message, str):
                     try:
                         control = json.loads(message)

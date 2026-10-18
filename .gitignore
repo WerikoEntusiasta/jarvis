@@ -55,10 +55,32 @@ dist/
 # 5S: temporarios e quarentena (2026-10-12)
 temp_rec_*.webm
 temp_rec_*.wav
+*.wav
+*.rar
 response_*.mp3
 push_subscriptions.json
 firmware_temp*/
 _quarentena_5S/
+
+# Temporary scratch and debug scripts
+check_*.py
+test_*.py
+apply_*.py
+deploy_*.py
+patch_*.py
+update_*.py
+fix_*.py
+upload_*.py
+trigger_*.py
+debug_*.py
+introspect_*.py
+push_*.py
+copy_*.py
+ze_tracker.py
+server_zima_hud.py
+jarvis-hud_router.py
+jarvis-screen-router_router.py
+router_extracted.py
 
 # Database & Storage
 *.db-journal
@@ -71,3 +93,6 @@ scratch/
 .idea/
 .DS_Store
 Thumbs.db
+
+jarvis_screen_router_zima.py
+scripts/inspect_sessions_json.py
