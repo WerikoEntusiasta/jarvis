@@ -87,14 +87,44 @@ def dispatch_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, An
         target = args.get("processo", "") or args.get("nome", "") or args.get("target", "") or args.get("app", "")
         return win_controls.close_application(target)
 
-    elif tool in ["controlar_volume_windows", "volume", "volume_set"]:
-        action = args.get("acao", "up")
-        steps = int(args.get("passos", 2))
+    elif tool in ["controlar_volume_windows", "volume", "volume_set", "pc_volume"]:
+        action = args.get("action", args.get("acao", "up"))
+        steps = int(args.get("steps", args.get("passos", 5)))
         return win_controls.control_volume(action, steps)
 
-    elif tool in ["controlar_midia_windows", "media", "spotify_control"]:
-        action = args.get("acao", "play_pause")
+    elif tool in ["controlar_midia_windows", "media", "spotify_control", "pc_media"]:
+        action = args.get("action", args.get("acao", "play_pause"))
         return win_controls.control_media(action)
+
+    elif tool in ["self_reload_hud", "reload_hud", "reload"]:
+        try:
+            from self_evolution import self_reload_hud
+            return self_reload_hud()
+        except Exception as e:
+            return {"ok": False, "erro": str(e)}
+
+    elif tool in ["generate_and_show_screen", "laya_screen"]:
+        try:
+            from laya_screen_subagent import get_laya_agent
+            laya = get_laya_agent()
+            prompt = str(args.get("prompt", ""))
+            hint = str(args.get("context_hint", ""))
+            full_prompt = f"{prompt} | Contexto: {hint}" if hint else prompt
+            screen_res = laya.generate_screen(full_prompt)
+            if screen_res.get("ok"):
+                laya.broadcast_to_hud(screen_res["screen"])
+                return {"ok": True, "info": f"Tela '{screen_res['screen'].get('title')}' gerada no HUD."}
+            return {"ok": False, "erro": screen_res.get("error")}
+        except Exception as e:
+            return {"ok": False, "erro": str(e)}
+
+    elif tool in ["close_screen"]:
+        try:
+            from laya_screen_subagent import get_laya_agent
+            get_laya_agent().close_screen()
+            return {"ok": True, "info": "Tela LAYA fechada."}
+        except Exception as e:
+            return {"ok": False, "erro": str(e)}
 
     elif tool in ["obter_telemetria_hardware", "telemetria", "hardware"]:
         return {"success": True, "telemetry": hardware_monitor.get_system_telemetry()}

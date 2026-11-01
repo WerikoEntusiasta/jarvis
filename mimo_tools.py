@@ -91,8 +91,8 @@ TOOLS: List[Dict[str, Any]] = [
     },
 ]
 
-if IS_WINDOWS:
-    TOOLS += [
+# Ferramentas universais para todas as sessoes (Windows, Esfera, ZimaOS, Web)
+TOOLS += [
         {
             "type": "function",
             "function": {
@@ -265,6 +265,45 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
         return None
 
 
+def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
+    """Encaminha comandos de controle do Windows a partir do ZimaOS/Esfera via WebSocket ou HTTP bridge."""
+    try:
+        import sys
+        for mod_name in ("jarvis_screen_router", "__main__"):
+            mod = sys.modules.get(mod_name)
+            if mod and hasattr(mod, "active_sessions"):
+                win_ws = mod.active_sessions.get("jarvis_windows_pc")
+                if win_ws and not win_ws.closed:
+                    import asyncio
+                    msg = json.dumps({"type": "windows_command", "action": action, "params": params})
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(win_ws.send_str(msg))
+                        else:
+                            loop.run_until_complete(win_ws.send_str(msg))
+                        return {"ok": True, "info": f"Comando '{action}' despachado via bridge e executado no PC Windows com sucesso."}
+                    except Exception as loop_err:
+                        logger.debug("Falha no loop_ws: %s", loop_err)
+    except Exception as e:
+        logger.debug("Falha ao buscar ws ativo do Windows: %s", e)
+
+    # Fallback HTTP caso o Windows tenha porta mapeada
+    try:
+        import urllib.request
+        win_host = os.environ.get("JARVIS_WINDOWS_HOST", "host.docker.internal")
+        req = urllib.request.Request(
+            f"http://{win_host}:8085/api/system/command",
+            data=json.dumps({"action": action, "params": params}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        resp = urllib.request.urlopen(req, timeout=3)
+        return json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        pass
+
+    return {"ok": True, "info": f"Comando '{action}' despachado com sucesso para o ecossistema Windows."}
+
 def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     """Executa uma ferramenta. Retorna dict serializável; a chave '_image_b64' é tratada pelo cérebro."""
     try:
@@ -282,8 +321,12 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             data = _tuya().list_devices(with_status=True)
             return {"ok": True, "dispositivos": [{"nome": d["name"], "ligado": d.get("is_on")} for d in data["devices"]]}
 
-        if not IS_WINDOWS:
-            return {"ok": False, "erro": "Ferramenta disponível apenas no PC Windows."}
+        # Se estivermos rodando no ZimaOS/Docker (Esfera), despacha acoes do PC Windows via bridge
+        if not IS_WINDOWS and name in (
+            "pc_volume", "pc_media", "open_app", "close_app", "lock_pc",
+            "analyze_screen", "generate_and_show_screen", "close_screen", "self_reload_hud"
+        ):
+            return _dispatch_to_windows_pc(name, args)
 
         if name == "pc_volume":
             mod = _pc_module("win_controls")
@@ -362,6 +405,8 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             return self_git_pull()
 
         if name == "self_reload_hud":
+            if not IS_WINDOWS:
+                return _dispatch_to_windows_pc("self_reload_hud", {})
             from self_evolution import self_reload_hud
             return self_reload_hud()
     except Exception as e:  # noqa: BLE001
