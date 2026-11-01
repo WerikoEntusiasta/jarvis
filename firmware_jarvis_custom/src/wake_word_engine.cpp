@@ -17,7 +17,7 @@ constexpr size_t kTensorArenaSize = 36 * 1024;
 constexpr size_t kVarArenaSize = 2048;
 constexpr size_t kFeatureSize = 40;
 constexpr size_t kSlidingWindowSize = 5;
-constexpr uint8_t kDefaultCutoffThreshold = 130; // ~0.51 de probabilidade (ajustado p/ responsividade de voz)
+constexpr uint8_t kDefaultCutoffThreshold = 35; // ~0.14 de probabilidade (alta sensibilidade p/ 'Hey Jarvis')
 
 struct WakeWordEngine::Impl {
   FrontendState frontend_state{};

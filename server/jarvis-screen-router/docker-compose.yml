@@ -3,9 +3,12 @@ version: '3.8'
 services:
   jarvis-screen-router:
     container_name: jarvis-screen-router
-    build: .
+    image: jarvis-screen-router:latest
     restart: always
-    ports:
-      - "8095:8095"
+    network_mode: host
+    environment:
+      - JARVIS_HUD_URL=http://127.0.0.1:8085
     volumes:
-      - /DATA/AppData/jarvis-screen-router/firmware.bin:/app/firmware.bin
+      - /DATA/AppData/jarvis-screen-router/jarvis_screen_router.py:/app/jarvis_screen_router.py
+      - /DATA/AppData/jarvis-screen-router/alexa_service.py:/app/alexa_service.py
+      - /DATA/AppData/jarvis-screen-router/alexa_data:/app/alexa_data

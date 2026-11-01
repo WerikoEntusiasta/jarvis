@@ -28,11 +28,14 @@
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include <mbedtls/md.h>
+#include <mbedtls/aes.h>
 #include <esp_heap_caps.h>
 #include <opus.h>
 #include "wake_word_engine.h"
+#include <esp_ns.h>
 
 static WakeWordEngine g_wake_word_engine;
+static ns_handle_t g_ns_inst = nullptr;
 
 #if __has_include("jarvis_sphere_secrets.h")
 #include "jarvis_sphere_secrets.h"
@@ -89,8 +92,15 @@ constexpr int kBatteryChargingPin = 41;
 const char* kDefaultSsid = JARVIS_SPHERE_WIFI_SSID;
 const char* kDefaultPass = JARVIS_SPHERE_WIFI_PASS;
 #else
-const char* kDefaultSsid = "YOUR_WIFI_SSID";
-const char* kDefaultPass = "YOUR_WIFI_PASSWORD";
+const char* kDefaultSsid = "Jarvis";
+const char* kDefaultPass = "ironman123";
+#endif
+#ifdef JARVIS_SPHERE_WIFI_SSID_FALLBACK
+const char* kFallbackSsid = JARVIS_SPHERE_WIFI_SSID_FALLBACK;
+const char* kFallbackPass = JARVIS_SPHERE_WIFI_PASS_FALLBACK;
+#else
+const char* kFallbackSsid = "WEGI_2G";
+const char* kFallbackPass = "Wegi#2520";
 #endif
 const char* kZimaOsWsHost = JARVIS_SPHERE_SERVER_HOST;
 constexpr int kZimaOsWsPort = 8095;
@@ -105,14 +115,18 @@ enum class DisplayMode {
     kStandby,   // Relógio NTP + Temperatura de Catanduva (Brilho 30%)
     kHappy,     // Rostinho Robot Ciano Fofo (Brilho 100%)
     kSpotify,   // Player Spotify (Brilho 100%)
-    kTelemetry, // Telemetria em Tempo Real (Brilho 100%)
+    kTelemetry,
+    kElection,  // Apuracao Presidencial 2026 em Tempo Real (TSE) // Telemetria em Tempo Real (Brilho 100%)
     kZeDelivery,// Tela Dedicada Permanente do Zé Delivery (Brilho 100%)
+    kLights,    // Tela Dedicada de Iluminacao Tuya Setup (Brilho 100%)
+    kWhatsApp,  // Notificação de Novas Mensagens do WhatsApp n8n (Brilho 100%)
     kSad,       // Rostinho Robot Azul Triste (Brilho 100%)
     kAngry,     // Rostinho Robot Vermelho Bravo (Brilho 100%)
     kCard,      // Card Customizado de Aprovação Canvas
     kTimer,     // Contagem Regressiva no Visor Circular
     kAlarm,     // Alarme Programado Disparando
     kVoiceListening,
+    kVoiceSpeaking,
     kVoiceTranscribing,
     kVoiceSending,
     kVoiceThinking,
@@ -216,9 +230,26 @@ size_t g_opus_preroll_head = 0;
 size_t g_opus_preroll_count = 0;
 
 bool g_mic_speech_active = false;
-float g_mic_noise_floor = 180.0f;
+bool g_mic_user_spoke_since_wake = false;
+unsigned long g_mic_wake_start_ms = 0;
+unsigned long g_last_beep_ms = 0;
+float g_mic_noise_floor = 2400.0f;
+uint16_t g_mic_active_frames = 0;
 uint16_t g_mic_loud_frames = 0;
 uint16_t g_mic_silence_frames = 0;
+volatile float g_mic_voice_level = 0.0f;   // 0.0 a 1.0 (nível da voz do usuário p/ feedback visual)
+volatile float g_tts_current_level = 0.0f; // 0.0 a 1.0 (nível da fala do Jarvis p/ modular boca/olhos)
+
+// Ringbuffer de playback TTS de 512 KB alocado na PSRAM (sem consumir SRAM interna)
+constexpr size_t kTtsRingBufferSize = 512 * 1024;
+static uint8_t* g_tts_ringbuffer = nullptr;
+static volatile size_t g_tts_rb_head = 0;
+static volatile size_t g_tts_rb_tail = 0;
+static volatile size_t g_tts_rb_count = 0;
+static portMUX_TYPE g_tts_mux = portMUX_INITIALIZER_UNLOCKED;
+static unsigned long g_last_tts_time = 0;
+static unsigned long g_last_tts_play_ms = 0;
+static bool g_pending_standby = false;
 
 DisplayMode g_current_mode = DisplayMode::kStandby;
 unsigned long g_voice_status_until = 0;
@@ -239,11 +270,40 @@ String g_ze_updated_at = "23:04";
 
 void DrawZeDeliveryScreen();
 
+// Apuracao Presidencial 2026 TSE em Tempo Real
+String g_election_apurado = "0,00%";
+String g_election_hora = "--:--";
+String g_election_c1_nome = "LULA";
+String g_election_c1_num = "13";
+String g_election_c1_pct = "0,00%";
+String g_election_c1_votos = "0";
+String g_election_c2_nome = "FLAVIO BOLSONARO";
+String g_election_c2_num = "22";
+String g_election_c2_pct = "0,00%";
+String g_election_c2_votos = "0";
+
+void DrawElectionScreen();
+
+// WhatsApp Notificações (n8n Webhook / WebSocket)
+String g_wa_sender = "WhatsApp";
+String g_wa_message = "Nenhuma mensagem recente";
+String g_wa_time = "Agora";
+unsigned long g_wa_received_ms = 0;
+
+void DrawWhatsAppScreen();
+
+// Controle Tático de Iluminação Tuya (Lâmpada Setup)
+bool g_tuya_lamp_on = false;
+String g_tuya_lamp_name = "SETUP";
+void DrawLightsScreen();
+void ToggleTuyaLamp();
+
+
 WiFiUDP g_telemetry_udp;
 constexpr int kTelemetryUdpPort = 8888;
 bool g_udp_started = false;
 
-void SetDisplayMode(DisplayMode new_mode);
+void SetDisplayMode(DisplayMode new_mode, bool force = false);
 
 void HandleDirectTelemetryUdp() {
     if (WiFi.status() != WL_CONNECTED) {
@@ -356,21 +416,38 @@ void SetAlarm(int hour, int minute, String label = "ALARME") {
 
 
 
-// Paleta de Cores (Estilo Google C++ Constexpr)
-constexpr uint16_t kColorNavyDark   = lgfx::color565(3, 12, 32);
-constexpr uint16_t kColorGridLine   = lgfx::color565(8, 28, 60);
-constexpr uint16_t kColorGridDot    = lgfx::color565(15, 60, 110);
-constexpr uint16_t kColorCyanOuter  = lgfx::color565(0, 80, 180);
-constexpr uint16_t kColorCyanMid    = lgfx::color565(0, 170, 240);
-constexpr uint16_t kColorCyanNeon   = lgfx::color565(0, 240, 255);
-constexpr uint16_t kColorCyanBright = lgfx::color565(180, 250, 255);
-constexpr uint16_t kColorBlueSad    = lgfx::color565(40, 130, 250);
-constexpr uint16_t kColorRedAngry   = lgfx::color565(255, 30, 40);
-constexpr uint16_t kColorRedDark    = lgfx::color565(120, 10, 20);
-constexpr uint16_t kColorText       = TFT_WHITE;
-constexpr uint16_t kColorBtnConfirm = lgfx::color565(0, 200, 160);
-constexpr uint16_t kColorBtnCancel  = lgfx::color565(220, 50, 80);
-constexpr uint16_t kColorSpotifyGreen = lgfx::color565(30, 215, 96);
+// ============================================================================
+// PALETA DE CORES PADRONIZADA (Design System: Cinza Chumbo + Branco + Acento)
+// ============================================================================
+constexpr uint16_t kDashboardBackground = lgfx::color565(13, 14, 19);  // Cinza chumbo base de todas as telas
+constexpr uint16_t kDashboardSurface    = lgfx::color565(28, 29, 36);  // Superfície circular central (214px)
+constexpr uint16_t kDashboardCard       = lgfx::color565(38, 39, 47);  // Cards internos / agrupamentos
+constexpr uint16_t kDashboardBorder     = lgfx::color565(57, 58, 67);  // Bordas e anéis sutis
+constexpr uint16_t kDashboardText       = lgfx::color565(244, 244, 247); // Branco puro para todos os textos
+constexpr uint16_t kDashboardMuted      = lgfx::color565(156, 158, 170); // Legendas e textos secundários
+constexpr uint16_t kDashboardDate       = lgfx::color565(187, 190, 204); // Data / subtítulos
+constexpr uint16_t kDashboardOrange     = lgfx::color565(255, 98, 39);  // Clima Standby
+constexpr uint16_t kDashboardGreen      = lgfx::color565(43, 211, 151); // Bateria Standby
+
+// Cores Secundárias por Função
+constexpr uint16_t kColorSpotifyGreen   = lgfx::color565(30, 215, 96);  // Spotify: Verde Oficial
+constexpr uint16_t kColorZeYellow       = lgfx::color565(255, 204, 0);  // Zé Delivery: Amarelo Oficial
+constexpr uint16_t kColorZeRed          = lgfx::color565(229, 25, 55);  // Zé Delivery: Acento Vermelho
+constexpr uint16_t kColorWhatsAppGreen  = lgfx::color565(37, 211, 102); // WhatsApp: Verde Oficial (#25D366)
+constexpr uint16_t kColorCyanNeon       = lgfx::color565(0, 240, 255);  // Telemetria / J.A.R.V.I.S.: Ciano Neon
+constexpr uint16_t kColorCyanBright     = lgfx::color565(180, 250, 255);
+constexpr uint16_t kColorCyanMid        = lgfx::color565(0, 170, 240);
+constexpr uint16_t kColorCyanOuter      = lgfx::color565(0, 80, 180);
+constexpr uint16_t kColorBlueSad        = lgfx::color565(40, 130, 250); // Emoção Triste: Azul
+constexpr uint16_t kColorRedAngry       = lgfx::color565(255, 30, 40);  // Emoção Bravo / Alarme: Vermelho
+constexpr uint16_t kColorRedDark        = lgfx::color565(120, 10, 20);
+constexpr uint16_t kColorYellowCyber    = lgfx::color565(255, 215, 0);  // Timer / Alerta: Amarelo Cyber
+constexpr uint16_t kColorBtnConfirm     = lgfx::color565(0, 200, 160);
+constexpr uint16_t kColorBtnCancel      = lgfx::color565(220, 50, 80);
+constexpr uint16_t kColorNavyDark       = kDashboardBackground;        // Fundo padrão unificado (Cinza Chumbo)
+constexpr uint16_t kColorText           = kDashboardText;              // Texto padrão unificado (Branco)
+constexpr uint16_t kColorGridLine       = kDashboardBorder;
+constexpr uint16_t kColorGridDot        = kDashboardCard;
 
 struct BatteryStatus {
     float voltage;
@@ -424,7 +501,14 @@ BatteryStatus ReadBatteryStatus() {
     return {s_filtered_vbat, s_cached_percentage, s_cached_charging};
 }
 
-void SetDisplayMode(DisplayMode new_mode) {
+void SetDisplayMode(DisplayMode new_mode, bool force) {
+    // TELA DE APURACAO FIXA:
+    // Nunca volta para Standby automaticamente (por idle, tts ou voz).
+    // Somente volta para Standby com toque fisico na tela (force == true)!
+    if (g_current_mode == DisplayMode::kElection && new_mode == DisplayMode::kStandby && !force) {
+        return; // Mantem a apuracao FIXA na tela permanentemente
+    }
+
     // TELA CUSTOM ATIVA: status automáticos do núcleo (idle/success/error) NÃO
     // derrubam o card — só interação real de voz, toque em botão ou expiração.
     if (g_is_custom_screen_active) {
@@ -446,6 +530,12 @@ void SetDisplayMode(DisplayMode new_mode) {
         g_custom_screen_hold_until = 0;
     }
     g_current_mode = new_mode;
+    if (new_mode == DisplayMode::kVoiceListening) {
+        g_mic_speech_active = true;
+        g_mic_user_spoke_since_wake = false;
+        g_mic_wake_start_ms = millis();
+        g_mic_silence_frames = 0;
+    }
     if (new_mode == DisplayMode::kSpotify) {
         g_spotify_show_devices = false;
         g_spotify_show_controls = false;
@@ -465,17 +555,19 @@ void SetDisplayMode(DisplayMode new_mode) {
 }
 
 void SetVoiceDisplayMode(const String& emotion) {
-    if (emotion == "listening") SetDisplayMode(DisplayMode::kVoiceListening);
+    if (emotion == "listening") { SetDisplayMode(DisplayMode::kVoiceListening); g_mic_speech_active = true; g_mic_silence_frames = 0; }
     else if (emotion == "transcribing") SetDisplayMode(DisplayMode::kVoiceTranscribing);
     else if (emotion == "sending") SetDisplayMode(DisplayMode::kVoiceSending);
     else if (emotion == "thinking" || emotion == "processing") SetDisplayMode(DisplayMode::kVoiceThinking);
     else if (emotion == "queued") SetDisplayMode(DisplayMode::kVoiceQueued);
     else if (emotion == "success" || emotion == "received") SetDisplayMode(DisplayMode::kVoiceSuccess);
     else if (emotion == "error" || emotion == "failed") SetDisplayMode(DisplayMode::kVoiceError);
-    else if (emotion == "standby" || emotion == "idle") SetDisplayMode(DisplayMode::kStandby);
+    else if (emotion == "standby" || emotion == "idle") { g_mic_speech_active = false; g_mic_silence_frames = 0; SetDisplayMode(DisplayMode::kStandby); }
     else if (emotion == "happy" || emotion == "speaking") SetDisplayMode(DisplayMode::kHappy);
     else if (emotion == "spotify") SetDisplayMode(DisplayMode::kSpotify);
     else if (emotion == "ze" || emotion == "ze_delivery" || emotion == "delivery") SetDisplayMode(DisplayMode::kZeDelivery);
+    else if (emotion == "election" || emotion == "eleicao" || emotion == "apuracao") SetDisplayMode(DisplayMode::kElection);
+    else if (emotion == "whatsapp" || emotion == "wa") SetDisplayMode(DisplayMode::kWhatsApp);
     else if (emotion == "sad") SetDisplayMode(DisplayMode::kSad);
     else if (emotion == "angry") SetDisplayMode(DisplayMode::kAngry);
 }
@@ -545,13 +637,14 @@ void InitializeES8311Codec() {
     WriteRegister(0x0A, 0x0C);
 
     // Start (ADC + DAC) e Polarização do Microfone (MIC BIAS 2.5V)
+    WriteRegister(0x09, 0x0C);
+    WriteRegister(0x0A, 0x0C);
+    WriteRegister(0x17, 0xCF); // ADC digital volume (+8dB limpo)
     WriteRegister(0x0E, 0x02); // ADC power up
     WriteRegister(0x12, 0x00);
-    WriteRegister(0x14, 0x1F); // ADC PGA Gain (+30dB - Ganho analogico maximo para captura de voz)
-    WriteRegister(0x16, 0x24); // ADC digital scale (+24dB oficial)
-    WriteRegister(0x17, 0xDF); // ADC digital volume (+16dB para sensibilidade acustica ideal)
+    WriteRegister(0x14, 0x1A); // ADC PGA Gain (+26dB - sensibilidade ideal para voz)
     WriteRegister(0x0D, 0x01); // Analog power up
-    WriteRegister(0x15, 0x40); // ADC MIC BIAS (Alimenta eletricamente a capsula do microfone)
+    WriteRegister(0x15, 0x40); // CRITICO: ADC MIC BIAS (alimenta eletricamente a capsula do microfone!)
     WriteRegister(0x37, 0x48); // DAC
     WriteRegister(0x45, 0x00);
     WriteRegister(0x44, 0x50); // Internal power routing
@@ -611,16 +704,6 @@ void FetchCatanduvaWeather() {
 
 void DrawStandbyClockWeather() {
     // Dashboard executivo compacto, com todos os elementos dentro da área segura circular.
-    constexpr uint16_t kDashboardBackground = lgfx::color565(13, 14, 19);
-    constexpr uint16_t kDashboardSurface = lgfx::color565(28, 29, 36);
-    constexpr uint16_t kDashboardCard = lgfx::color565(38, 39, 47);
-    constexpr uint16_t kDashboardBorder = lgfx::color565(57, 58, 67);
-    constexpr uint16_t kDashboardText = lgfx::color565(244, 244, 247);
-    constexpr uint16_t kDashboardMuted = lgfx::color565(156, 158, 170);
-    constexpr uint16_t kDashboardDate = lgfx::color565(187, 190, 204);
-    constexpr uint16_t kDashboardOrange = lgfx::color565(255, 98, 39);
-    constexpr uint16_t kDashboardGreen = lgfx::color565(43, 211, 151);
-
     g_canvas.fillScreen(kDashboardBackground);
     g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
     g_canvas.drawCircle(120, 120, 107, kDashboardBorder);
@@ -636,6 +719,35 @@ void DrawStandbyClockWeather() {
         int w_idx = timeinfo.tm_wday % 7;
         int m_idx = (timeinfo.tm_mon >= 0 && timeinfo.tm_mon < 12) ? timeinfo.tm_mon : 0;
         snprintf(date_str, sizeof(date_str), "%s, %02d %s", wdays[w_idx], timeinfo.tm_mday, months[m_idx]);
+    }
+
+    // Badge de Timer ou Alarme Ativo no topo
+    if (g_timer_active) {
+        uint32_t rem_sec = 0;
+        if (g_timer_paused) {
+            rem_sec = g_timer_pause_remaining_ms / 1000;
+        } else {
+            long diff = (long)(g_timer_end_ms - millis());
+            rem_sec = (diff > 0) ? (diff / 1000) : 0;
+        }
+        int tm_min = rem_sec / 60;
+        int tm_sec = rem_sec % 60;
+        char tm_badge[24];
+        snprintf(tm_badge, sizeof(tm_badge), "TIMER %02d:%02d", tm_min, tm_sec);
+        
+        g_canvas.fillRoundRect(65, 30, 110, 20, 6, kColorYellowCyber);
+        g_canvas.setTextColor(TFT_BLACK, kColorYellowCyber);
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString(tm_badge, 120, 40, &fonts::Font2);
+    } else if (g_alarm_active && g_alarm_hour >= 0 && g_alarm_minute >= 0) {
+        char alm_badge[24];
+        snprintf(alm_badge, sizeof(alm_badge), "ALM %02d:%02d", g_alarm_hour, g_alarm_minute);
+        
+        g_canvas.fillRoundRect(72, 30, 96, 20, 6, kDashboardCard);
+        g_canvas.drawRoundRect(72, 30, 96, 20, 6, kDashboardBorder);
+        g_canvas.setTextColor(kColorCyanNeon, kDashboardCard);
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString(alm_badge, 120, 40, &fonts::Font2);
     }
 
     // Relógio e contexto (+5% na hora, -5% na data).
@@ -689,23 +801,53 @@ void DrawRobotFace(DisplayMode mode) {
         uint16_t face_color = kColorCyanNeon;
         uint16_t glow_color = kColorCyanBright;
 
-        int left_eye_x = 82, right_eye_x = 158, eye_y = 92, eye_radius = 26;
+        // Feedback Visual Reativo (Item D): Modulação de voz do usuário e da fala do Jarvis
+        bool is_speaking = (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 350));
+        float tts_mod = is_speaking ? g_tts_current_level : 0.0f;
+        float mic_mod = (mode == DisplayMode::kVoiceListening) ? g_mic_voice_level : 0.0f;
+
+        // Modulação dos olhos: dilatação e energia proporcional ao áudio
+        int eye_mod = static_cast<int>((tts_mod * 4.0f) + (mic_mod * 3.0f));
+        int eye_radius = 26 + eye_mod;
+        int left_eye_x = 82, right_eye_x = 158, eye_y = 92;
         
-        if (is_blinking) {
+        if (is_blinking && !is_speaking) {
             g_canvas.drawArc(left_eye_x, eye_y + 5, 20, 16, 200, 340, face_color);
             g_canvas.drawArc(right_eye_x, eye_y + 5, 20, 16, 200, 340, face_color);
         } else {
             g_canvas.fillCircle(left_eye_x, eye_y, eye_radius, face_color);
             g_canvas.fillCircle(right_eye_x, eye_y, eye_radius, face_color);
-            g_canvas.fillCircle(left_eye_x - 7, eye_y - 7, 7, glow_color);
-            g_canvas.fillCircle(right_eye_x - 7, eye_y - 7, 7, glow_color);
+            int pupil_r = 7 + (eye_mod / 2);
+            g_canvas.fillCircle(left_eye_x - 7, eye_y - 7, pupil_r, glow_color);
+            g_canvas.fillCircle(right_eye_x - 7, eye_y - 7, pupil_r, glow_color);
         }
 
         int mouth_x = 120, mouth_y = 152;
-        g_canvas.fillCircle(mouth_x, mouth_y, 15, face_color);
-        g_canvas.fillCircle(mouth_x - 5, mouth_y - 6, 12, kColorNavyDark);
-        g_canvas.fillCircle(mouth_x + 5, mouth_y - 6, 12, kColorNavyDark);
-        g_canvas.fillCircle(mouth_x, mouth_y + 3, 10, glow_color);
+        if (is_speaking && tts_mod > 0.06f) {
+            // Boca Dinâmica Modulando com o Áudio do TTS! Abre e fecha no ritmo da fala
+            int mouth_h = 10 + static_cast<int>(tts_mod * 22.0f);
+            int mouth_w = 22 + static_cast<int>(tts_mod * 12.0f);
+            g_canvas.fillRoundRect(mouth_x - mouth_w / 2, mouth_y - mouth_h / 2, mouth_w, mouth_h, mouth_h / 2, face_color);
+            g_canvas.fillRoundRect(mouth_x - (mouth_w - 6) / 2, mouth_y - (mouth_h - 4) / 2, mouth_w - 6, mouth_h - 4, (mouth_h - 4) / 2, kColorNavyDark);
+            g_canvas.fillCircle(mouth_x, mouth_y, 3 + static_cast<int>(tts_mod * 4.0f), glow_color);
+        } else {
+            // Boca sorriso padrão quando em repouso
+            g_canvas.fillCircle(mouth_x, mouth_y, 15, face_color);
+            g_canvas.fillCircle(mouth_x - 5, mouth_y - 6, 12, kColorNavyDark);
+            g_canvas.fillCircle(mouth_x + 5, mouth_y - 6, 12, kColorNavyDark);
+            g_canvas.fillCircle(mouth_x, mouth_y + 3, 10, glow_color);
+        }
+
+        // Anel ciano externo reativo no ritmo da voz ou do áudio
+        if (is_speaking || mode == DisplayMode::kVoiceListening) {
+            float ring_energy = is_speaking ? tts_mod : mic_mod;
+            int ring_r = 114 + static_cast<int>(ring_energy * 5.0f);
+            uint16_t r_col = (ring_energy > 0.25f) ? kColorCyanBright : kColorCyanNeon;
+            g_canvas.drawCircle(120, 120, ring_r, r_col);
+            if (ring_energy > 0.35f) {
+                g_canvas.drawCircle(120, 120, ring_r - 2, lgfx::color565(0, 180, 220));
+            }
+        }
 
     } else if (mode == DisplayMode::kSad) {
         uint16_t face_color = kColorBlueSad;
@@ -743,13 +885,17 @@ void DrawRobotFace(DisplayMode mode) {
     if (mode == DisplayMode::kVoiceListening) {
         const uint8_t pulse = static_cast<uint8_t>((millis() / 130) % 8);
         const uint16_t ring = (pulse < 4) ? kColorCyanBright : kColorCyanNeon;
-        g_canvas.drawCircle(120, 120, 112 - (pulse % 3), ring);
-        g_canvas.drawCircle(120, 120, 109 - (pulse % 3), lgfx::color565(18, 87, 112));
+        int dynamic_ring = 112 + static_cast<int>(g_mic_voice_level * 5.0f);
+        g_canvas.drawCircle(120, 120, dynamic_ring - (pulse % 3), ring);
+        g_canvas.drawCircle(120, 120, dynamic_ring - 3 - (pulse % 3), lgfx::color565(18, 87, 112));
+        
         const uint16_t pill_color = lgfx::color565(12, 35, 49);
         const uint16_t pulse_color = ((millis() / 350) % 2) ? kColorCyanBright : kColorCyanNeon;
         g_canvas.fillRoundRect(59, 184, 122, 29, 14, pill_color);
-        g_canvas.drawCircle(78, 198, 5, pulse_color);
-        g_canvas.fillCircle(78, 198, 3, pulse_color);
+        
+        int dot_r = 3 + static_cast<int>(g_mic_voice_level * 4.0f);
+        g_canvas.drawCircle(78, 198, 5 + static_cast<int>(g_mic_voice_level * 2.0f), pulse_color);
+        g_canvas.fillCircle(78, 198, dot_r, pulse_color);
         g_canvas.setTextSize(0.85f);
         g_canvas.setTextColor(kColorCyanBright, pill_color);
         g_canvas.setTextDatum(textdatum_t::middle_center);
@@ -760,15 +906,15 @@ void DrawRobotFace(DisplayMode mode) {
 }
 
 void DrawVoiceProgressScreen(DisplayMode mode) {
-    const uint16_t bg = kColorNavyDark;
-    const uint16_t muted = lgfx::color565(104, 132, 155);
+    const uint16_t bg = kDashboardBackground;
+    const uint16_t muted = kDashboardMuted;
     g_canvas.fillScreen(bg);
-    g_canvas.drawCircle(120, 120, 116, kColorCyanMid);
-    g_canvas.drawCircle(120, 120, 111, lgfx::color565(24, 47, 68));
+    g_canvas.drawCircle(120, 120, 116, kDashboardBorder);
+    g_canvas.drawCircle(120, 120, 111, kDashboardSurface);
 
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.setTextSize(0.62f);
-    g_canvas.setTextColor(kColorCyanBright, bg);
+    g_canvas.setTextColor(kDashboardText, bg);
     g_canvas.drawString("J.A.R.V.I.S.", 120, 34, &fonts::Font4);
 
     const char* line1 = "PROCESSANDO";
@@ -802,7 +948,7 @@ void DrawVoiceProgressScreen(DisplayMode mode) {
             line1 = "RESPOSTA";
             line2 = "RECEBIDA";
             footer = "JARVIS RESPONDEU";
-            accent = kColorCyanBright;
+            accent = lgfx::color565(43, 211, 151); // Verde sucesso
             break;
         case DisplayMode::kVoiceError:
             line1 = "NAO FOI";
@@ -839,7 +985,7 @@ void DrawVoiceProgressScreen(DisplayMode mode) {
     }
 
     g_canvas.setTextSize(0.68f);
-    g_canvas.setTextColor(accent, bg);
+    g_canvas.setTextColor(kDashboardText, bg);
     g_canvas.drawString(line1, 120, 151, &fonts::Font4);
     g_canvas.drawString(line2, 120, 174, &fonts::Font4);
     g_canvas.setTextSize(0.62f);
@@ -1225,8 +1371,8 @@ constexpr int kSpotifyMainBtnW = 120;
 constexpr int kSpotifyMainBtnH = 30;
 
 void DrawSpotifyDevicesOverlay() {
-    constexpr uint16_t kOverlayBg = lgfx::color565(6, 20, 40);
-    constexpr uint16_t kRowBg = lgfx::color565(10, 34, 56);
+    constexpr uint16_t kOverlayBg = kDashboardCard;
+    constexpr uint16_t kRowBg = kDashboardSurface;
     g_canvas.fillRoundRect(28, 52, 184, 160, 12, kOverlayBg);
     g_canvas.drawRoundRect(28, 52, 184, 160, 12, kColorSpotifyGreen);
     g_canvas.setTextColor(kColorSpotifyGreen, kOverlayBg);
@@ -1257,7 +1403,7 @@ void DrawSpotifyDevicesOverlay() {
 
 // Overlay de controles: ocupa quase toda a tela, 6 botoes grandes (2x3).
 void DrawSpotifyControlsOverlay() {
-    constexpr uint16_t kCtlBg = lgfx::color565(38, 39, 47);
+    constexpr uint16_t kCtlBg = kDashboardCard;
     g_canvas.fillRoundRect(kSpotifyCtlOX, kSpotifyCtlOY,
                            kSpotifyCtlOW, kSpotifyCtlOH, 14, kCtlBg);
     g_canvas.drawRoundRect(kSpotifyCtlOX, kSpotifyCtlOY,
@@ -1345,15 +1491,11 @@ bool HandleSpotifyTap(int tx, int ty) {
 void DrawSpotifyScreen() {
     SpotifyRefreshNowPlaying(false);
 
-    // Fundo grafite igual a home (linhas ~540-552): base + circulo + anel.
-    constexpr uint16_t kSpBg = lgfx::color565(13, 14, 19);
-    constexpr uint16_t kSpSurface = lgfx::color565(28, 29, 36);
-    constexpr uint16_t kSpBorder = lgfx::color565(57, 58, 67);
-    g_canvas.fillScreen(kSpBg);
-    g_canvas.fillCircle(120, 120, 107, kSpSurface);
-    g_canvas.drawCircle(120, 120, 107, kSpBorder);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kDashboardBorder);
 
-    g_canvas.setTextColor(kColorSpotifyGreen, kSpSurface);
+    g_canvas.setTextColor(kColorSpotifyGreen, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("SPOTIFY", 120, 24, &fonts::Font2);
 
@@ -1364,7 +1506,7 @@ void DrawSpotifyScreen() {
                              ? g_spotify_title
                              : String("NADA TOCANDO");
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.setTextColor(kColorText, kSpSurface);
+    g_canvas.setTextColor(kColorText, kDashboardSurface);
     if (title.length() <= 22) {
         g_canvas.drawString(title.c_str(), 120, 152, &fonts::Font2);
     } else {
@@ -1403,68 +1545,62 @@ void DrawSpotifyScreen() {
 }
 
 void DrawTelemetryScreen() {
-    constexpr uint16_t kColorYellowCyber = lgfx::color565(255, 215, 0);
-    constexpr uint16_t kColorGrayBg      = lgfx::color565(22, 24, 28);
-    constexpr uint16_t kColorCardBg      = lgfx::color565(32, 35, 42);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kColorCyanNeon);
 
-    g_canvas.fillScreen(kColorGrayBg);
-
-    // Borda Circular Cyberpunk nos 240px
-    g_canvas.drawCircle(120, 120, 118, kColorCyanNeon);
-    g_canvas.drawCircle(120, 120, 115, kColorYellowCyber);
-
-    // Cabeçalho: "RIG TELEMETRY" compacto no topo (Font2)
-    g_canvas.setTextColor(kColorCyanBright, kColorGrayBg);
+    // Cabeçalho: "RIG TELEMETRY" compacto no topo em Ciano Neon
+    g_canvas.setTextColor(kColorCyanNeon, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("RIG TELEMETRY", 120, 18, &fonts::Font2);
 
-    // Card Central de Telemetria (largura 158px, altura 124px no y=42)
+    // Card Central de Telemetria (largura 158px, altura 124px no y=40)
     constexpr int kCardW = 158;
     constexpr int kCardH = 124;
     constexpr int kCardX = (240 - kCardW) / 2;
-    constexpr int kCardY = 42;
-    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kColorCardBg);
-    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, lgfx::color565(55, 60, 72));
+    constexpr int kCardY = 40;
+    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kDashboardCard);
+    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kDashboardBorder);
 
     // Barras de Progresso Compactas Largura 132px
     constexpr int kBarWidth = 132;
     constexpr int kBarHeight = 8;
     constexpr int kBarX = (240 - kBarWidth) / 2;
 
-    // 1. CPU
+    // 1. CPU (Texto padrão branco + barra ciano)
     String cpu_str = "CPU: " + String(g_telemetry_cpu) + "%";
-    g_canvas.setTextColor(kColorCyanNeon, kColorCardBg);
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(cpu_str.c_str(), 120, kCardY + 6, &fonts::Font2);
 
     int cpu_bar_y = kCardY + 24;
-    g_canvas.drawRoundRect(kBarX, cpu_bar_y, kBarWidth, kBarHeight, 2, kColorCyanMid);
+    g_canvas.drawRoundRect(kBarX, cpu_bar_y, kBarWidth, kBarHeight, 2, kDashboardBorder);
     int cpu_fill = (kBarWidth - 4) * constrain(g_telemetry_cpu, 0, 100) / 100;
     if (cpu_fill > 0) {
-        g_canvas.fillRoundRect(kBarX + 2, cpu_bar_y + 2, cpu_fill, kBarHeight - 4, 1, lgfx::color565(0, 220, 255));
+        g_canvas.fillRoundRect(kBarX + 2, cpu_bar_y + 2, cpu_fill, kBarHeight - 4, 1, kColorCyanNeon);
     }
 
-    // 2. RAM
+    // 2. RAM (Texto padrão branco + barra verde)
     String ram_str = "RAM: " + String(g_telemetry_ram) + "%";
-    g_canvas.setTextColor(lgfx::color565(34, 197, 94), kColorCardBg);
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(ram_str.c_str(), 120, kCardY + 36, &fonts::Font2);
 
     int ram_bar_y = kCardY + 54;
-    g_canvas.drawRoundRect(kBarX, ram_bar_y, kBarWidth, kBarHeight, 2, lgfx::color565(40, 120, 70));
+    g_canvas.drawRoundRect(kBarX, ram_bar_y, kBarWidth, kBarHeight, 2, kDashboardBorder);
     int ram_fill = (kBarWidth - 4) * constrain(g_telemetry_ram, 0, 100) / 100;
     if (ram_fill > 0) {
         g_canvas.fillRoundRect(kBarX + 2, ram_bar_y + 2, ram_fill, kBarHeight - 4, 1, lgfx::color565(34, 197, 94));
     }
 
-    // 3. GPU
+    // 3. GPU (Texto padrão branco + barra amarela)
     String gpu_str = "GPU: " + String(g_telemetry_gpu_temp) + "C | " + String(g_telemetry_gpu_util) + "%";
-    g_canvas.setTextColor(kColorYellowCyber, kColorCardBg);
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(gpu_str.c_str(), 120, kCardY + 66, &fonts::Font2);
 
     int gpu_bar_y = kCardY + 84;
-    g_canvas.drawRoundRect(kBarX, gpu_bar_y, kBarWidth, kBarHeight, 2, lgfx::color565(140, 110, 0));
+    g_canvas.drawRoundRect(kBarX, gpu_bar_y, kBarWidth, kBarHeight, 2, kDashboardBorder);
     int gpu_fill = (kBarWidth - 4) * constrain(g_telemetry_gpu_util, 0, 100) / 100;
     if (gpu_fill > 0) {
         g_canvas.fillRoundRect(kBarX + 2, gpu_bar_y + 2, gpu_fill, kBarHeight - 4, 1, kColorYellowCyber);
@@ -1472,12 +1608,12 @@ void DrawTelemetryScreen() {
 
     // 4. VRAM Line
     String vram_str = "VRAM: " + g_telemetry_gpu_vram;
-    g_canvas.setTextColor(lgfx::color565(200, 220, 255), kColorCardBg);
+    g_canvas.setTextColor(kDashboardMuted, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(vram_str.c_str(), 120, kCardY + 98, &fonts::Font2);
 
-    // Rodapé limpo
-    g_canvas.setTextColor(lgfx::color565(90, 105, 125), kColorGrayBg);
+    // Rodapé
+    g_canvas.setTextColor(kDashboardMuted, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("[ Toque p/ avancar ]", 120, 184, &fonts::Font0);
 
@@ -1485,19 +1621,12 @@ void DrawTelemetryScreen() {
 }
 
 void DrawZeDeliveryScreen() {
-    constexpr uint16_t kColorZeYellow = lgfx::color565(255, 204, 0);
-    constexpr uint16_t kColorZeRed    = lgfx::color565(229, 25, 55);
-    constexpr uint16_t kColorDarkBg   = lgfx::color565(18, 18, 22);
-    constexpr uint16_t kColorCardBg   = lgfx::color565(28, 30, 36);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kColorZeYellow);
 
-    g_canvas.fillScreen(kColorDarkBg);
-
-    // Borda Circular Zé Delivery nos 240px
-    g_canvas.drawCircle(120, 120, 118, kColorZeYellow);
-    g_canvas.drawCircle(120, 120, 115, kColorZeRed);
-
-    // Cabeçalho: "ZE DELIVERY" compacto e elegante no topo
-    g_canvas.setTextColor(kColorZeYellow, kColorDarkBg);
+    // Cabeçalho: "ZE DELIVERY" compacto e elegante no topo em Amarelo Zé
+    g_canvas.setTextColor(kColorZeYellow, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("ZE DELIVERY", 120, 18, &fonts::Font2);
 
@@ -1537,17 +1666,17 @@ void DrawZeDeliveryScreen() {
     constexpr int kCardH = 74;
     constexpr int kCardX = (240 - kCardW) / 2;
     constexpr int kCardY = 66;
-    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kColorCardBg);
-    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, lgfx::color565(60, 64, 75));
+    g_canvas.fillRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kDashboardCard);
+    g_canvas.drawRoundRect(kCardX, kCardY, kCardW, kCardH, 8, kDashboardBorder);
 
-    // Pedido #
-    g_canvas.setTextColor(TFT_WHITE, kColorCardBg);
+    // Pedido # (Branco puro)
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     String num_str = "PEDIDO #" + g_ze_order_number;
     g_canvas.drawString(num_str.c_str(), 120, kCardY + 6, &fonts::Font2);
 
-    // Itens
-    g_canvas.setTextColor(lgfx::color565(200, 220, 240), kColorCardBg);
+    // Itens (Branco puro)
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     String items_disp = g_ze_items;
     if (items_disp.length() > 20) {
@@ -1555,33 +1684,460 @@ void DrawZeDeliveryScreen() {
     }
     g_canvas.drawString(items_disp.c_str(), 120, kCardY + 28, &fonts::Font2);
 
-    // Total
-    g_canvas.setTextColor(kColorZeYellow, kColorCardBg);
+    // Total (Amarelo Zé em destaque)
+    g_canvas.setTextColor(kColorZeYellow, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::top_center);
     char total_buf[32];
     snprintf(total_buf, sizeof(total_buf), "Total: R$ %.2f", g_ze_total);
     g_canvas.drawString(total_buf, 120, kCardY + 50, &fonts::Font2);
 
     // Botões Inferiores Compactos (largura 64px, altura 28px no y=150)
-    // Span total: x=50 a x=190 (140px dentro do circulo)
-    // Botão 1: REFRESH
+    // Botão 1: REFRESH (Amarelo Zé)
     g_canvas.fillRoundRect(50, 150, 64, 28, 6, kColorZeYellow);
     g_canvas.drawRoundRect(50, 150, 64, 28, 6, TFT_WHITE);
     g_canvas.setTextColor(TFT_BLACK, kColorZeYellow);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString("REFRESH", 82, 164, &fonts::Font2);
 
-    // Botão 2: VOLTAR
-    g_canvas.fillRoundRect(126, 150, 64, 28, 6, lgfx::color565(45, 48, 56));
-    g_canvas.drawRoundRect(126, 150, 64, 28, 6, lgfx::color565(120, 125, 135));
-    g_canvas.setTextColor(TFT_WHITE, lgfx::color565(45, 48, 56));
+    // Botão 2: VOLTAR (Card neutro)
+    g_canvas.fillRoundRect(126, 150, 64, 28, 6, kDashboardCard);
+    g_canvas.drawRoundRect(126, 150, 64, 28, 6, kDashboardBorder);
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString("VOLTAR", 158, 164, &fonts::Font2);
 
     // Dica de navegação no rodapé curvo
-    g_canvas.setTextColor(lgfx::color565(90, 105, 125), kColorDarkBg);
+    g_canvas.setTextColor(kDashboardMuted, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("[ Toque p/ avancar ]", 120, 186, &fonts::Font0);
+
+    g_canvas.pushSprite(0, 0);
+}
+
+
+
+static volatile bool s_tuya_busy = false;
+
+static void TuyaAesEcbEncrypt(const uint8_t key[16], const uint8_t* in_data, size_t in_len, uint8_t* out_data, size_t* out_len, bool add_pkcs7) {
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+    mbedtls_aes_setkey_enc(&aes, key, 128);
+    size_t pos = 0;
+    while (pos + 16 <= in_len) {
+        mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, in_data + pos, out_data + pos);
+        pos += 16;
+    }
+    if (add_pkcs7) {
+        uint8_t block[16];
+        size_t rem = in_len - pos;
+        uint8_t pad = static_cast<uint8_t>(16 - rem);
+        for (size_t i = 0; i < rem; ++i) block[i] = in_data[pos + i];
+        for (size_t i = rem; i < 16; ++i) block[i] = pad;
+        mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, block, out_data + pos);
+        pos += 16;
+    }
+    *out_len = pos;
+    mbedtls_aes_free(&aes);
+}
+
+static void TuyaAesEcbDecrypt(const uint8_t key[16], const uint8_t* in_data, size_t in_len, uint8_t* out_data) {
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+    mbedtls_aes_setkey_dec(&aes, key, 128);
+    for (size_t pos = 0; pos + 16 <= in_len; pos += 16) {
+        mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_DECRYPT, in_data + pos, out_data + pos);
+    }
+    mbedtls_aes_free(&aes);
+}
+
+static void TuyaHmacSha256(const uint8_t key[16], const uint8_t* data, size_t len, uint8_t out_hmac[32]) {
+    const mbedtls_md_info_t* md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_md_hmac(md, key, 16, data, len, out_hmac);
+}
+
+static size_t PackTuya34Packet(uint32_t seqno, uint32_t cmd, const uint8_t* payload, size_t payload_len, const uint8_t hmac_key[16], uint8_t* out_buf) {
+    uint32_t msg_len = payload_len + 32 + 4;
+    out_buf[0] = 0x00; out_buf[1] = 0x00; out_buf[2] = 0x55; out_buf[3] = 0xAA;
+    out_buf[4] = (seqno >> 24) & 0xFF; out_buf[5] = (seqno >> 16) & 0xFF; out_buf[6] = (seqno >> 8) & 0xFF; out_buf[7] = seqno & 0xFF;
+    out_buf[8] = (cmd >> 24) & 0xFF; out_buf[9] = (cmd >> 16) & 0xFF; out_buf[10] = (cmd >> 8) & 0xFF; out_buf[11] = cmd & 0xFF;
+    out_buf[12] = (msg_len >> 24) & 0xFF; out_buf[13] = (msg_len >> 16) & 0xFF; out_buf[14] = (msg_len >> 8) & 0xFF; out_buf[15] = msg_len & 0xFF;
+    memcpy(out_buf + 16, payload, payload_len);
+    TuyaHmacSha256(hmac_key, out_buf, 16 + payload_len, out_buf + 16 + payload_len);
+    size_t sfx = 16 + payload_len + 32;
+    out_buf[sfx] = 0x00; out_buf[sfx + 1] = 0x00; out_buf[sfx + 2] = 0xAA; out_buf[sfx + 3] = 0x55;
+    return sfx + 4;
+}
+
+static bool ExecuteDirectTuya34(bool target_state) {
+    static const uint8_t kTuyaKey[16] = {'3','M','$','V','F','V','6','s','E','R','E','k','g','S','0','H'};
+    WiFiClient client;
+    client.setTimeout(2000);
+    if (!client.connect("192.168.10.20", 6668)) {
+        Serial.println("[TUYA-3.4] Falha ao conectar em 192.168.10.20:6668");
+        return false;
+    }
+
+    uint8_t local_nonce[16] = {'J','A','R','V','I','S','3','4','S','P','H','E','R','E','0','1'};
+    uint32_t r = esp_random();
+    memcpy(local_nonce, &r, 4);
+
+    uint8_t step1_enc[32];
+    size_t step1_enc_len = 0;
+    TuyaAesEcbEncrypt(kTuyaKey, local_nonce, 16, step1_enc, &step1_enc_len, true);
+
+    uint8_t pkt_buf[256];
+    size_t pkt1_len = PackTuya34Packet(1, 3, step1_enc, step1_enc_len, kTuyaKey, pkt_buf);
+    client.write(pkt_buf, pkt1_len);
+
+    unsigned long t0 = millis();
+    while (client.available() < 120 && millis() - t0 < 1500) {
+        delay(5);
+    }
+    uint8_t resp[256];
+    int rlen = client.read(resp, sizeof(resp));
+    if (rlen < 120) {
+        Serial.printf("[TUYA-3.4] Handshake resp curta (%d bytes)\n", rlen);
+        client.stop();
+        return false;
+    }
+
+    // Offset 20 = 16 bytes header + 4 bytes retcode (0x00000000)
+    uint8_t dec_payload[64];
+    TuyaAesEcbDecrypt(kTuyaKey, resp + 20, 64, dec_payload);
+    uint8_t remote_nonce[16];
+    memcpy(remote_nonce, dec_payload, 16);
+
+    uint8_t rkey_hmac[32];
+    TuyaHmacSha256(kTuyaKey, remote_nonce, 16, rkey_hmac);
+    uint8_t step3_enc[48];
+    size_t step3_enc_len = 0;
+    TuyaAesEcbEncrypt(kTuyaKey, rkey_hmac, 32, step3_enc, &step3_enc_len, true);
+    size_t pkt3_len = PackTuya34Packet(2, 5, step3_enc, step3_enc_len, kTuyaKey, pkt_buf);
+    client.write(pkt_buf, pkt3_len);
+
+    uint8_t xor_nonce[16];
+    for (int i = 0; i < 16; ++i) xor_nonce[i] = local_nonce[i] ^ remote_nonce[i];
+    uint8_t session_key[32];
+    size_t sk_len = 0;
+    TuyaAesEcbEncrypt(kTuyaKey, xor_nonce, 16, session_key, &sk_len, false);
+
+    uint8_t ctrl_raw[128];
+    memset(ctrl_raw, 0, 15);
+    ctrl_raw[0] = '3'; ctrl_raw[1] = '.'; ctrl_raw[2] = '4';
+    time_t now_sec = time(nullptr);
+    if (now_sec < 100000) now_sec = 1761760000;
+    int jlen = snprintf(reinterpret_cast<char*>(ctrl_raw + 15), sizeof(ctrl_raw) - 15,
+                        "{\"protocol\":5,\"t\":%lu,\"data\":{\"dps\":{\"1\":%s}}}",
+                        static_cast<unsigned long>(now_sec), target_state ? "true" : "false");
+    uint8_t ctrl_enc[160];
+    size_t ctrl_enc_len = 0;
+    TuyaAesEcbEncrypt(session_key, ctrl_raw, 15 + jlen, ctrl_enc, &ctrl_enc_len, true);
+
+    size_t pkt_cmd_len = PackTuya34Packet(3, 13, ctrl_enc, ctrl_enc_len, session_key, pkt_buf);
+    client.write(pkt_buf, pkt_cmd_len);
+    unsigned long t1 = millis();
+    while (client.available() < 20 && millis() - t1 < 250) {
+        delay(5);
+    }
+    client.stop();
+    Serial.printf("[TUYA-3.4] SUCESSO DIRETO LAN 192.168.10.20:6668 -> %s!\n", target_state ? "LIGADA" : "DESLIGADA");
+    return true;
+}
+
+void SetTuyaLamp(bool state) {
+    g_tuya_lamp_on = state;
+    Serial.printf("[TUYA] SetTuyaLamp estado=%s\n", state ? "LIGAR" : "DESLIGAR");
+    if (s_tuya_busy) return;
+    s_tuya_busy = true;
+
+    xTaskCreate([](void* param) {
+        bool target_state = (param != NULL);
+        if (WiFi.status() == WL_CONNECTED) {
+            for (int attempt = 0; attempt < 3; ++attempt) {
+                if (ExecuteDirectTuya34(target_state)) break;
+                vTaskDelay(pdMS_TO_TICKS(140));
+            }
+        }
+        s_tuya_busy = false;
+        vTaskDelete(NULL);
+    }, "tuya_direct_task", 8192, (void*)(state ? 1 : 0), 2, NULL);
+}
+
+void ToggleTuyaLamp() {
+    static unsigned long s_last_tuya_toggle_ms = 0;
+    if (millis() - s_last_tuya_toggle_ms < 850) {
+        return; // Debounce: evita duplo toque acidental
+    }
+    s_last_tuya_toggle_ms = millis();
+
+    bool new_state = !g_tuya_lamp_on;
+    SetTuyaLamp(new_state);
+    
+    if (g_web_socket.isConnected()) {
+        JsonDocument doc;
+        doc["type"] = "custom";
+        doc["payload"]["event"] = "tuya_toggle";
+        doc["payload"]["device"] = "setup";
+        doc["payload"]["state"] = new_state;
+        String json_str;
+        serializeJson(doc, json_str);
+        g_web_socket.sendTXT(json_str);
+    }
+}
+
+void DrawLightsScreen() {
+    g_canvas.fillScreen(TFT_BLACK);
+
+    // Anel externo tático
+    uint16_t halo_color = g_tuya_lamp_on ? lgfx::color565(255, 200, 0) : lgfx::color565(60, 60, 75);
+    g_canvas.drawCircle(120, 120, 117, halo_color);
+    g_canvas.drawCircle(120, 120, 116, halo_color);
+
+    // Cabecalho
+    g_canvas.setTextColor(lgfx::color565(0, 220, 255), TFT_BLACK);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("ILUMINACAO", 120, 24, &fonts::Font4);
+
+    // Nome do Dispositivo
+    g_canvas.setTextColor(TFT_WHITE, TFT_BLACK);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString(g_tuya_lamp_name.c_str(), 120, 58, &fonts::Font4);
+
+    // Status visual central (Lampada acesa / apagada)
+    if (g_tuya_lamp_on) {
+        g_canvas.fillCircle(120, 106, 20, lgfx::color565(255, 215, 0));
+        g_canvas.fillCircle(120, 106, 14, lgfx::color565(255, 250, 180));
+        g_canvas.setTextColor(lgfx::color565(0, 255, 128), TFT_BLACK);
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString("LIGADA", 120, 134, &fonts::Font2);
+    } else {
+        g_canvas.fillCircle(120, 106, 20, lgfx::color565(40, 40, 50));
+        g_canvas.drawCircle(120, 106, 20, lgfx::color565(80, 80, 100));
+        g_canvas.setTextColor(lgfx::color565(140, 140, 150), TFT_BLACK);
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString("DESLIGADA", 120, 134, &fonts::Font2);
+    }
+
+    // Botao Tatil Principal [LIGAR / DESLIGAR]
+    const int btn_x = 35;
+    const int btn_y = 152;
+    const int btn_w = 170;
+    const int btn_h = 44;
+    const int btn_r = 22;
+
+    if (g_tuya_lamp_on) {
+        g_canvas.fillRoundRect(btn_x, btn_y, btn_w, btn_h, btn_r, lgfx::color565(180, 40, 40));
+        g_canvas.drawRoundRect(btn_x, btn_y, btn_w, btn_h, btn_r, lgfx::color565(255, 80, 80));
+        g_canvas.setTextColor(TFT_WHITE, lgfx::color565(180, 40, 40));
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString("DESLIGAR", 120, btn_y + 22, &fonts::Font4);
+    } else {
+        g_canvas.fillRoundRect(btn_x, btn_y, btn_w, btn_h, btn_r, lgfx::color565(255, 180, 0));
+        g_canvas.drawRoundRect(btn_x, btn_y, btn_w, btn_h, btn_r, lgfx::color565(255, 230, 100));
+        g_canvas.setTextColor(TFT_BLACK, lgfx::color565(255, 180, 0));
+        g_canvas.setTextDatum(textdatum_t::middle_center);
+        g_canvas.drawString("LIGAR", 120, btn_y + 22, &fonts::Font4);
+    }
+
+    // Dica cordal inferior
+    g_canvas.setTextColor(lgfx::color565(100, 110, 130), TFT_BLACK);
+    g_canvas.setTextDatum(textdatum_t::middle_center);
+    g_canvas.drawString("TOQUE PARA ALTERNAR", 120, 210, &fonts::Font2);
+
+    g_canvas.pushSprite(0, 0);
+}
+
+void DrawElectionScreen() {
+    g_canvas.fillScreen(kDashboardBackground);
+    
+    // Fundo central da Esfera (sem borda amarela, circulo em BRANCO)
+    g_canvas.fillCircle(120, 120, 114, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 114, TFT_WHITE);
+    g_canvas.drawCircle(120, 120, 118, lgfx::color565(30, 40, 55));
+
+    // Cabecalho Oficial: "ELEICOES 2026" em BRANCO
+    g_canvas.setTextColor(TFT_WHITE, kDashboardSurface);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("ELEICOES 2026", 120, 14, &fonts::Font2);
+
+    // Linha divisoria fina branca
+    g_canvas.drawFastHLine(70, 34, 100, lgfx::color565(80, 95, 120));
+
+    // Dimensoes dos Cards adaptadas para tela redonda 240x240
+    constexpr int kCardW = 176;
+    constexpr int kCardX = (240 - kCardW) / 2;
+
+    // Card Candidato 1 - Lula (y=40, h=52)
+    constexpr int kCard1Y = 40;
+    g_canvas.fillRoundRect(kCardX, kCard1Y, kCardW, 52, 8, kDashboardCard);
+    g_canvas.drawRoundRect(kCardX, kCard1Y, kCardW, 52, 8, lgfx::color565(60, 30, 40));
+    // Faixa neon lateral vermelha (PT)
+    g_canvas.fillRoundRect(kCardX + 2, kCard1Y + 3, 4, 46, 2, lgfx::color565(225, 29, 72));
+
+    // Nome do Candidato 1 (Apenas LULA, sem numero)
+    g_canvas.setTextColor(TFT_WHITE, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_left);
+    g_canvas.drawString("LULA", kCardX + 14, kCard1Y + 6, &fonts::Font2);
+
+    // Porcentagem centralizada perfeitamente na vertical do card
+    g_canvas.setTextColor(lgfx::color565(255, 90, 120), kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::middle_right);
+    g_canvas.setFont(&fonts::Font4);
+    g_canvas.setTextSize(0.90, 0.90);
+    g_canvas.drawString(g_election_c1_pct.c_str(), kCardX + kCardW - 8, kCard1Y + 26);
+    g_canvas.setTextSize(1.0, 1.0);
+
+    // Votos do Candidato 1 (+15% de tamanho)
+    g_canvas.setTextColor(TFT_WHITE, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_left);
+    g_canvas.setFont(&fonts::Font2);
+    g_canvas.setTextSize(1.15, 1.15);
+    g_canvas.drawString(g_election_c1_votos.c_str(), kCardX + 14, kCard1Y + 28);
+    g_canvas.setTextSize(1.0, 1.0);
+
+    // Card Candidato 2 - Flavio Bolsonaro (y=98, h=52)
+    constexpr int kCard2Y = 98;
+    g_canvas.fillRoundRect(kCardX, kCard2Y, kCardW, 52, 8, kDashboardCard);
+    g_canvas.drawRoundRect(kCardX, kCard2Y, kCardW, 52, 8, lgfx::color565(25, 40, 75));
+    // Faixa neon lateral azul (PL)
+    g_canvas.fillRoundRect(kCardX + 2, kCard2Y + 3, 4, 46, 2, lgfx::color565(37, 99, 235));
+
+    // Nome do Candidato 2 (Apenas FLAVIO, sem numero e sem sobrenome)
+    g_canvas.setTextColor(TFT_WHITE, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_left);
+    g_canvas.drawString("FLAVIO", kCardX + 14, kCard2Y + 6, &fonts::Font2);
+
+    // Porcentagem centralizada perfeitamente na vertical do card
+    g_canvas.setTextColor(lgfx::color565(96, 165, 250), kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::middle_right);
+    g_canvas.setFont(&fonts::Font4);
+    g_canvas.setTextSize(0.90, 0.90);
+    g_canvas.drawString(g_election_c2_pct.c_str(), kCardX + kCardW - 8, kCard2Y + 26);
+    g_canvas.setTextSize(1.0, 1.0);
+
+    // Votos do Candidato 2 (+15% de tamanho)
+    g_canvas.setTextColor(TFT_WHITE, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_left);
+    g_canvas.setFont(&fonts::Font2);
+    g_canvas.setTextSize(1.15, 1.15);
+    g_canvas.drawString(g_election_c2_votos.c_str(), kCardX + 14, kCard2Y + 28);
+    g_canvas.setTextSize(1.0, 1.0);
+
+    // Mini barra comparativa proporcional (y=156, w=140)
+    float c1_pct_f = g_election_c1_pct.toFloat();
+    if (c1_pct_f <= 0.0f) c1_pct_f = 50.0f;
+    constexpr int kCompW = 140;
+    constexpr int kCompX = (240 - kCompW) / 2;
+    int fill1 = constrain((int)((kCompW - 2) * (c1_pct_f / 100.0f)), 2, kCompW - 4);
+    g_canvas.fillRoundRect(kCompX, 156, fill1, 4, 1, lgfx::color565(225, 29, 72));
+    g_canvas.fillRoundRect(kCompX + fill1, 156, kCompW - fill1, 4, 1, lgfx::color565(37, 99, 235));
+
+    // ZONA INFERIOR: PORCENTAGEM DAS APURACOES EM DESTAQUE GIGANTE
+    // Sub-rotulo
+    g_canvas.setTextColor(lgfx::color565(180, 200, 225), kDashboardSurface);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("TOTAL APURADO", 120, 166, &fonts::Font0);
+
+    // Porcentagem Apurada em Grande Destaque (Font4 em Branco)
+    g_canvas.setTextColor(TFT_WHITE, kDashboardSurface);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString(g_election_apurado.c_str(), 120, 180, &fonts::Font4);
+
+    // Horario de sincronizacao oficial TSE
+    if (g_election_hora.length() > 0 && g_election_hora != "--:--") {
+        String hora_str = "TSE: " + g_election_hora;
+        g_canvas.setTextColor(lgfx::color565(130, 150, 175), kDashboardSurface);
+        g_canvas.drawString(hora_str.c_str(), 120, 210, &fonts::Font0);
+    }
+
+    g_canvas.pushSprite(0, 0);
+}
+
+void DrawWhatsAppScreen() {
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kColorWhatsAppGreen);
+
+    // Cabeçalho: "WHATSAPP" em verde oficial
+    g_canvas.setTextColor(kColorWhatsAppGreen, kDashboardSurface);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("WHATSAPP", 120, 20, &fonts::Font2);
+
+    // Card Central de Mensagem (largura 180px, altura 116px no y=42)
+    constexpr int kWaCardW = 180;
+    constexpr int kWaCardH = 116;
+    constexpr int kWaCardX = (240 - kWaCardW) / 2;
+    constexpr int kWaCardY = 42;
+    g_canvas.fillRoundRect(kWaCardX, kWaCardY, kWaCardW, kWaCardH, 8, kDashboardCard);
+    g_canvas.drawRoundRect(kWaCardX, kWaCardY, kWaCardW, kWaCardH, 8, kDashboardBorder);
+
+    // Remetente em destaque (Verde WhatsApp)
+    g_canvas.setTextColor(kColorWhatsAppGreen, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    String sender_disp = g_wa_sender.length() > 0 ? g_wa_sender : "Nova Mensagem";
+    if (sender_disp.length() > 20) {
+        sender_disp = sender_disp.substring(0, 18) + "..";
+    }
+    g_canvas.drawString(sender_disp.c_str(), 120, kWaCardY + 6, &fonts::Font2);
+
+    // Linha divisória sutil
+    g_canvas.drawLine(kWaCardX + 10, kWaCardY + 25, kWaCardX + kWaCardW - 10, kWaCardY + 25, kDashboardBorder);
+
+    // Quebra da mensagem em até 3 linhas (max ~20 caracteres por linha)
+    String raw_msg = g_wa_message.length() > 0 ? g_wa_message : "Sem texto";
+    String l1 = "", l2 = "", l3 = "";
+    int len = raw_msg.length();
+    if (len <= 20) {
+        l1 = raw_msg;
+    } else {
+        int cut1 = 20;
+        for (int i = 20; i >= 10; --i) {
+            if (raw_msg.charAt(i) == ' ') { cut1 = i; break; }
+        }
+        l1 = raw_msg.substring(0, cut1);
+        String rem1 = raw_msg.substring(cut1);
+        rem1.trim();
+        if (rem1.length() <= 20) {
+            l2 = rem1;
+        } else {
+            int cut2 = 20;
+            for (int i = 20; i >= 10; --i) {
+                if (rem1.charAt(i) == ' ') { cut2 = i; break; }
+            }
+            l2 = rem1.substring(0, cut2);
+            String rem2 = rem1.substring(cut2);
+            rem2.trim();
+            if (rem2.length() > 20) {
+                l3 = rem2.substring(0, 17) + "...";
+            } else {
+                l3 = rem2;
+            }
+        }
+    }
+
+    g_canvas.setTextColor(kDashboardText, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString(l1.c_str(), 120, kWaCardY + 31, &fonts::Font2);
+    if (l2.length() > 0) g_canvas.drawString(l2.c_str(), 120, kWaCardY + 49, &fonts::Font2);
+    if (l3.length() > 0) g_canvas.drawString(l3.c_str(), 120, kWaCardY + 67, &fonts::Font2);
+
+    // Horário no canto inferior direito do card
+    g_canvas.setTextColor(kDashboardMuted, kDashboardCard);
+    g_canvas.setTextDatum(textdatum_t::bottom_right);
+    String time_disp = g_wa_time.length() > 0 ? g_wa_time : "";
+    g_canvas.drawString(time_disp.c_str(), kWaCardX + kWaCardW - 8, kWaCardY + kWaCardH - 4, &fonts::Font0);
+
+    // Botão Inferior "DISPENSAR" (Verde WhatsApp)
+    g_canvas.fillRoundRect(65, 166, 110, 26, 6, kColorWhatsAppGreen);
+    g_canvas.drawRoundRect(65, 166, 110, 26, 6, TFT_WHITE);
+    g_canvas.setTextColor(TFT_BLACK, kColorWhatsAppGreen);
+    g_canvas.setTextDatum(textdatum_t::middle_center);
+    g_canvas.drawString("DISPENSAR", 120, 179, &fonts::Font2);
+
+    // Dica de rodapé
+    g_canvas.setTextColor(kDashboardMuted, kDashboardSurface);
+    g_canvas.setTextDatum(textdatum_t::top_center);
+    g_canvas.drawString("[ Toque para voltar ]", 120, 198, &fonts::Font0);
 
     g_canvas.pushSprite(0, 0);
 }
@@ -1596,15 +2152,15 @@ void RenderCustomScreen(String req_id, String title, String message, String btn1
     g_current_button2_id = btn2_id;
     g_current_button3_id = btn3_id;
 
-    g_canvas.fillScreen(kColorNavyDark);
-    g_canvas.drawCircle(120, 120, 118, kColorCyanNeon);
-    g_canvas.drawCircle(120, 120, 115, kColorCyanMid);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kDashboardBorder);
 
-    g_canvas.setTextColor(kColorCyanBright, kColorNavyDark);
+    g_canvas.setTextColor(kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
-    g_canvas.drawString(title.c_str(), 120, 20, &fonts::Font4);
+    g_canvas.drawString(title.c_str(), 120, 24, &fonts::Font4);
 
-    g_canvas.setTextColor(kColorText, kColorNavyDark);
+    g_canvas.setTextColor(kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(message.c_str(), 120, 70, &fonts::Font2);
 
@@ -1649,12 +2205,13 @@ void RenderCustomScreen(String req_id, String title, String message, String btn1
 
 void PlayAlarmBeepTone() {
     static unsigned long s_last_beep = 0;
-    if (millis() - s_last_beep > 400) {
+    if (millis() - s_last_beep > 450) {
         s_last_beep = millis();
-        int16_t beep_buf[512];
-        for (int i = 0; i < 512; i++) {
-            float sample = sinf(2.0f * M_PI * 800.0f * i / 16000.0f);
-            beep_buf[i] = (int16_t)(sample * 16000.0f);
+        int16_t beep_buf[800]; // 50ms de áudio a 16kHz na pilha (0 bytes PSRAM)
+        for (int i = 0; i < 800; i++) {
+            float freq = (i < 400) ? 950.0f : 1250.0f;
+            float sample = sinf(2.0f * M_PI * freq * i / 16000.0f);
+            beep_buf[i] = (int16_t)(sample * 18000.0f);
         }
         size_t written = 0;
         i2s_write(kI2sPortNum, beep_buf, sizeof(beep_buf), &written, 0);
@@ -1662,8 +2219,9 @@ void PlayAlarmBeepTone() {
 }
 
 void DrawTimerScreen() {
-    constexpr uint16_t kColorYellowCyber = lgfx::color565(255, 215, 0);
-    g_canvas.fillScreen(kColorNavyDark);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
+    g_canvas.drawCircle(120, 120, 107, kDashboardBorder);
 
     uint32_t rem_sec = 0;
     if (g_timer_paused) {
@@ -1677,18 +2235,16 @@ void DrawTimerScreen() {
     if (pct > 1.0f) pct = 1.0f;
     if (pct < 0.0f) pct = 0.0f;
 
-    g_canvas.drawCircle(120, 120, 118, kColorGridLine);
-
     int start_angle = -90;
     int sweep_angle = static_cast<int>(360.0f * pct);
-    uint16_t arc_color = (pct > 0.2f) ? kColorCyanNeon : kColorRedAngry;
-    g_canvas.drawArc(120, 120, 118, 112, start_angle, start_angle + sweep_angle, arc_color);
+    uint16_t arc_color = (pct > 0.2f) ? kColorYellowCyber : kColorRedAngry;
+    g_canvas.drawArc(120, 120, 107, 103, start_angle, start_angle + sweep_angle, arc_color);
 
-    g_canvas.setTextColor(kColorCyanBright, kColorNavyDark);
+    g_canvas.setTextColor(kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString("TIMER REGRESSIVO", 120, 18, &fonts::Font4);
 
-    g_canvas.setTextColor(kColorCyanNeon, kColorNavyDark);
+    g_canvas.setTextColor(kColorYellowCyber, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(g_timer_label.c_str(), 120, 50, &fonts::Font2);
 
@@ -1697,25 +2253,25 @@ void DrawTimerScreen() {
     char time_buf[16];
     snprintf(time_buf, sizeof(time_buf), "%02d:%02d", mins, secs);
 
-    g_canvas.setTextColor(g_timer_paused ? kColorYellowCyber : kColorCyanBright, kColorNavyDark);
+    g_canvas.setTextColor(g_timer_paused ? kColorYellowCyber : kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString(time_buf, 120, 105, &fonts::Font7);
 
     if (g_timer_paused) {
-        g_canvas.setTextColor(kColorYellowCyber, kColorNavyDark);
+        g_canvas.setTextColor(kColorYellowCyber, kDashboardSurface);
         g_canvas.setTextDatum(textdatum_t::top_center);
         g_canvas.drawString("[ PAUSADO ]", 120, 142, &fonts::Font2);
     }
 
-    g_canvas.fillRoundRect(35, 172, 75, 36, 8, g_timer_paused ? kColorBtnConfirm : kColorCyanMid);
-    g_canvas.drawRoundRect(35, 172, 75, 36, 8, kColorCyanBright);
-    g_canvas.setTextColor(TFT_BLACK, g_timer_paused ? kColorBtnConfirm : kColorCyanMid);
+    g_canvas.fillRoundRect(35, 172, 75, 36, 8, g_timer_paused ? kColorBtnConfirm : kDashboardCard);
+    g_canvas.drawRoundRect(35, 172, 75, 36, 8, kDashboardBorder);
+    g_canvas.setTextColor(g_timer_paused ? TFT_BLACK : kDashboardText, g_timer_paused ? kColorBtnConfirm : kDashboardCard);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString(g_timer_paused ? "RETOMAR" : "PAUSAR", 72, 190, &fonts::Font2);
 
     g_canvas.fillRoundRect(130, 172, 75, 36, 8, kColorBtnCancel);
-    g_canvas.drawRoundRect(130, 172, 75, 36, 8, kColorCyanBright);
-    g_canvas.setTextColor(kColorText, kColorBtnCancel);
+    g_canvas.drawRoundRect(130, 172, 75, 36, 8, kDashboardBorder);
+    g_canvas.setTextColor(kDashboardText, kColorBtnCancel);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString("CANCELAR", 167, 190, &fonts::Font2);
 
@@ -1723,19 +2279,20 @@ void DrawTimerScreen() {
 }
 
 void DrawAlarmScreen() {
-    g_canvas.fillScreen(kColorNavyDark);
+    g_canvas.fillScreen(kDashboardBackground);
+    g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
 
     bool flash = ((millis() / 300) % 2 == 0);
-    uint16_t ring_color = flash ? kColorRedAngry : kColorCyanNeon;
+    uint16_t ring_color = flash ? kColorRedAngry : kColorYellowCyber;
 
-    g_canvas.drawCircle(120, 120, 118, ring_color);
-    g_canvas.drawCircle(120, 120, 115, ring_color);
+    g_canvas.drawCircle(120, 120, 107, ring_color);
+    g_canvas.drawCircle(120, 120, 105, ring_color);
 
-    g_canvas.setTextColor(ring_color, kColorNavyDark);
+    g_canvas.setTextColor(ring_color, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(g_alarm_ringing ? "ALARME TOCANDO!" : "ALARME", 120, 18, &fonts::Font4);
 
-    g_canvas.setTextColor(kColorCyanBright, kColorNavyDark);
+    g_canvas.setTextColor(kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::top_center);
     g_canvas.drawString(g_alarm_label.c_str(), 120, 50, &fonts::Font2);
 
@@ -1744,13 +2301,13 @@ void DrawAlarmScreen() {
         snprintf(alarm_time_str, sizeof(alarm_time_str), "%02d:%02d", g_alarm_hour, g_alarm_minute);
     }
 
-    g_canvas.setTextColor(kColorCyanBright, kColorNavyDark);
+    g_canvas.setTextColor(kDashboardText, kDashboardSurface);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString(alarm_time_str, 120, 105, &fonts::Font7);
 
     g_canvas.fillRoundRect(45, 170, 150, 40, 10, kColorBtnCancel);
-    g_canvas.drawRoundRect(45, 170, 150, 40, 10, kColorCyanBright);
-    g_canvas.setTextColor(kColorText, kColorBtnCancel);
+    g_canvas.drawRoundRect(45, 170, 150, 40, 10, kDashboardBorder);
+    g_canvas.setTextColor(kDashboardText, kColorBtnCancel);
     g_canvas.setTextDatum(textdatum_t::middle_center);
     g_canvas.drawString("DESLIGAR ALARME", 120, 190, &fonts::Font2);
 
@@ -1914,16 +2471,6 @@ void ExecuteHttpOtaUpdate(const String& url) {
     }
 }
 
-// Ringbuffer de playback TTS de 512 KB alocado na PSRAM (sem consumir SRAM interna)
-constexpr size_t kTtsRingBufferSize = 512 * 1024;
-static uint8_t* g_tts_ringbuffer = nullptr;
-static volatile size_t g_tts_rb_head = 0;
-static volatile size_t g_tts_rb_tail = 0;
-static volatile size_t g_tts_rb_count = 0;
-static portMUX_TYPE g_tts_mux = portMUX_INITIALIZER_UNLOCKED;
-static unsigned long g_last_tts_time = 0;
-static unsigned long g_last_tts_play_ms = 0;
-
 void PlayWakeBeep() {
     static unsigned long s_last_wake_beep = 0;
     if (millis() - s_last_wake_beep < 3000) {
@@ -1943,7 +2490,7 @@ void PlayWakeBeep() {
         size_t written = 0;
         i2s_write(kI2sPortNum, samples, sizeof(samples), &written, portMAX_DELAY);
     }
-    g_last_tts_time = millis();
+    g_last_beep_ms = millis();
 }
 
 bool SendSphereAuthProof(WebSocketsClient& socket, const String& nonce) {
@@ -2077,6 +2624,8 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
         // Acionamento por Voz / Wake Word / Emoção
         if (msg_type == "wakeup") {
             PlayWakeBeep();
+            g_mic_speech_active = true;
+            g_mic_silence_frames = 0;
             SetDisplayMode(DisplayMode::kVoiceListening);
         }
         else if (msg_type == "jarvis.status") {
@@ -2109,7 +2658,13 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
         }
         else if (msg_type == "emotion") {
             String emo = doc["emotion"] | "happy";
-            SetVoiceDisplayMode(emo);
+            if (emo == "standby" && (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 500))) {
+                g_pending_standby = true;
+                Serial.println("[EMOTION] Standby postergado: audio ainda reproduzindo no speaker");
+            } else {
+                g_pending_standby = false;
+                SetVoiceDisplayMode(emo);
+            }
         }
         else if (msg_type == "tts" || msg_type == "speaking") {
             String state = doc["state"] | "start";
@@ -2144,11 +2699,69 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
             bool show = p["show"] | true;
             if (show) SetDisplayMode(DisplayMode::kZeDelivery);
         }
+        else if (msg_type == "jarvis.election" || msg_type == "election") {
+            JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+            if (p["apurado"].is<const char*>() || p["apurado"].is<String>()) g_election_apurado = p["apurado"].as<String>();
+            if (p["hora"].is<const char*>() || p["hora"].is<String>()) g_election_hora = p["hora"].as<String>();
+            if (p["c1"].is<JsonObject>()) {
+                JsonObject c1 = p["c1"];
+                if (c1["nome"].is<const char*>() || c1["nome"].is<String>()) g_election_c1_nome = c1["nome"].as<String>();
+                if (c1["num"].is<const char*>() || c1["num"].is<String>()) g_election_c1_num = c1["num"].as<String>();
+                if (c1["pct"].is<const char*>() || c1["pct"].is<String>()) g_election_c1_pct = c1["pct"].as<String>();
+                if (c1["votos"].is<const char*>() || c1["votos"].is<String>()) g_election_c1_votos = c1["votos"].as<String>();
+            }
+            if (p["c2"].is<JsonObject>()) {
+                JsonObject c2 = p["c2"];
+                if (c2["nome"].is<const char*>() || c2["nome"].is<String>()) g_election_c2_nome = c2["nome"].as<String>();
+                if (c2["num"].is<const char*>() || c2["num"].is<String>()) g_election_c2_num = c2["num"].as<String>();
+                if (c2["pct"].is<const char*>() || c2["pct"].is<String>()) g_election_c2_pct = c2["pct"].as<String>();
+                if (c2["votos"].is<const char*>() || c2["votos"].is<String>()) g_election_c2_votos = c2["votos"].as<String>();
+            }
+            bool show = p["show"] | true;
+            if (show) SetDisplayMode(DisplayMode::kElection);
+        }
+        else if (msg_type == "jarvis.whatsapp" || msg_type == "whatsapp") {
+            JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+            if (p["sender"].is<const char*>() || p["sender"].is<String>()) g_wa_sender = p["sender"].as<String>();
+            if (p["message"].is<const char*>() || p["message"].is<String>()) g_wa_message = p["message"].as<String>();
+            if (p["time"].is<const char*>() || p["time"].is<String>()) g_wa_time = p["time"].as<String>();
+            g_wa_received_ms = millis();
+            PlayWakeBeep();
+            SetDisplayMode(DisplayMode::kWhatsApp);
+            Serial.printf("[WHATSAPP] Mensagem recebida de %s: %s (%s)\n", g_wa_sender.c_str(), g_wa_message.c_str(), g_wa_time.c_str());
+        }
         else if (msg_type == "custom") {
             String event = doc["payload"]["event"] | doc["event"] | "";
             if (event == "jarvis.emotion") {
                 String emo = doc["payload"]["emotion"] | doc["emotion"] | "happy";
-                SetVoiceDisplayMode(emo);
+                if (emo == "standby" && (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 500))) {
+                    g_pending_standby = true;
+                    Serial.println("[EMOTION] Standby postergado: audio ainda reproduzindo no speaker");
+                } else {
+                    g_pending_standby = false;
+                    SetVoiceDisplayMode(emo);
+                }
+            }
+            else if (event == "jarvis.election" || event == "election") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                if (p["apurado"].is<const char*>() || p["apurado"].is<String>()) g_election_apurado = p["apurado"].as<String>();
+                if (p["hora"].is<const char*>() || p["hora"].is<String>()) g_election_hora = p["hora"].as<String>();
+                if (p["c1"].is<JsonObject>()) {
+                    JsonObject c1 = p["c1"];
+                    if (c1["nome"].is<const char*>() || c1["nome"].is<String>()) g_election_c1_nome = c1["nome"].as<String>();
+                    if (c1["num"].is<const char*>() || c1["num"].is<String>()) g_election_c1_num = c1["num"].as<String>();
+                    if (c1["pct"].is<const char*>() || c1["pct"].is<String>()) g_election_c1_pct = c1["pct"].as<String>();
+                    if (c1["votos"].is<const char*>() || c1["votos"].is<String>()) g_election_c1_votos = c1["votos"].as<String>();
+                }
+                if (p["c2"].is<JsonObject>()) {
+                    JsonObject c2 = p["c2"];
+                    if (c2["nome"].is<const char*>() || c2["nome"].is<String>()) g_election_c2_nome = c2["nome"].as<String>();
+                    if (c2["num"].is<const char*>() || c2["num"].is<String>()) g_election_c2_num = c2["num"].as<String>();
+                    if (c2["pct"].is<const char*>() || c2["pct"].is<String>()) g_election_c2_pct = c2["pct"].as<String>();
+                    if (c2["votos"].is<const char*>() || c2["votos"].is<String>()) g_election_c2_votos = c2["votos"].as<String>();
+                }
+                bool show = p["show"] | true;
+                if (show) SetDisplayMode(DisplayMode::kElection, true);
             }
             else if (event == "jarvis.telemetry") {
                 JsonObject payload_obj = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
@@ -2201,6 +2814,73 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
                     SetDisplayMode(DisplayMode::kAlarm);
                 }
             }
+            else if (event == "jarvis.timer_action" || msg_type == "jarvis.timer_action") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                String act = p["action"] | "";
+                if (act == "pause") {
+                    if (g_timer_active && !g_timer_paused) {
+                        g_timer_paused = true;
+                        g_timer_pause_remaining_ms = (g_timer_end_ms > millis()) ? (g_timer_end_ms - millis()) : 0;
+                        Serial.println("[TIMER] Pausado via WebSocket");
+                    }
+                } else if (act == "resume") {
+                    if (g_timer_active && g_timer_paused) {
+                        g_timer_paused = false;
+                        g_timer_end_ms = millis() + g_timer_pause_remaining_ms;
+                        Serial.println("[TIMER] Retomado via WebSocket");
+                    }
+                } else if (act == "cancel") {
+                    g_timer_active = false;
+                    g_timer_paused = false;
+                    if (g_current_mode == DisplayMode::kTimer) {
+                        SetDisplayMode(DisplayMode::kStandby);
+                    }
+                    Serial.println("[TIMER] Cancelado via WebSocket");
+                }
+            }
+            else if (event == "jarvis.alarm_action" || msg_type == "jarvis.alarm_action") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                String act = p["action"] | "";
+                if (act == "cancel" || act == "stop" || act == "dismiss") {
+                    g_alarm_ringing = false;
+                    g_alarm_active = false;
+                    if (g_current_mode == DisplayMode::kAlarm) {
+                        SetDisplayMode(DisplayMode::kStandby);
+                    }
+                    Serial.println("[ALARME] Desligado/Cancelado via WebSocket");
+                }
+            }
+            else if (event == "jarvis.election" || event == "election") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                if (p["apurado"].is<const char*>() || p["apurado"].is<String>()) g_election_apurado = p["apurado"].as<String>();
+                if (p["hora"].is<const char*>() || p["hora"].is<String>()) g_election_hora = p["hora"].as<String>();
+                if (p["c1"].is<JsonObject>()) {
+                    JsonObject c1 = p["c1"];
+                    if (c1["nome"].is<const char*>() || c1["nome"].is<String>()) g_election_c1_nome = c1["nome"].as<String>();
+                    if (c1["num"].is<const char*>() || c1["num"].is<String>()) g_election_c1_num = c1["num"].as<String>();
+                    if (c1["pct"].is<const char*>() || c1["pct"].is<String>()) g_election_c1_pct = c1["pct"].as<String>();
+                    if (c1["votos"].is<const char*>() || c1["votos"].is<String>()) g_election_c1_votos = c1["votos"].as<String>();
+                }
+                if (p["c2"].is<JsonObject>()) {
+                    JsonObject c2 = p["c2"];
+                    if (c2["nome"].is<const char*>() || c2["nome"].is<String>()) g_election_c2_nome = c2["nome"].as<String>();
+                    if (c2["num"].is<const char*>() || c2["num"].is<String>()) g_election_c2_num = c2["num"].as<String>();
+                    if (c2["pct"].is<const char*>() || c2["pct"].is<String>()) g_election_c2_pct = c2["pct"].as<String>();
+                    if (c2["votos"].is<const char*>() || c2["votos"].is<String>()) g_election_c2_votos = c2["votos"].as<String>();
+                }
+                bool show = p["show"] | false;
+                if (show) SetDisplayMode(DisplayMode::kElection);
+            }
+            else if (event == "tuya_command" || event == "jarvis.tuya_command" || event == "tuya_state" || event == "jarvis.tuya_state") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                bool state = p["state"] | false;
+                String act = p["action"] | "";
+                if (act == "on") state = true;
+                else if (act == "off") state = false;
+                else if (act == "toggle") state = !g_tuya_lamp_on;
+                Serial.printf("[TUYA] Evento WebSocket recebido (act=%s, state=%d). Executando na LAN...\n", act.c_str(), state);
+                SetTuyaLamp(state);
+            }
             else if (event == "jarvis.ze_status" || event == "ze_delivery") {
                 JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
                 if (p["number"].is<const char*>() || p["number"].is<String>()) g_ze_order_number = p["number"].as<String>();
@@ -2208,8 +2888,30 @@ void ProcessWebSocketEvent(WebSocketsClient& socket, bool audio_channel,
                 if (p["items"].is<const char*>() || p["items"].is<String>()) g_ze_items = p["items"].as<String>();
                 if (p["total"].is<float>() || p["total"].is<int>()) g_ze_total = p["total"].as<float>();
                 if (p["updated_at"].is<const char*>() || p["updated_at"].is<String>()) g_ze_updated_at = p["updated_at"].as<String>();
-                bool show = p["show"] | true;
+                bool show = p["show"] | false;
                 if (show) SetDisplayMode(DisplayMode::kZeDelivery);
+            }
+            else if (event == "jarvis.whatsapp" || event == "whatsapp") {
+                JsonObject p = doc["payload"].is<JsonObject>() ? doc["payload"] : doc.as<JsonObject>();
+                if (p["sender"].is<const char*>() || p["sender"].is<String>()) g_wa_sender = p["sender"].as<String>();
+                if (p["message"].is<const char*>() || p["message"].is<String>()) g_wa_message = p["message"].as<String>();
+                if (p["time"].is<const char*>() || p["time"].is<String>()) g_wa_time = p["time"].as<String>();
+                g_wa_received_ms = millis();
+                PlayWakeBeep();
+                SetDisplayMode(DisplayMode::kWhatsApp);
+                Serial.printf("[WHATSAPP] Mensagem recebida de %s: %s (%s)\n", g_wa_sender.c_str(), g_wa_message.c_str(), g_wa_time.c_str());
+            }
+            else if (event == "stop_tts" || msg_type == "stop_tts") {
+                portENTER_CRITICAL(&g_tts_mux);
+                g_tts_rb_count = 0;
+                g_tts_rb_head = 0;
+                g_tts_rb_tail = 0;
+                portEXIT_CRITICAL(&g_tts_mux);
+                i2s_zero_dma_buffer(kI2sPortNum);
+                g_last_tts_play_ms = 0;
+                g_last_tts_time = 0;
+                SetDisplayMode(DisplayMode::kStandby);
+                Serial.println("[TTS] Fala interrompida por evento stop_tts");
             }
 
         }
@@ -2268,18 +2970,18 @@ void AudioTask(void* pvParameters) {
     while (true) {
         if (WiFi.status() == WL_CONNECTED && g_web_socket.isConnected()) {
             // Trava de Mute / Anti-Eco por Hardware:
-            // Enquanto o alto-falante estiver tocando ou tocou ha menos de 1000ms, o microfone e 100% ignorado!
-            if (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 1000)) {
+            // Se o alto-falante estiver tocando, a fala normal fica pausada,
+            // mas a Wake Word local continua monitorando para permitir Interrupção / Barge-in por voz!
+            bool tts_active = (g_tts_rb_count > 0 || (g_last_tts_play_ms > 0 && millis() - g_last_tts_play_ms < 1500) || (g_last_beep_ms > 0 && millis() - g_last_beep_ms < 600));
+            if (tts_active) {
                 g_mic_speech_active = false;
                 g_mic_silence_frames = 0;
-                s_preroll_idx = 0;
-                s_preroll_full = false;
-                g_wake_word_engine.Reset();
-                vTaskDelay(pdMS_TO_TICKS(15));
-                continue;
             }
 
             static uint8_t mono_buf[512];
+            static int16_t s_ns_in[160];
+            static int16_t s_ns_out[160];
+            static size_t s_ns_accum_count = 0;
             size_t bytes_read = 0;
             for (int _i = 0; _i < 16; _i++) {
                 esp_err_t err = i2s_read(kI2sPortNum, mono_buf, sizeof(mono_buf), &bytes_read, 0);
@@ -2289,97 +2991,161 @@ void AudioTask(void* pvParameters) {
                 size_t num_samples = bytes_read / 2;
                 const int16_t* samples = reinterpret_cast<const int16_t*>(mono_buf);
 
-                if (!g_mic_speech_active) {
-                    int16_t boosted_samples[256];
-                    size_t n_boost = num_samples < 256 ? num_samples : 256;
-                    for (size_t s = 0; s < n_boost; ++s) {
-                        int32_t b = static_cast<int32_t>(samples[s]) * 3;
-                        if (b > 32767) b = 32767;
-                        if (b < -32768) b = -32768;
-                        boosted_samples[s] = static_cast<int16_t>(b);
-                    }
-                    if (g_wake_word_engine.ProcessSamples(boosted_samples, n_boost)) {
-                        g_mic_speech_active = true;
-                        g_mic_silence_frames = 0;
-                        Serial.println("[WAKEWORD-LOCAL] *** WAKE WORD 'HEY JARVIS' DETECTADA LOCALMENTE NA ESFERA! ***");
-                        SetDisplayMode(DisplayMode::kVoiceListening);
-                        PlayWakeBeep();
-                        g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+                for (size_t s = 0; s < num_samples; ++s) {
+                    s_ns_in[s_ns_accum_count++] = samples[s];
+                    if (s_ns_accum_count >= 160) {
+                        s_ns_accum_count = 0;
 
-                        // Despeja imediatamente os pacotes Opus acumulados no pre-roll circular
-                        size_t count = s_preroll_full ? kOpusPreRollCount : s_preroll_idx;
-                        size_t start = s_preroll_full ? s_preroll_idx : 0;
-                        for (size_t p = 0; p < count; ++p) {
-                            size_t idx = (start + p) % kOpusPreRollCount;
-                            if (s_preroll_packets[idx].len > 0) {
-                                g_web_socket.sendBIN(s_preroll_packets[idx].data, s_preroll_packets[idx].len);
+                        // Filtro neural Espressif ESP-NS Pro (10ms = 160 samples @ 16kHz)
+                        if (g_ns_inst) {
+                            ns_process(g_ns_inst, s_ns_in, s_ns_out);
+                        } else {
+                            memcpy(s_ns_out, s_ns_in, sizeof(s_ns_in));
+                        }
+
+                        // Wake Word verificada com precisão absoluta no ZimaOS (Whisper STT) sem falsos positivos locais.
+
+                        // Acumula os 160 samples originais do ADC no frame Opus (preserva fonemas puros p/ Whisper STT)
+                        for (size_t b = 0; b < 160; ++b) {
+                            if (g_opus_pcm_accum_count < static_cast<size_t>(kOpusFrameSamples)) {
+                                g_opus_pcm_accum[g_opus_pcm_accum_count++] = s_ns_in[b];
                             }
                         }
-                        s_preroll_idx = 0;
-                        s_preroll_full = false;
-                    }
-                }
 
-                for (size_t s = 0; s < num_samples; ++s) {
-                    if (g_opus_pcm_accum_count < static_cast<size_t>(kOpusFrameSamples)) {
-                        g_opus_pcm_accum[g_opus_pcm_accum_count++] = samples[s];
-                    }
-                }
+                        if (g_opus_pcm_accum_count >= static_cast<size_t>(kOpusFrameSamples)) {
+                            g_opus_pcm_accum_count = 0;
 
-                if (g_opus_pcm_accum_count >= static_cast<size_t>(kOpusFrameSamples)) {
-                    g_opus_pcm_accum_count = 0;
+                            int64_t sum_dc = 0;
+                            for (int p = 0; p < kOpusFrameSamples; ++p) sum_dc += g_opus_pcm_accum[p];
+                            int16_t mean_dc = static_cast<int16_t>(sum_dc / kOpusFrameSamples);
+                            double energy = 0.0;
+                            for (int p = 0; p < kOpusFrameSamples; ++p) {
+                                int32_t v = static_cast<int32_t>(g_opus_pcm_accum[p]) - mean_dc;
+                                if (v > 32767) v = 32767;
+                                if (v < -32768) v = -32768;
+                                g_opus_pcm_accum[p] = static_cast<int16_t>(v);
+                                double val = v;
+                                energy += val * val;
+                            }
+                            float rms = static_cast<float>(sqrt(energy / kOpusFrameSamples));
 
-                    double energy = 0.0;
-                    for (int s = 0; s < kOpusFrameSamples; ++s) {
-                        double val = g_opus_pcm_accum[s];
-                        energy += val * val;
-                    }
-                    float rms = static_cast<float>(sqrt(energy / kOpusFrameSamples));
-                    float threshold = max(420.0f, g_mic_noise_floor * 2.2f);
+                            bool tts_active_frame = (g_tts_rb_count > 0 || (g_last_tts_play_ms > 0 && millis() - g_last_tts_play_ms < 1500) || (g_last_beep_ms > 0 && millis() - g_last_beep_ms < 600));
+                            if (tts_active_frame) {
+                                s_preroll_idx = 0;
+                                s_preroll_full = false;
+                            }
 
-                    static unsigned long s_last_mic_dbg = 0;
-                    if (millis() - s_last_mic_dbg > 4000) {
-                        s_last_mic_dbg = millis();
-                        Serial.printf("[OPUS-MIC] RMS=%.1f Floor=%.1f Active=%d Thresh=%.1f\n",
-                                      rms, g_mic_noise_floor, g_mic_speech_active, threshold);
-                    }
+                            float start_threshold = max(4800.0f, g_mic_noise_floor * 2.0f);
+                            float silence_threshold = max(3300.0f, g_mic_noise_floor * 1.38f);
 
-                    g_opus_packet_buf[0] = 'O';
-                    g_opus_packet_buf[1] = 'P';
-                    g_opus_packet_buf[2] = 'U';
-                    g_opus_packet_buf[3] = 'S';
-                    opus_int32 enc_bytes = 0;
-                    if (g_opus_encoder) {
-                        enc_bytes = opus_encode(g_opus_encoder, g_opus_pcm_accum, kOpusFrameSamples,
-                                                g_opus_packet_buf + 4, sizeof(g_opus_packet_buf) - 4);
-                    }
-
-                    if (enc_bytes > 0) {
-                        size_t total_opus_bytes = enc_bytes + 4;
-
-                        // Se a fala ainda NAO foi iniciada por Wake Word:
-                        if (!g_mic_speech_active) {
-                            // Repouso / Silencio / Conversa sem Wake Word:
-                            // ZERO BYTES ENVIADOS PELA REDE!
-                            // Apenas armazena no buffer circular de pre-roll local!
-                            memcpy(s_preroll_packets[s_preroll_idx].data, g_opus_packet_buf, total_opus_bytes);
-                            s_preroll_packets[s_preroll_idx].len = total_opus_bytes;
-                            s_preroll_idx = (s_preroll_idx + 1) % kOpusPreRollCount;
-                            if (s_preroll_idx == 0) s_preroll_full = true;
-                        } else {
-                            // Fala ativa apos Wake Word: transmite o comando continuamente
-                            g_web_socket.sendBIN(g_opus_packet_buf, total_opus_bytes);
-
-                            if (rms < 350.0f) {
-                                if (++g_mic_silence_frames >= 8) { // ~480ms de silencio
-                                    g_mic_speech_active = false;
-                                    g_mic_silence_frames = 0;
-                                    Serial.println("[OPUS-MIC] Comando concluido -> enviando voice_end e ativando Thinking.");
-                                    SetDisplayMode(DisplayMode::kVoiceThinking);
-                                    g_web_socket.sendTXT("{\"type\":\"voice_end\"}");
+                            if (!g_mic_speech_active && !tts_active_frame) {
+                                g_mic_active_frames = 0;
+                                if (rms < start_threshold) {
+                                    g_mic_loud_frames = 0;
+                                    g_mic_noise_floor = (g_mic_noise_floor * 0.94f) + (min(rms, 3600.0f) * 0.06f);
+                                    if (g_mic_noise_floor < 350.0f) g_mic_noise_floor = 350.0f;
+                                    if (g_mic_noise_floor > 3400.0f) g_mic_noise_floor = 3400.0f;
+                                } else {
+                                    if (++g_mic_loud_frames >= 2) {
+                                        g_mic_speech_active = true;
+                                        g_mic_user_spoke_since_wake = true;
+                                        g_mic_silence_frames = 0;
+                                        g_mic_loud_frames = 0;
+                                        Serial.printf("[MIC-VAD] Fala detectada (RMS=%.1f >= %.1f)! Enviando pre-roll + stream.\n", rms, start_threshold);
+                                        size_t count = s_preroll_full ? kOpusPreRollCount : s_preroll_idx;
+                                        size_t start = s_preroll_full ? s_preroll_idx : 0;
+                                        for (size_t p = 0; p < count; ++p) {
+                                            size_t idx = (start + p) % kOpusPreRollCount;
+                                            if (s_preroll_packets[idx].len > 0) {
+                                                g_web_socket.sendBIN(s_preroll_packets[idx].data, s_preroll_packets[idx].len);
+                                            }
+                                        }
+                                        s_preroll_idx = 0;
+                                        s_preroll_full = false;
+                                    }
                                 }
+                            }
+
+                            if (g_mic_speech_active) {
+                                float diff = rms - g_mic_noise_floor;
+                                float raw_mic_lvl = (diff > 0.0f) ? (diff / 3000.0f) : 0.0f;
+                                if (raw_mic_lvl > 1.0f) raw_mic_lvl = 1.0f;
+                                g_mic_voice_level = (g_mic_voice_level * 0.7f) + (raw_mic_lvl * 0.3f);
                             } else {
-                                g_mic_silence_frames = 0;
+                                g_mic_voice_level *= 0.85f;
+                            }
+
+                            static unsigned long s_last_mic_dbg = 0;
+                            if (millis() - s_last_mic_dbg > 2000) {
+                                s_last_mic_dbg = millis();
+                                Serial.printf("[OPUS-MIC] RMS=%.1f Floor=%.1f Active=%d Spoke=%d Start=%.1f Corte=%.1f\n",
+                                              rms, g_mic_noise_floor, g_mic_speech_active, g_mic_user_spoke_since_wake, start_threshold, silence_threshold);
+                            }
+
+                            g_opus_packet_buf[0] = 'O';
+                            g_opus_packet_buf[1] = 'P';
+                            g_opus_packet_buf[2] = 'U';
+                            g_opus_packet_buf[3] = 'S';
+                            opus_int32 enc_bytes = 0;
+                            if (g_opus_encoder) {
+                                enc_bytes = opus_encode(g_opus_encoder, g_opus_pcm_accum, kOpusFrameSamples,
+                                                        g_opus_packet_buf + 4, sizeof(g_opus_packet_buf) - 4);
+                            }
+
+                            if (enc_bytes > 0 && !tts_active_frame) {
+                                size_t total_opus_bytes = enc_bytes + 4;
+
+                                if (!g_mic_speech_active) {
+                                    memcpy(s_preroll_packets[s_preroll_idx].data, g_opus_packet_buf, total_opus_bytes);
+                                    s_preroll_packets[s_preroll_idx].len = total_opus_bytes;
+                                    s_preroll_idx = (s_preroll_idx + 1) % kOpusPreRollCount;
+                                    if (s_preroll_idx == 0) s_preroll_full = true;
+                                } else {
+                                    g_mic_active_frames++;
+                                    if (rms >= start_threshold) {
+                                        g_mic_user_spoke_since_wake = true;
+                                        g_mic_silence_frames = 0;
+                                    }
+                                    if (g_mic_active_frames >= 150) {
+                                        g_mic_speech_active = false;
+                                        g_mic_user_spoke_since_wake = false;
+                                        g_mic_silence_frames = 0;
+                                        g_mic_active_frames = 0;
+                                        if (g_current_mode == DisplayMode::kVoiceListening) {
+                                            SetDisplayMode(DisplayMode::kVoiceThinking);
+                                        }
+                                        g_web_socket.sendTXT("{\"type\":\"voice_end\"}");
+                                    }
+
+                                    // So envia pacotes Opus quando o usuario realmente comecou a falar!
+                                    if (g_mic_user_spoke_since_wake) {
+                                        g_web_socket.sendBIN(g_opus_packet_buf, total_opus_bytes);
+                                    }
+
+                                    if (rms < silence_threshold) {
+                                        if (g_mic_user_spoke_since_wake) {
+                                            uint16_t needed_sil = (g_current_mode == DisplayMode::kVoiceListening) ? 24 : 15;
+                                            if (++g_mic_silence_frames >= needed_sil) {
+                                                g_mic_speech_active = false;
+                                                g_mic_user_spoke_since_wake = false;
+                                                g_mic_silence_frames = 0;
+                                                g_mic_active_frames = 0;
+                                                Serial.printf("[OPUS-MIC] Fim de fala detectado! Enviando voice_end.\n");
+                                                if (g_current_mode == DisplayMode::kVoiceListening) {
+                                                    SetDisplayMode(DisplayMode::kVoiceThinking);
+                                                }
+                                                g_web_socket.sendTXT("{\"type\":\"voice_end\"}");
+                                            }
+                                        } else if (g_current_mode == DisplayMode::kVoiceListening && (millis() - g_mic_wake_start_ms > 8000)) {
+                                            // Timeout de 7s em escuta sem fala -> volta silenciosamente para Standby
+                                            g_mic_speech_active = false;
+                                            g_mic_silence_frames = 0;
+                                            SetDisplayMode(DisplayMode::kStandby);
+                                        }
+                                    } else {
+                                        g_mic_silence_frames = 0;
+                                    }
+                                }
                             }
                         }
                     }
@@ -2421,6 +3187,13 @@ void setup() {
     InitializeI2SAudio();
     InitializeOpusEncoder();
     g_wake_word_engine.Initialize();
+
+    g_ns_inst = ns_pro_create(10, 2, 16000);
+    if (g_ns_inst) {
+        Serial.println("[AUDIO-DSP] ESP-NS Pro (Noise Suppression Agressivo 16kHz) ativado com sucesso!");
+    } else {
+        Serial.println("[AUDIO-DSP] Falha ao inicializar ESP-NS Pro, operando sem NS.");
+    }
 
     Serial.println("\n[+] Firmware J.A.R.V.I.S. v10.0 (microWakeWord TFLite ESP32-S3) OK!\n");
 
@@ -2495,6 +3268,15 @@ void HandleSerialDiagnosticCommands() {
                           (unsigned)g_tts_rb_count, (unsigned)kTtsRingBufferSize,
                           (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 1000)));
             Serial.println("-------------------------------------------\n");
+        } else if (cmd == "tuya on") {
+            Serial.println("[CMD] Forcando Tuya ON via serial");
+            SetTuyaLamp(true);
+        } else if (cmd == "tuya off") {
+            Serial.println("[CMD] Forcando Tuya OFF via serial");
+            SetTuyaLamp(false);
+        } else if (cmd == "tuya toggle") {
+            Serial.println("[CMD] Alternando Tuya via serial");
+            ToggleTuyaLamp();
         } else if (cmd == "trigger") {
             Serial.println("[CMD] Disparando gatilho Wake Word por comando serial!");
             g_mic_speech_active = true;
@@ -2519,6 +3301,15 @@ void HandleSerialDiagnosticCommands() {
             int m = cmd.substring(5).toInt();
             SetDisplayMode(static_cast<DisplayMode>(m));
             Serial.printf("[CMD] Modo de display alterado para %d\n", m);
+        } else if (cmd.startsWith("wa ") || cmd.startsWith("whatsapp ")) {
+            String msg = cmd.substring(cmd.indexOf(' ') + 1);
+            g_wa_sender = "WhatsApp n8n";
+            g_wa_message = msg;
+            g_wa_time = "Agora";
+            g_wa_received_ms = millis();
+            PlayWakeBeep();
+            SetDisplayMode(DisplayMode::kWhatsApp);
+            Serial.printf("[CMD] Teste WhatsApp disparado: %s\n", g_wa_message.c_str());
         } else {
             Serial.printf("[CMD] Comando '%s' desconhecido. Digite 'help' para ajuda.\n", cmd.c_str());
         }
@@ -2537,6 +3328,8 @@ void PrintPeriodicDiagnosticHeartbeat() {
         case DisplayMode::kSpotify: mode_name = "SPOTIFY"; break;
         case DisplayMode::kTelemetry: mode_name = "TELEMETRY"; break;
         case DisplayMode::kZeDelivery: mode_name = "ZE_DELIVERY"; break;
+        case DisplayMode::kLights: mode_name = "LIGHTS_TUYA"; break;
+        case DisplayMode::kElection: mode_name = "ELECTION_TSE"; break;
         case DisplayMode::kVoiceListening: mode_name = "VOICE_LISTENING"; break;
         case DisplayMode::kVoiceThinking: mode_name = "VOICE_THINKING"; break;
         case DisplayMode::kVoiceSuccess: mode_name = "VOICE_SUCCESS"; break;
@@ -2583,7 +3376,7 @@ void loop() {
         }
         g_web_socket.loop();
 
-                // Drena o ringbuffer de TTS da PSRAM no speaker (zero memmove, playback 100% fluido).
+        // Drena o ringbuffer de TTS da PSRAM no speaker (zero memmove, playback 100% fluido).
         if (g_tts_rb_count > 0 && g_tts_ringbuffer) {
             uint8_t play_chunk[1024];
             size_t to_read = 0;
@@ -2596,11 +3389,34 @@ void loop() {
             g_tts_rb_count -= to_read;
             portEXIT_CRITICAL(&g_tts_mux);
 
+            // Modulação da fala do Jarvis (Item D): calcula amplitude instantânea do chunk de áudio
+            if (to_read >= 4) {
+                const int16_t* pcm = reinterpret_cast<const int16_t*>(play_chunk);
+                size_t n_samples = to_read / 2;
+                int32_t sum_val = 0;
+                size_t step = (n_samples > 64) ? (n_samples / 32) : 1;
+                size_t count_sampled = 0;
+                for (size_t s = 0; s < n_samples; s += step) {
+                    int16_t v = pcm[s];
+                    if (v < 0) v = -v;
+                    sum_val += v;
+                    count_sampled++;
+                }
+                if (count_sampled > 0) {
+                    float avg_amp = static_cast<float>(sum_val) / count_sampled;
+                    float raw_lvl = avg_amp / 7500.0f;
+                    if (raw_lvl > 1.0f) raw_lvl = 1.0f;
+                    g_tts_current_level = (g_tts_current_level * 0.65f) + (raw_lvl * 0.35f);
+                }
+            }
+
             size_t written = 0;
             if (i2s_write(kI2sPortNum, play_chunk, to_read, &written, pdMS_TO_TICKS(15)) == ESP_OK && written > 0) {
                 g_last_tts_time = millis();
                 g_last_tts_play_ms = millis();
             }
+        } else {
+            g_tts_current_level *= 0.85f;
         }
 
 if (millis() - g_last_weather_fetch > 600000) {
@@ -2608,9 +3424,15 @@ if (millis() - g_last_weather_fetch > 600000) {
             FetchCatanduvaWeather();
         }
     } else {
-        if (millis() - g_last_wifi_check > 5000) {
+        if (millis() - g_last_wifi_check > 12000) {
             g_last_wifi_check = millis();
-            WiFi.begin(kDefaultSsid, kDefaultPass);
+            static int s_wifi_attempt = 0;
+            s_wifi_attempt++;
+            if (s_wifi_attempt % 3 == 0) {
+                WiFi.begin(kFallbackSsid, kFallbackPass);
+            } else {
+                WiFi.begin(kDefaultSsid, kDefaultPass);
+            }
         }
     }
 
@@ -2619,9 +3441,19 @@ if (millis() - g_last_weather_fetch > 600000) {
         SetDisplayMode(DisplayMode::kStandby);
     }
 
-    // Retorno automático para a página inicial (Standby / Relógio NTP) após 6s de inatividade após voz/cards
-    if ((g_current_mode == DisplayMode::kHappy || g_current_mode == DisplayMode::kCard) &&
-        g_last_tts_time > 0 && (millis() - g_last_tts_time > 6000)) {
+        // Retorno automatico apos reproducao de audio
+    if (g_pending_standby && g_tts_rb_count == 0 && (millis() - g_last_tts_play_ms >= 500)) {
+        g_pending_standby = false;
+        SetDisplayMode(DisplayMode::kStandby);
+        Serial.println("[EMOTION] Audio finalizado, retornando ao Standby");
+    }
+    if ((g_current_mode == DisplayMode::kHappy || g_current_mode == DisplayMode::kVoiceSpeaking) &&
+        g_tts_rb_count == 0 && g_last_tts_play_ms > 0 && (millis() - g_last_tts_play_ms > 3500)) {
+        SetDisplayMode(DisplayMode::kStandby);
+    }
+    if (g_current_mode == DisplayMode::kCard && g_is_custom_screen_active && millis() >= g_custom_screen_hold_until) {
+        g_is_custom_screen_active = false;
+        g_custom_screen_hold_until = 0;
         SetDisplayMode(DisplayMode::kStandby);
     }
 
@@ -2700,11 +3532,57 @@ if (millis() - g_last_weather_fetch > 600000) {
                     g_web_socket.sendTXT(json_str);
                 }
 
+                // Navegacao Fisica na Tela por Gesto (Swipe)
+                if (direction == "LEFT") {
+                    if (g_current_mode == DisplayMode::kStandby) SetDisplayMode(DisplayMode::kHappy);
+                    else if (g_current_mode == DisplayMode::kHappy) SetDisplayMode(DisplayMode::kLights);
+                    else if (g_current_mode == DisplayMode::kLights) SetDisplayMode(DisplayMode::kSpotify);
+                    else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kTelemetry);
+                    else if (g_current_mode == DisplayMode::kTelemetry) SetDisplayMode(DisplayMode::kElection);
+                    else if (g_current_mode == DisplayMode::kElection) SetDisplayMode(DisplayMode::kStandby, true);
+                    else SetDisplayMode(DisplayMode::kStandby, true);
+                } else if (direction == "RIGHT") {
+                    if (g_current_mode == DisplayMode::kStandby) SetDisplayMode(DisplayMode::kElection);
+                    else if (g_current_mode == DisplayMode::kElection) SetDisplayMode(DisplayMode::kTelemetry);
+                    else if (g_current_mode == DisplayMode::kTelemetry) SetDisplayMode(DisplayMode::kSpotify);
+                    else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kLights);
+                    else if (g_current_mode == DisplayMode::kLights) SetDisplayMode(DisplayMode::kHappy);
+                    else if (g_current_mode == DisplayMode::kHappy) SetDisplayMode(DisplayMode::kStandby, true);
+                    else SetDisplayMode(DisplayMode::kStandby, true);
+                } else if (direction == "DOWN") {
+                    g_is_custom_screen_active = false;
+                    SetDisplayMode(DisplayMode::kStandby);
+                } else if (direction == "UP") {
+                    SetDisplayMode(DisplayMode::kSpotify);
+                }
+
                 Serial.println("[TOUCH] Gesto Arrastar (Swipe): " + direction);
-                // DO NOT trigger button tap or close screen on swipe!
             } else {
                 // Toque Simples (TAP / CLIQUE)
-                if (g_current_mode == DisplayMode::kCard) {
+                if (g_current_mode == DisplayMode::kStandby) {
+                    // Toque no Relogio vai direto para o Rostinho do Jarvis!
+                    SetDisplayMode(DisplayMode::kHappy);
+                } else if (g_current_mode == DisplayMode::kHappy) {
+                    // Toque no Rostinho vai para a Iluminacao!
+                    SetDisplayMode(DisplayMode::kLights);
+                } else if (g_current_mode == DisplayMode::kLights) {
+                    int ty = g_touch_current_y;
+                    // Se tocar na area do botao central (y: 135 a 205)
+                    if (ty >= 135 && ty <= 205) {
+                        ToggleTuyaLamp();
+                    } else {
+                        // Toque fora avanca para o Spotify
+                        SetDisplayMode(DisplayMode::kSpotify);
+                    }
+                } else if (g_current_mode == DisplayMode::kSpotify) {
+                    if (!HandleSpotifyTap(g_touch_current_x, g_touch_current_y)) {
+                        SetDisplayMode(DisplayMode::kTelemetry);
+                    }
+                } else if (g_current_mode == DisplayMode::kTelemetry) {
+                    SetDisplayMode(DisplayMode::kElection);
+                } else if (g_current_mode == DisplayMode::kElection) {
+                    SetDisplayMode(DisplayMode::kStandby, true);
+                } else if (g_current_mode == DisplayMode::kCard) {
                     String clicked_btn = "";
                     if (g_current_button3_id.length() > 0) {
                         if (g_touch_current_x < 85) clicked_btn = g_current_button1_id;
@@ -2735,6 +3613,8 @@ if (millis() - g_last_weather_fetch > 600000) {
                     }
 
                 } else if (g_current_mode == DisplayMode::kTelemetry) {
+                    SetDisplayMode(DisplayMode::kElection);
+                } else if (g_current_mode == DisplayMode::kElection) {
                     SetDisplayMode(DisplayMode::kZeDelivery);
                 } else if (g_current_mode == DisplayMode::kZeDelivery) {
                     int tx = g_touch_current_x;
@@ -2775,24 +3655,71 @@ if (millis() - g_last_weather_fetch > 600000) {
                         Serial.println("[TIMER] Cancelado");
                     }
                 } else if (g_current_mode == DisplayMode::kAlarm) {
-                    int tx = g_touch_current_x;
-                    int ty = g_touch_current_y;
-                    if (tx >= 30 && tx <= 210 && ty >= 160 && ty <= 220) {
-                        g_alarm_ringing = false;
-                        g_alarm_active = false;
-                        SetDisplayMode(DisplayMode::kStandby);
-                        Serial.println("[ALARME] Desligado pelo toque");
-                    }
+                    g_alarm_ringing = false;
+                    g_alarm_active = false;
+                    SetDisplayMode(DisplayMode::kStandby);
+                    Serial.println("[ALARME] Desligado pelo toque na tela");
+                } else if (g_current_mode == DisplayMode::kWhatsApp) {
+                    SetDisplayMode(DisplayMode::kStandby);
+                    g_wa_received_ms = 0;
+                    Serial.println("[WHATSAPP] Notificacao dispensada pelo toque");
                 } else {
-                    if (g_current_mode == DisplayMode::kStandby) SetDisplayMode(DisplayMode::kHappy);
-                    else if (g_current_mode == DisplayMode::kHappy) SetDisplayMode(DisplayMode::kSpotify);
-                    else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kTelemetry);
-                    else if (g_current_mode == DisplayMode::kTelemetry) SetDisplayMode(DisplayMode::kZeDelivery);
-                    else if (g_current_mode == DisplayMode::kZeDelivery) SetDisplayMode(DisplayMode::kSad);
-                    else if (g_current_mode == DisplayMode::kSad) SetDisplayMode(DisplayMode::kAngry);
-                    else SetDisplayMode(DisplayMode::kStandby);
+                    // Se o Jarvis estiver falando ou tocando TTS (ou em estado de voz ativo):
+                    // INTERRUPÇÃO IMEDIATA (BARGE-IN POR TOQUE NA TELA)
+                    if (g_tts_rb_count > 0 || (millis() - g_last_tts_play_ms < 1500) ||
+                        g_current_mode == DisplayMode::kVoiceSpeaking ||
+                        g_current_mode == DisplayMode::kVoiceThinking ||
+                        g_current_mode == DisplayMode::kVoiceListening) {
+                        
+                        portENTER_CRITICAL(&g_tts_mux);
+                        g_tts_rb_count = 0;
+                        g_tts_rb_head = 0;
+                        g_tts_rb_tail = 0;
+                        portEXIT_CRITICAL(&g_tts_mux);
+                        
+                        i2s_zero_dma_buffer(kI2sPortNum);
+                        g_last_tts_play_ms = 0;
+                        g_last_tts_time = 0;
+                        g_mic_speech_active = false;
+                        
+                        if (g_web_socket.isConnected()) {
+                            g_web_socket.sendTXT("{\"type\":\"stop_tts\"}");
+                        }
+                        
+                        SetDisplayMode(DisplayMode::kStandby);
+                        Serial.println("[BARGE-IN] Fala interrompida imediatamente pelo toque na tela!");
+                    } else {
+                        if (g_current_mode == DisplayMode::kStandby || g_current_mode == DisplayMode::kHappy) {
+                            // TAP-TO-TALK: Toque na tela desperta imediatamente o J.A.R.V.I.S.
+                            g_mic_speech_active = true;
+                            g_mic_silence_frames = 0;
+                            SetDisplayMode(DisplayMode::kVoiceListening);
+                            PlayWakeBeep();
+                            if (g_web_socket.isConnected()) {
+                                g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+                            }
+                            Serial.println("[TOUCH-WAKE] Microfone e escuta ativados pelo toque na tela!");
+                        }
+                        else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kTelemetry);
+                        else if (g_current_mode == DisplayMode::kSpotify) SetDisplayMode(DisplayMode::kTelemetry);
+                        else if (g_current_mode == DisplayMode::kTelemetry) SetDisplayMode(DisplayMode::kElection);
+                    else if (g_current_mode == DisplayMode::kElection) SetDisplayMode(DisplayMode::kStandby, true);
+                        else if (g_current_mode == DisplayMode::kZeDelivery) SetDisplayMode(DisplayMode::kWhatsApp);
+                        else if (g_current_mode == DisplayMode::kWhatsApp) SetDisplayMode(DisplayMode::kSad);
+                        else if (g_current_mode == DisplayMode::kSad) SetDisplayMode(DisplayMode::kAngry);
+                        else SetDisplayMode(DisplayMode::kStandby);
+                    }
                 }
             }
+        }
+    }
+
+    // Timeout automático de 30 segundos da tela do WhatsApp para retornar a Standby
+    if (g_current_mode == DisplayMode::kWhatsApp && g_wa_received_ms > 0) {
+        if (millis() - g_wa_received_ms > 30000) {
+            g_wa_received_ms = 0;
+            SetDisplayMode(DisplayMode::kStandby);
+            Serial.println("[WHATSAPP] Timeout de 30s atingido, retornando a Standby");
         }
     }
 
@@ -2806,9 +3733,13 @@ if (millis() - g_last_weather_fetch > 600000) {
             DrawSpotifyScreen();
         } else if (g_current_mode == DisplayMode::kTelemetry) {
             DrawTelemetryScreen();
+        } else if (g_current_mode == DisplayMode::kElection) {
+            DrawElectionScreen();
         } else if (g_current_mode == DisplayMode::kZeDelivery) {
             DrawZeDeliveryScreen();
-        } else if (g_current_mode == DisplayMode::kHappy || g_current_mode == DisplayMode::kSad || g_current_mode == DisplayMode::kAngry) {
+        } else if (g_current_mode == DisplayMode::kWhatsApp) {
+            DrawWhatsAppScreen();
+        } else if (g_current_mode == DisplayMode::kHappy || g_current_mode == DisplayMode::kSad || g_current_mode == DisplayMode::kAngry || g_current_mode == DisplayMode::kVoiceSpeaking) {
             DrawRobotFace(g_current_mode);
         } else if (g_current_mode == DisplayMode::kVoiceListening) {
             DrawRobotFace(g_current_mode);
@@ -2816,6 +3747,8 @@ if (millis() - g_last_weather_fetch > 600000) {
                    g_current_mode == DisplayMode::kVoiceThinking || g_current_mode == DisplayMode::kVoiceQueued ||
                    g_current_mode == DisplayMode::kVoiceSuccess || g_current_mode == DisplayMode::kVoiceError) {
             DrawVoiceProgressScreen(g_current_mode);
+        } else if (g_current_mode == DisplayMode::kLights) {
+            DrawLightsScreen();
         } else if (g_current_mode == DisplayMode::kTimer) {
             DrawTimerScreen();
         } else if (g_current_mode == DisplayMode::kAlarm) {

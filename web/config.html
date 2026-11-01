@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S. // CENTRAL DE CONEXÕES & INTEGRAÇÕES</title>
+<link rel="icon" type="image/x-icon" href="/jarvis_hud.ico">
+<style>
+:root {
+  --bg: #07090e;
+  --panel: rgba(14, 18, 27, 0.85);
+  --panel-solid: #0e121b;
+  --panel-hover: rgba(22, 28, 42, 0.95);
+  --border: rgba(0, 240, 255, 0.18);
+  --border-dim: rgba(255, 255, 255, 0.08);
+  --cyan: #00f0ff;
+  --cyan-glow: rgba(0, 240, 255, 0.35);
+  --cyan-dim: rgba(0, 240, 255, 0.1);
+  --emerald: #10b981;
+  --emerald-glow: rgba(16, 185, 129, 0.35);
+  --amber: #f59e0b;
+  --amber-glow: rgba(245, 158, 11, 0.35);
+  --rose: #f43f5e;
+  --rose-glow: rgba(244, 63, 94, 0.35);
+  --purple: #a855f7;
+  --text: #f8fafc;
+  --text-dim: #94a3b8;
+  --mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+  --hud: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg);
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.08) 0%, transparent 60%),
+    radial-gradient(circle at 10% 90%, rgba(16, 185, 129, 0.04) 0%, transparent 40%),
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+  color: var(--text);
+  font-family: var(--hud);
+  min-height: 100vh;
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+.wrap {
+  max-width: 1360px;
+  margin: 0 auto;
+}
+
+/* HEADER TÁTICO */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--panel);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  margin-bottom: 20px;
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.arc-reactor {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid var(--cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 0 18px var(--cyan-glow);
+  animation: reactorPulse 3s infinite ease-in-out;
+}
+
+.arc-inner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+}
+
+@keyframes reactorPulse {
+  0%, 100% { box-shadow: 0 0 14px var(--cyan-glow); }
+  50% { box-shadow: 0 0 24px rgba(0, 240, 255, 0.6); }
+}
+
+.title-box h1 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--cyan);
+  text-transform: uppercase;
+}
+
+.title-box p {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+  font-family: var(--mono);
+}
+
+.btn:hover {
+  background: rgba(0, 240, 255, 0.22);
+  box-shadow: 0 0 16px var(--cyan-glow);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-color: var(--border-dim);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+.btn.loading .spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* SUMMARY KPI GRID */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.kpi-card {
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-dim);
+  border-radius: 16px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.25s ease;
+}
+
+.kpi-card:hover {
+  border-color: var(--border);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+
+.kpi-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.kpi-title {
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.kpi-icon {
+  font-size: 1.1rem;
+}
+
+.kpi-val {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.kpi-sub {
+  font-size: 0.72rem;
+  color: var(--emerald);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+}
+
+/* FILTERS & SEARCH */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  background: rgba(14, 18, 27, 0.6);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border-dim);
+  overflow-x: auto;
+}
+
+.tab-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: #fff;
+}
+
+.tab-btn.active {
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.search-box {
+  position: relative;
+  min-width: 260px;
+}
+
+.search-box input {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border-dim);
+  color: #fff;
+  padding: 8px 12px 8px 34px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  outline: none;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.search-box input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+.search-box .icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+/* SECTION HEADERS */
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 24px 0 14px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.section-title .badge {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  font-family: var(--mono);
+}
+
+/* SERVICES GRID */
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.service-card {
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-dim);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.service-card:hover {
+  border-color: var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  transform: translateY(-2px);
+}
+
+.service-card.status-ok {
+  border-left: 3px solid var(--emerald);
+}
+
+.service-card.status-bad {
+  border-left: 3px solid var(--rose);
+}
+
+.service-card.status-warn {
+  border-left: 3px solid var(--amber);
+}
+
+.card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.service-info h3 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.service-info p {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-family: var(--mono);
+}
+
+.status-badge.ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-badge.bad {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--rose);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.status-badge.warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.card-meta {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 10px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.73rem;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.meta-row.stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: 6px;
+  border-left: 2px solid var(--cyan);
+}
+
+.meta-row.stacked .meta-val {
+  font-size: 0.7rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.meta-key {
+  color: var(--text-dim);
+}
+
+.meta-val {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.meta-val.cyan { color: var(--cyan); }
+.meta-val.emerald { color: var(--emerald); }
+.meta-val.amber { color: var(--amber); }
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.latency-tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.test-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--mono);
+}
+
+.test-btn:hover {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-glow);
+}
+
+/* LOG CONSOLE */
+.console-panel {
+  background: #090c12;
+  border: 1px solid var(--border-dim);
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 30px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.console-title {
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.console-logs {
+  font-family: var(--mono);
+  font-size: 0.73rem;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.console-logs .log-line {
+  display: flex;
+  gap: 10px;
+}
+
+.console-logs .log-time {
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.console-logs .log-ok { color: var(--emerald); }
+.console-logs .log-bad { color: var(--rose); }
+.console-logs .log-info { color: var(--cyan); }
+
+@media (max-width: 768px) {
+  header { flex-direction: column; align-items: flex-start; }
+  .header-actions { width: 100%; justify-content: space-between; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .search-box { min-width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="arc-reactor">
+        <div class="arc-inner"></div>
+      </div>
+      <div class="title-box">
+        <h1>J.A.R.V.I.S. // CENTRAL DE INTEGRAÇÕES</h1>
+        <p id="sub-status">MONITORAMENTO EM TEMPO REAL · APIs · MCPs · WEBHOOKS · WEBSOCKETS</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btn-refresh" onclick="refreshAll(true)">
+        <span class="spin">↻</span> ATUALIZAR TUDO
+      </button>
+      <a href="/" class="btn btn-secondary">
+        ← VOLTAR AO HUD
+      </a>
+    </div>
+  </header>
+
+  <!-- KPI SUMMARY CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">APIs de Inteligência</span>
+        <span class="kpi-icon">🧠</span>
+      </div>
+      <div class="kpi-val" id="kpi-ai">-- / --</div>
+      <div class="kpi-sub" id="kpi-ai-sub">Verificando...</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Servidores MCP</span>
+        <span class="kpi-icon">⚡</span>
+      </div>
+      <div class="kpi-val" id="kpi-mcp">-- / --</div>
+      <div class="kpi-sub" id="kpi-mcp-sub">Model Context Protocol</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Webhooks & Mensageria</span>
+        <span class="kpi-icon">🪝</span>
+      </div>
+      <div class="kpi-val" id="kpi-webhooks">-- / --</div>
+      <div class="kpi-sub" id="kpi-webhooks-sub">Eventos e Automação</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">WebSockets & Hardware</span>
+        <span class="kpi-icon">📡</span>
+      </div>
+      <div class="kpi-val" id="kpi-ws">-- / --</div>
+      <div class="kpi-sub" id="kpi-ws-sub">Esfera & Nó Windows</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR: FILTROS E BUSCA -->
+  <div class="toolbar">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="setFilter('all', this)">TODOS (<span id="count-all">0</span>)</button>
+      <button class="tab-btn" onclick="setFilter('ai', this)">APIs DE IA (<span id="count-ai">0</span>)</button>
+      <button class="tab-btn" onclick="setFilter('mcp', this)">MCPs (<span id="count-mcp">0</span>)</button>
+      <button class="tab-btn" onclick="setFilter('webhook', this)">WEBHOOKS (<span id="count-webhook">0</span>)</button>
+      <button class="tab-btn" onclick="setFilter('ws', this)">WEBSOCKETS (<span id="count-ws">0</span>)</button>
+    </div>
+
+    <div class="search-box">
+      <span class="icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Filtrar serviço por nome ou porta..." oninput="filterServices()">
+    </div>
+  </div>
+
+  <!-- CONTAINER DE SERVIÇOS -->
+  <div id="services-container">
+    <!-- Renderizado dinamicamente pelo JS -->
+  </div>
+
+  <!-- CONSOLE DE LOGS EM TEMPO REAL -->
+  <div class="console-panel">
+    <div class="console-header">
+      <span class="console-title">>_ REGISTRO DE TELEMETRIA E DIAGNÓSTICO</span>
+      <button onclick="clearLogs()" style="background:none;border:none;color:#64748b;cursor:pointer;font-family:var(--mono);font-size:0.7rem;">Limpar</button>
+    </div>
+    <div class="console-logs" id="console-logs">
+      <div class="log-line">
+        <span class="log-time">[00:00:00]</span>
+        <span class="log-info">Console de diagnóstico inicializado. Carregando dados da infraestrutura...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentFilter = 'all';
+let servicesData = [];
+
+function log(type, msg) {
+  const box = document.getElementById('console-logs');
+  const now = new Date().toLocaleTimeString('pt-BR');
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  const cls = type === 'ok' ? 'log-ok' : (type === 'bad' ? 'log-bad' : 'log-info');
+  div.innerHTML = `<span class="log-time">[${now}]</span> <span class="${cls}">${msg}</span>`;
+  box.prepend(div);
+}
+
+function clearLogs() {
+  document.getElementById('console-logs').innerHTML = '';
+}
+
+function setFilter(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterServices();
+}
+
+function filterServices() {
+  const query = document.getElementById('searchInput').value.toLowerCase().trim();
+  const cards = document.querySelectorAll('.service-card');
+  let visible = 0;
+
+  cards.forEach(card => {
+    const cat = card.getAttribute('data-cat');
+    const text = card.textContent.toLowerCase();
+    const matchCat = (currentFilter === 'all' || cat === currentFilter);
+    const matchQuery = (!query || text.includes(query));
+
+    if (matchCat && matchQuery) {
+      card.style.display = 'flex';
+      visible++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  // Mostra/oculta títulos de seção se nenhum card da seção estiver visível
+  document.querySelectorAll('.section-group').forEach(grp => {
+    const hasVisible = Array.from(grp.querySelectorAll('.service-card')).some(c => c.style.display !== 'none');
+    grp.style.display = hasVisible ? 'block' : 'none';
+  });
+}
+
+async function testSingle(id) {
+  const btn = document.getElementById(`btn-test-${id}`);
+  if (btn) btn.textContent = 'Testando...';
+  log('info', `Executando probe individual para o serviço [${id}]...`);
+
+  try {
+    const t0 = performance.now();
+    const res = await fetch(`/api/config/test?service=${encodeURIComponent(id)}`);
+    const data = await res.json();
+    const lat = Math.round(performance.now() - t0);
+
+    const s = servicesData.find(x => x.id === id);
+    if (s) {
+      s.online = data.online;
+      s.latency = data.latency ?? lat;
+      s.details = data.details || s.details;
+      renderServices();
+    }
+    log(data.online ? 'ok' : 'bad', `Probe [${id}]: ${data.online ? 'ONLINE' : 'FALHA'} (${s.latency}ms)`);
+  } catch (err) {
+    log('bad', `Erro no probe de [${id}]: ${err.message}`);
+  } finally {
+    if (btn) btn.textContent = 'Testar';
+  }
+}
+
+async function refreshAll(manual = false) {
+  const btn = document.getElementById('btn-refresh');
+  if (btn) btn.classList.add('loading');
+  if (manual) log('info', 'Varredura completa de todas as conexões iniciada...');
+
+  try {
+    const t0 = performance.now();
+    const res = await fetch('/api/config/status');
+    const data = await res.json();
+    const totalLat = Math.round(performance.now() - t0);
+
+    if (data.services) {
+      servicesData = data.services;
+      updateKPIs(data);
+      renderServices();
+      if (manual) log('ok', `Varredura concluída em ${totalLat}ms. Todos os status atualizados.`);
+    }
+  } catch (err) {
+    log('bad', `Falha ao carregar status de conexões: ${err.message}`);
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
+function updateKPIs(data) {
+  const aiList = servicesData.filter(s => s.category === 'ai');
+  const mcpList = servicesData.filter(s => s.category === 'mcp');
+  const whList = servicesData.filter(s => s.category === 'webhook');
+  const wsList = servicesData.filter(s => s.category === 'ws');
+
+  const aiOk = aiList.filter(s => s.online).length;
+  const mcpOk = mcpList.filter(s => s.online).length;
+  const whOk = whList.filter(s => s.online).length;
+  const wsOk = wsList.filter(s => s.online).length;
+
+  document.getElementById('kpi-ai').textContent = `${aiOk} / ${aiList.length}`;
+  document.getElementById('kpi-ai-sub').textContent = aiOk === aiList.length ? 'Todas operacionais' : `${aiList.length - aiOk} offline`;
+
+  document.getElementById('kpi-mcp').textContent = `${mcpOk} / ${mcpList.length}`;
+  document.getElementById('kpi-mcp-sub').textContent = mcpOk === mcpList.length ? 'Todos MCPs ativos' : `${mcpList.length - mcpOk} indisponível`;
+
+  document.getElementById('kpi-webhooks').textContent = `${whOk} / ${whList.length}`;
+  document.getElementById('kpi-webhooks-sub').textContent = `${whOk} ouvindo eventos`;
+
+  document.getElementById('kpi-ws').textContent = `${wsOk} / ${wsList.length}`;
+  document.getElementById('kpi-ws-sub').textContent = wsOk === wsList.length ? 'Sincronia perfeita' : 'Aguardando handshake';
+
+  document.getElementById('count-all').textContent = servicesData.length;
+  document.getElementById('count-ai').textContent = aiList.length;
+  document.getElementById('count-mcp').textContent = mcpList.length;
+  document.getElementById('count-webhook').textContent = whList.length;
+  document.getElementById('count-ws').textContent = wsList.length;
+}
+
+function renderServices() {
+  const container = document.getElementById('services-container');
+  const categories = [
+    { key: 'ai', title: 'APIs DE INTELIGÊNCIA ARTIFICIAL', icon: '🧠' },
+    { key: 'mcp', title: 'SERVIDORES & FERRAMENTAS MCP (Model Context Protocol)', icon: '⚡' },
+    { key: 'webhook', title: 'WEBHOOKS, MENSAGERIA & AUTOMAÇÃO', icon: '🪝' },
+    { key: 'ws', title: 'WEBSOCKETS, TEMPO REAL & HARDWARE', icon: '📡' }
+  ];
+
+  let html = '';
+
+  categories.forEach(cat => {
+    const list = servicesData.filter(s => s.category === cat.key);
+    if (!list.length) return;
+
+    html += `
+      <div class="section-group" id="group-${cat.key}">
+        <div class="section-title">
+          <span>${cat.icon}</span>
+          <span>${cat.title}</span>
+          <span class="badge">${list.filter(s => s.online).length}/${list.length} OK</span>
+        </div>
+        <div class="service-grid">
+    `;
+
+    list.forEach(s => {
+      const stClass = s.online ? 'status-ok' : (s.warn ? 'status-warn' : 'status-bad');
+      const badgeCls = s.online ? 'ok' : (s.warn ? 'warn' : 'bad');
+      const badgeText = s.online ? 'ONLINE' : (s.warn ? 'AVISO' : 'OFFLINE');
+
+      html += `
+        <div class="service-card ${stClass}" data-cat="${s.category}" id="card-${s.id}">
+          <div class="card-top">
+            <div class="service-info">
+              <h3>${s.icon || '▪'} ${s.name}</h3>
+              <p>${s.description || ''}</p>
+            </div>
+            <div class="status-badge ${badgeCls}">
+              <span class="status-dot"></span> ${badgeText}
+            </div>
+          </div>
+
+          <div class="card-meta">
+            <div class="meta-row">
+              <span class="meta-key">Tipo / Protocolo</span>
+              <span class="meta-val cyan">${s.protocol || 'REST / HTTP'}</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">Endpoint / Porta</span>
+              <span class="meta-val">${s.endpoint || s.port || '—'}</span>
+            </div>
+            ${s.model ? `
+            <div class="meta-row">
+              <span class="meta-key">Modelo Padrão</span>
+              <span class="meta-val amber">${s.model}</span>
+            </div>` : ''}
+            ${s.auth ? `
+            <div class="meta-row">
+              <span class="meta-key">Autenticação</span>
+              <span class="meta-val ${s.auth_ok ? 'emerald' : 'amber'}">${s.auth}</span>
+            </div>` : ''}
+            ${s.details ? `
+            <div class="meta-row stacked">
+              <span class="meta-key" style="color:var(--cyan);font-weight:700;">Detalhes da Conexão</span>
+              <span class="meta-val">${s.details}</span>
+            </div>` : ''}
+          </div>
+
+          <div class="card-foot">
+            <span class="latency-tag">${s.latency != null ? s.latency + ' ms' : '— ms'}</span>
+            <button class="test-btn" id="btn-test-${s.id}" onclick="testSingle('${s.id}')">Testar</button>
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  filterServices();
+}
+
+// Inicializa varredura automática ao carregar e atualiza a cada 10 segundos
+refreshAll(false);
+setInterval(() => refreshAll(false), 10000);
+</script>
+
+</body>
+</html>

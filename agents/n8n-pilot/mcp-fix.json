@@ -1,0 +1,27 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "update_workflow",
+    "arguments": {
+      "workflowId": "7ErNDW6zKpwZfU2e",
+      "operations": [
+        {
+          "op": "setNodeType",
+          "nodeName": "Append to Daily Log",
+          "nodeType": "n8n-nodes-base.code",
+          "typeVersion": 2
+        },
+        {
+          "op": "setNodeParameters",
+          "nodeName": "Append to Daily Log",
+          "parameters": {
+            "language": "javaScript",
+            "jsCode": "const fs = require('fs');\nconst item = $input.item.json;\nconst filePath = '/home/node/.openclaw/workspace-acessor/whatsapp-logs/' + item.dateStr + '.md';\n\nfs.appendFileSync(filePath, item.markdown, 'utf8');\n\nreturn { success: true, file: filePath };"
+          }
+        }
+      ]
+    }
+  }
+}

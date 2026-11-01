@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>J.A.R.V.I.S. // TACTICAL SQUAD</title>
+<link rel="icon" type="image/x-icon" href="/jarvis_hud.ico">
+<style>
+  :root {
+    --bg: #01091d;
+    --panel: rgba(8, 16, 36, 0.88);
+    --panel-solid: #081024;
+    --panel-hover: rgba(14, 28, 60, 0.95);
+    --line: rgba(0, 240, 255, 0.22);
+    --cyan: #00f0ff;
+    --cyan-glow: rgba(0, 240, 255, 0.45);
+    --emerald: #10b981;
+    --emerald-glow: rgba(16, 185, 129, 0.35);
+    --amber: #fbbf24;
+    --rose: #f43f5e;
+    --purple: #a855f7;
+    --text: #e2f3ff;
+    --muted: #7fb1cc;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
+    --sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -20%, rgba(0,240,255,0.09), transparent 65%),
+                radial-gradient(800px 500px at 85% 95%, rgba(16,185,129,0.05), transparent 50%),
+                linear-gradient(180deg, #01091d, #020b1c 60%, #010813);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 20px 80px;
+    letter-spacing: .3px;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; }
+
+  /* HEADER & NAV */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header-titles h1 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--cyan);
+    letter-spacing: 3.5px;
+    text-shadow: 0 0 16px var(--cyan-glow);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-titles .sub {
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-top: 5px;
+    letter-spacing: 1.5px;
+    font-family: var(--mono);
+  }
+  .nav-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .nav-btn {
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid var(--line);
+    color: var(--text);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-btn:hover {
+    background: rgba(0, 240, 255, 0.18);
+    border-color: var(--cyan);
+    box-shadow: 0 0 14px var(--cyan-glow);
+  }
+
+  /* SYSTEM METRICS BANNER */
+  .metrics-banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .metric-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .metric-icon {
+    font-size: 26px;
+  }
+  .metric-info .label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .metric-info .value {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--cyan);
+    font-family: var(--mono);
+    margin-top: 3px;
+  }
+
+  /* AGENTS GRID */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+    gap: 18px;
+  }
+  .agent-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all .25s ease;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    position: relative;
+    overflow: hidden;
+  }
+  .agent-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--cyan);
+    box-shadow: 0 10px 32px rgba(0, 240, 255, 0.16);
+  }
+  .agent-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.7;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .agent-avatar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .agent-emoji {
+    font-size: 30px;
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .agent-title .name {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+  .agent-title .model {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--cyan);
+    margin-top: 3px;
+  }
+  .badge-status {
+    font-size: 10px;
+    font-family: var(--mono);
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #34d399;
+    box-shadow: 0 0 6px #34d399;
+  }
+  .agent-role {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin-bottom: 14px;
+    flex-grow: 1;
+  }
+  .tools-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 16px;
+  }
+  .tool-tag {
+    font-size: 9.5px;
+    font-family: var(--mono);
+    color: var(--muted);
+    background: rgba(255,255,255,0.03);
+    padding: 3px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(0, 240, 255, 0.08);
+  }
+  .btn-profile {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-profile:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+  .btn-chat {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.2), rgba(16, 185, 129, 0.25));
+    border: 1px solid var(--cyan);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding: 7px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-chat:hover {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.4), rgba(16, 185, 129, 0.5));
+    box-shadow: 0 0 16px var(--cyan-glow);
+  }
+
+  /* MODAL CHAT & SOUL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 9, 29, 0.88);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel-solid);
+    border: 1px solid var(--cyan);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 900px;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 45px rgba(0, 240, 255, 0.28);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--cyan);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 22px;
+    cursor: pointer;
+  }
+  .modal-close:hover { color: #fff; }
+
+  /* CHAT BODY */
+  .chat-messages {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 380px;
+    max-height: 520px;
+    background: rgba(0,0,0,0.3);
+  }
+  .msg-row {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+  }
+  .msg-row.user {
+    align-self: flex-end;
+  }
+  .msg-row.agent {
+    align-self: flex-start;
+  }
+  .msg-bubble {
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  .msg-row.user .msg-bubble {
+    background: rgba(0, 240, 255, 0.15);
+    border: 1px solid var(--cyan);
+    color: #fff;
+  }
+  .msg-row.agent .msg-bubble {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #e2e8f0;
+  }
+  .msg-meta {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .chat-input-bar {
+    display: flex;
+    padding: 14px 20px;
+    border-top: 1px solid var(--line);
+    background: rgba(8, 16, 36, 0.95);
+    gap: 10px;
+  }
+  .chat-input-bar input {
+    flex-grow: 1;
+    background: rgba(1, 9, 29, 0.85);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-size: 13px;
+    outline: none;
+  }
+  .chat-input-bar input:focus {
+    border-color: var(--cyan);
+  }
+  .btn-send {
+    background: var(--cyan);
+    color: #01091d;
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-send:hover {
+    box-shadow: 0 0 14px var(--cyan-glow);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-titles">
+      <h1><span>⚡</span> J.A.R.V.I.S. // TACTICAL AGENT SQUAD</h1>
+      <div class="sub">ESQUADRÃO MULTI-AGENTE DA AMPLIFICA MARKETING & INFRAESTRUTURA // MEMÓRIA UNIFICADA PG17 + REDIS</div>
+    </div>
+    <div class="nav-links">
+      <a href="javascript:void(0)" onclick="openWhatsappModal()" class="nav-btn" style="border-color: #25d366; color: #25d366; background: rgba(37,211,102,0.1);"><span>💬</span> WHATSAPP DO JARVIS</a>
+      <a href="/index.html" class="nav-btn"><span>⚛️</span> TACTICAL HUD</a>
+      <a href="/skills" class="nav-btn"><span>🛍️</span> SKILLS MARKETPLACE</a>
+      <a href="/nodes.html" class="nav-btn"><span>📡</span> CENTRAL DE NÓS</a>
+      <a href="/config.html" class="nav-btn"><span>⚙️</span> CONFIGURAÇÕES</a>
+    </div>
+  </header>
+
+  <!-- METRICS -->
+  <div class="metrics-banner">
+    <div class="metric-card">
+      <div class="metric-icon">👥</div>
+      <div class="metric-info">
+        <div class="label">Esquadrão Ativo</div>
+        <div class="value" id="count-agents">10 Agentes</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon">🧠</div>
+      <div class="metric-info">
+        <div class="label">Memória Cognitiva</div>
+        <div class="value">Postgres 17 + Redis 7</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon">⚡</div>
+      <div class="metric-info">
+        <div class="label">Roteamento de IA</div>
+        <div class="value">MiMo Flash / 9Router</div>
+      </div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-icon">🔐</div>
+      <div class="metric-info">
+        <div class="label">Credenciais & APIs</div>
+        <div class="value" style="color: #34d399;">100% Conectado (.env)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGENTS GRID -->
+  <div class="grid" id="agents-grid">
+    <div style="grid-column: 1/-1; text-align: center; color: var(--cyan); padding: 50px; font-family: var(--mono);">
+      ⚡ Conectando ao Núcleo J.A.R.V.I.S. e carregando o Squad...
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CHAT -->
+<div class="modal-overlay" id="chat-modal" onclick="closeModal('chat-modal', event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="chat-title">CONVERSA DIRETA</div>
+      <button class="modal-close" onclick="closeModal('chat-modal')">&times;</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-bar">
+      <input type="text" id="chat-input" placeholder="Digite uma instrução ou pergunta para o especialista..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+      <button class="btn-send" onclick="sendChatMessage()">ENVIAR ➔</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SOUL / DIRETIVAS -->
+<div class="modal-overlay" id="soul-modal" onclick="closeModal('soul-modal', event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="soul-title">DIRETIVAS DO AGENTE (SOUL.MD)</div>
+      <button class="modal-close" onclick="closeModal('soul-modal')">&times;</button>
+    </div>
+    <div style="padding: 20px; overflow-y: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #e2e8f0; background: rgba(0,0,0,0.3);" id="soul-body"></div>
+  </div>
+</div>
+
+<!-- MODAL WHATSAPP JARVIS -->
+<div class="modal-overlay" id="wa-modal" onclick="closeModal('wa-modal', event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px; text-align: center;">
+    <div class="modal-header">
+      <div class="modal-title" style="color: #25d366;">
+        <span>💬</span> WHATSAPP DEDICADO DO J.A.R.V.I.S.
+      </div>
+      <button class="modal-close" onclick="closeModal('wa-modal')">&times;</button>
+    </div>
+    <div style="padding: 24px 20px;">
+      <div id="wa-status-box" style="margin-bottom: 16px; font-family: var(--mono); font-size: 13px; padding: 10px; border-radius: 8px; background: rgba(37,211,102,0.1); border: 1px solid rgba(37,211,102,0.3); color: #25d366;">
+        ⚡ Verificando status da sessão...
+      </div>
+      <div id="wa-qr-container" style="background: #ffffff; border-radius: 12px; padding: 16px; display: inline-block; box-shadow: 0 0 25px rgba(37,211,102,0.3); min-width: 240px; min-height: 240px;">
+        <img id="wa-qr-img" src="/api/waha/jarvis/qr" alt="QR Code WhatsApp J.A.R.V.I.S." style="width: 240px; height: 240px; display: block; border-radius: 6px;" onerror="this.style.display='none'; document.getElementById('wa-qr-err').style.display='block';">
+        <div id="wa-qr-err" style="display:none; color: #111; font-family: var(--mono); font-size: 12px; padding: 40px 10px;">
+          Carregando QR Code ou sessão já conectada...
+        </div>
+      </div>
+      <p style="margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+        Aponte a câmera do WhatsApp no chip exclusivo do <b>J.A.R.V.I.S.</b> para parear.<br>
+        Sua sessão pessoal/comercial continua 100% segura e isolada.
+      </p>
+      <div style="margin-top: 16px;">
+        <button onclick="refreshWhatsappStatus()" class="nav-btn" style="border-color: #25d366; color: #25d366; cursor: pointer;">
+          🔄 Atualizar Status
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let squad = [];
+let activeChatAgent = null;
+let chatHistory = {};
+
+async function loadSquad() {
+  try {
+    const res = await fetch('/api/squad/agents');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    squad = data.agents || [];
+    renderSquad();
+  } catch (e) {
+    document.getElementById('agents-grid').innerHTML = `
+      <div style="grid-column: 1/-1; color: var(--rose); font-family: var(--mono); padding: 40px; text-align: center;">
+        Erro ao conectar com o Squad: ${e.message}
+      </div>
+    `;
+  }
+}
+
+function renderSquad() {
+  document.getElementById('count-agents').innerText = `${squad.length} Agentes`;
+  const grid = document.getElementById('agents-grid');
+
+  grid.innerHTML = squad.map(ag => {
+    const toolsHtml = (ag.tools || []).map(t => `<span class="tool-tag">#${t}</span>`).join('');
+    return `
+      <div class="agent-card">
+        <div>
+          <div class="card-top">
+            <div class="agent-avatar-wrap">
+              <div class="agent-emoji">${ag.emoji || '🤖'}</div>
+              <div class="agent-title">
+                <div class="name">${ag.name}</div>
+                <div class="model">⚙️ ${ag.model || 'Gemini 3.8 Flash'}</div>
+              </div>
+            </div>
+            <span class="badge-status"><span class="status-dot"></span> ONLINE</span>
+          </div>
+          <div class="agent-role">${ag.role}</div>
+          <div class="tools-list">${toolsHtml}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-profile" onclick="openSoulModal('${ag.id}')">📜 DIRETIVAS</button>
+          <button class="btn-chat" onclick="openChatModal('${ag.id}')">💬 CONVERSAR</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function openSoulModal(agentId) {
+  const ag = squad.find(a => a.id === agentId);
+  document.getElementById('soul-title').innerText = `${ag ? ag.emoji : '📜'} ${ag ? ag.name.toUpperCase() : agentId.toUpperCase()} // DIRETIVAS (SOUL.MD)`;
+  document.getElementById('soul-body').innerText = 'Carregando diretivas e identidade...';
+  document.getElementById('soul-modal').classList.add('open');
+
+  try {
+    const res = await fetch(`/api/squad/profile?id=${encodeURIComponent(agentId)}`);
+    const data = await res.json();
+    if (data.soul || data.identity) {
+      document.getElementById('soul-body').innerText = `${data.identity ? '=== IDENTIDADE ===\n' + data.identity + '\n\n' : ''}=== SOUL.MD ===\n${data.soul || 'Sem SOUL.md customizado.'}`;
+    } else {
+      document.getElementById('soul-body').innerText = data.role || 'Sem diretivas detalhadas.';
+    }
+  } catch (e) {
+    document.getElementById('soul-body').innerText = `Erro ao carregar diretivas: ${e.message}`;
+  }
+}
+
+function openChatModal(agentId) {
+  activeChatAgent = squad.find(a => a.id === agentId) || { id: agentId, name: agentId, emoji: '🤖' };
+  document.getElementById('chat-title').innerText = `${activeChatAgent.emoji} ${activeChatAgent.name.toUpperCase()} // SESSÃO TÁTICA`;
+  
+  if (!chatHistory[agentId]) {
+    chatHistory[agentId] = [
+      { role: 'agent', content: `Olá Senhor Werik! Sou o ${activeChatAgent.name}. Como posso assumir essa operação com você agora?` }
+    ];
+  }
+
+  renderChatMessages();
+  document.getElementById('chat-modal').classList.add('open');
+  setTimeout(() => document.getElementById('chat-input').focus(), 150);
+}
+
+function renderChatMessages() {
+  const container = document.getElementById('chat-messages');
+  const msgs = chatHistory[activeChatAgent.id] || [];
+
+  container.innerHTML = msgs.map(m => {
+    let tierBadge = '';
+    if (m.routing) {
+      if (m.routing.tier === 'pro') {
+        tierBadge = `<div style="margin-top:6px;"><span style="font-size:10px; background:rgba(234, 179, 8, 0.15); border:1px solid #eab308; color:#fde047; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px;">🧠 XIAOMI MIMO PRO · RACIOCÍNIO ESTRATÉGICO</span></div>`;
+      } else {
+        tierBadge = `<div style="margin-top:6px;"><span style="font-size:10px; background:rgba(0, 240, 255, 0.15); border:1px solid #00f0ff; color:#00f0ff; padding:2px 8px; border-radius:4px; font-weight:700; letter-spacing:0.5px;">⚡ XIAOMI MIMO FLASH · ALTA VELOCIDADE</span></div>`;
+      }
+    }
+    const formattedContent = (m.content || '').replace(/\n/g, '<br>');
+    return `
+      <div class="msg-row ${m.role}">
+        <div class="msg-bubble">${formattedContent}</div>
+        ${tierBadge}
+        <div class="msg-meta">${m.role === 'user' ? 'Senhor Werik' : activeChatAgent.name} • Agora</div>
+      </div>
+    `;
+  }).join('');
+
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !activeChatAgent) return;
+
+  input.value = '';
+  chatHistory[activeChatAgent.id].push({ role: 'user', content: text });
+  renderChatMessages();
+
+  // Indicador temporário
+  chatHistory[activeChatAgent.id].push({ role: 'agent', content: 'Processando com diretivas e ferramentas...' });
+  renderChatMessages();
+
+  try {
+    const res = await fetch('/api/squad/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        agent_id: activeChatAgent.id,
+        message: text,
+        history: chatHistory[activeChatAgent.id].slice(0, -2)
+      })
+    });
+    const data = await res.json();
+    
+    // Remove o indicador temporário
+    chatHistory[activeChatAgent.id].pop();
+    
+    if (data.reply) {
+      chatHistory[activeChatAgent.id].push({
+        role: 'agent',
+        content: data.reply,
+        routing: data.routing
+      });
+    } else {
+      chatHistory[activeChatAgent.id].push({ role: 'agent', content: `Erro: ${data.error || 'Sem resposta do agente.'}` });
+    }
+  } catch (err) {
+    chatHistory[activeChatAgent.id].pop();
+    chatHistory[activeChatAgent.id].push({ role: 'agent', content: `Falha na rota: ${err.message}` });
+  }
+
+  renderChatMessages();
+}
+
+function closeModal(id, event) {
+  if (!event || event.target === document.getElementById(id)) {
+    document.getElementById(id).classList.remove('open');
+  }
+}
+
+async function openWhatsappModal() {
+  document.getElementById('wa-modal').classList.add('open');
+  refreshWhatsappStatus();
+}
+
+async function refreshWhatsappStatus() {
+  const box = document.getElementById('wa-status-box');
+  const img = document.getElementById('wa-qr-img');
+  const errBox = document.getElementById('wa-qr-err');
+
+  box.innerHTML = '⚡ Consultando status da sessão...';
+  try {
+    const res = await fetch('/api/waha/jarvis/status');
+    const data = await res.json();
+    if (data.status === 'WORKING') {
+      box.innerHTML = `✅ <b>WHATSAPP CONECTADO!</b> (${data.me?.id || 'Online'})`;
+      box.style.background = 'rgba(16,185,129,0.2)';
+      box.style.color = '#10b981';
+      box.style.borderColor = '#10b981';
+      img.style.display = 'none';
+      errBox.style.display = 'block';
+      errBox.innerHTML = '🎉 Sessão do J.A.R.V.I.S. Ativa e Conectada ao WhatsApp!';
+    } else if (data.status === 'SCAN_QR_CODE' || data.status === 'STARTING') {
+      box.innerHTML = `📲 <b>AGUARDANDO ESCANEAMENTO DO QR CODE</b>`;
+      box.style.background = 'rgba(234,179,8,0.15)';
+      box.style.color = '#fde047';
+      box.style.borderColor = '#eab308';
+      img.src = '/api/waha/jarvis/qr?t=' + Date.now();
+      img.style.display = 'block';
+      errBox.style.display = 'none';
+    } else {
+      box.innerHTML = `⚠️ Status: ${data.status || 'Desconhecido'}`;
+    }
+  } catch (err) {
+    box.innerHTML = `❌ Erro de conexão com WAHA: ${err.message}`;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', loadSquad);
+</script>
+</body>
+</html>

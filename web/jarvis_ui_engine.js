@@ -135,6 +135,30 @@
         return this._buildDashboardSpec(userMsg, rawReply);
       }
 
+      // 8. NOTÍCIAS / BRIEFING NARRADO DE TECNOLOGIA
+      if (
+        q.includes('notícia') || q.includes('noticia') || q.includes('notícias') || q.includes('noticias') ||
+        q.includes('news') || q.includes('briefing') || q.includes('manchete') || q.includes('novidades tech')
+      ) {
+        return this._buildNewsSpec(userMsg, rawReply, extraData);
+      }
+
+      // 9. CONFIRMAÇÃO DE AÇÃO / AUTORIZAÇÃO
+      if (
+        q.includes('confirmar') || q.includes('autorização') || q.includes('autorizacao') ||
+        rawReply.includes('[APROVAR]') || rawReply.includes('[CONFIRMAR]') || rawReply.includes('Deseja prosseguir?')
+      ) {
+        return this._buildConfirmationSpec(userMsg, rawReply);
+      }
+
+      // 10. RESULTADOS DE PESQUISA
+      if (
+        q.includes('pesquisa') || q.includes('pesquisar') || q.includes('buscar na web') ||
+        q.includes('procure sobre') || q.includes('quem foi') || q.includes('o que significa')
+      ) {
+        return this._buildSearchSpec(userMsg, rawReply, extraData);
+      }
+
       // Fallback: Card rico interativo com hierarquia limpa
       return {
         type: 'card',
@@ -142,6 +166,43 @@
         subtitle: 'J.A.R.V.I.S. INTELLIGENCE',
         content: rawReply,
         interactive: false
+      };
+    },
+
+    _buildNewsSpec(userMsg, rawReply, extraData) {
+      const articles = extraData.articles || [];
+      return {
+        type: 'news_deck',
+        title: 'BRIEFING TÉCNICO // NOTÍCIAS DE TECNOLOGIA',
+        category: 'TECNOLOGIA & INOVAÇÃO',
+        articles: articles,
+        activeIndex: 0
+      };
+    },
+
+    _buildConfirmationSpec(userMsg, rawReply) {
+      return {
+        type: 'confirmation',
+        title: 'AUTORIZAÇÃO DE OPERAÇÃO',
+        description: rawReply || 'O J.A.R.V.I.S. solicita sua confirmação para prosseguir com a ação solicitada.',
+        level: 'warning',
+        actionId: 'action_' + Date.now()
+      };
+    },
+
+    _buildSearchSpec(userMsg, rawReply, extraData) {
+      return {
+        type: 'search_results',
+        query: userMsg || 'Pesquisa',
+        status: 'confirmed',
+        results: extraData.results || [
+          {
+            title: userMsg.toUpperCase(),
+            source: 'OPENCLAW WEB RADAR',
+            summary: rawReply,
+            badge: 'VERIFICADO'
+          }
+        ]
       };
     },
 
@@ -867,6 +928,538 @@
           ` : ''}
         </div>
       `;
+    },
+
+        /**
+     * COMPONENTE: NEWS DECK (Briefing Narrado Multi-Cards com Layouts Dinâmicos e Foco Hero)
+     */
+    news_deck(spec) {
+      const articles = spec.articles || [];
+      const activeIdx = spec.activeIndex !== undefined ? spec.activeIndex : (window.JarvisUI && window.JarvisUI._lastNewsActiveIdx !== undefined ? window.JarvisUI._lastNewsActiveIdx : 0);
+      const layout = spec.layout || (window.JarvisUI && window.JarvisUI._currentNewsLayout ? window.JarvisUI._currentNewsLayout : 'spotlight');
+      if (window.JarvisUI) {
+        window.JarvisUI._lastNewsSpec = spec;
+        window.JarvisUI._currentNewsLayout = layout;
+        window.JarvisUI._lastNewsActiveIdx = activeIdx;
+      }
+      
+      const placeholderImg = "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80";
+
+      if (!articles.length) {
+        return `
+          <div class="glass-card-stark p-8 rounded-2xl w-full max-w-2xl mx-auto text-center border border-sky-500/30">
+            <span class="text-3xl text-cyan-400 mb-2 block animate-pulse">📡</span>
+            <h3 class="text-base font-bold text-white font-hud tracking-wide uppercase mb-1">NENHUMA NOTÍCIA DISPONÍVEL</h3>
+            <p class="text-xs text-slate-400 mb-4">Os feeds de notícias estão sendo sincronizados ou não retornaram artigos para este tópico.</p>
+            <button onclick="JarvisPresentation && JarvisPresentation.showNewsBriefing('technology')" class="px-4 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 font-mono-code text-xs transition-colors">
+              ↻ SINCRONIZAR NOVAMENTE
+            </button>
+          </div>
+        `;
+      }
+
+      // Barra de Seleção de Layouts Dinâmicos & Fundo Limpo
+      const isCleanBg = document.body.classList.contains('presentation-clean-bg');
+      const layoutToolbar = `
+        <div class="w-full flex flex-wrap items-center justify-between gap-2 px-1 pb-2 border-b border-cyan-500/20 mb-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-[10px] font-mono-code text-slate-400 uppercase tracking-wider">LAYOUT DO DECK:</span>
+            <div class="inline-flex rounded-lg p-0.5 bg-slate-950/80 border border-cyan-500/30">
+              <button onclick="window.JarvisUI && window.JarvisUI.setNewsLayout('spotlight')" 
+                      class="px-2.5 py-1 rounded-md text-[10px] font-mono-code transition-all ${layout === 'spotlight' ? 'bg-cyan-500/30 text-cyan-200 font-bold border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.3)]' : 'text-slate-400 hover:text-cyan-300'}">
+                ◫ FOCO HERO
+              </button>
+              <button onclick="window.JarvisUI && window.JarvisUI.setNewsLayout('magazine')" 
+                      class="px-2.5 py-1 rounded-md text-[10px] font-mono-code transition-all ${layout === 'magazine' ? 'bg-cyan-500/30 text-cyan-200 font-bold border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.3)]' : 'text-slate-400 hover:text-cyan-300'}">
+                ☷ REVISTA
+              </button>
+              <button onclick="window.JarvisUI && window.JarvisUI.setNewsLayout('grid')" 
+                      class="px-2.5 py-1 rounded-md text-[10px] font-mono-code transition-all ${layout === 'grid' ? 'bg-cyan-500/30 text-cyan-200 font-bold border border-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.3)]' : 'text-slate-400 hover:text-cyan-300'}">
+                ⚏ GRADE
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button id="pres-btn-cleanbg" 
+                    onclick="window.JarvisPresentation && window.JarvisPresentation.toggleCleanBackground()" 
+                    title="Alterna entre Fundo Limpo e Modo HUD com Vortex"
+                    class="px-3 py-1 rounded-lg ${isCleanBg ? 'border-cyan-400 bg-cyan-950/90 text-cyan-200' : 'bg-slate-900 border-slate-700 text-slate-300'} border text-[10px] font-mono-code font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.25)] flex items-center space-x-1.5 hover:border-cyan-400 hover:text-cyan-200">
+              <span>✦</span>
+              <span id="pres-cleanbg-label">${isCleanBg ? 'FUNDO LIMPO' : 'MODO HUD'}</span>
+            </button>
+            <span class="text-[9px] font-mono-code text-cyan-400/70">${articles.length} MATÉRIAS</span>
+          </div>
+        </div>
+      `;
+
+      // 1. LAYOUT SPOTLIGHT (Hero Card de Destaque Principal + Dock de Contexto)
+      if (layout === 'spotlight') {
+        const activeArt = articles[activeIdx] || articles[0];
+        const heroImg = activeArt.imageUrl || placeholderImg;
+        const heroSource = (activeArt.source || "RADAR").toUpperCase();
+        const heroDate = activeArt.publishedAt ? (activeArt.publishedAt.length > 16 ? activeArt.publishedAt.slice(0, 16) : activeArt.publishedAt) : "HOJE";
+
+        const dockCardsHtml = articles.map((art, idx) => {
+          const isActive = idx === activeIdx;
+          const activeBorder = isActive 
+            ? "border-cyan-400 bg-cyan-950/70 shadow-[0_0_20px_rgba(0,240,255,0.4)] scale-[1.02]" 
+            : "border-slate-800 bg-slate-950/60 hover:border-cyan-500/40 opacity-75 hover:opacity-100";
+          const imgUrl = art.imageUrl || placeholderImg;
+          const sourceName = (art.source || "RADAR").toUpperCase();
+
+          return `
+            <div id="news-card-item-${idx}" 
+                 data-news-idx="${idx}"
+                 onclick="window.JarvisNewsNarrator && window.JarvisNewsNarrator.jumpTo(${idx})"
+                 class="glass-card-stark p-2.5 rounded-xl border flex items-center space-x-3 transition-all duration-300 cursor-pointer group ${activeBorder}">
+              
+              <div class="w-16 h-14 rounded-lg overflow-hidden bg-slate-900 flex-shrink-0 border border-cyan-900/40 relative">
+                <img src="${imgUrl}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                <div class="absolute inset-0 bg-slate-950/20"></div>
+                <div id="news-card-badge-${idx}" class="absolute top-1 left-1">
+                  ${isActive ? `
+                    <span class="px-1.5 py-0.5 rounded bg-cyan-500/90 text-[8px] font-mono-code font-bold text-slate-950 animate-pulse">
+                      ılılı
+                    </span>
+                  ` : `
+                    <span class="px-1.5 py-0.5 rounded bg-slate-950/80 text-[8px] font-mono-code font-bold text-slate-400">
+                      #${idx + 1}
+                    </span>
+                  `}
+                </div>
+              </div>
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between space-x-1 mb-0.5">
+                  <span class="text-[9px] font-mono-code font-bold text-cyan-300 truncate">${sourceName}</span>
+                  <span class="text-[8px] font-mono-code text-slate-500">${art.publishedAt ? art.publishedAt.slice(0, 10) : ''}</span>
+                </div>
+                <h5 class="text-[11px] font-bold text-white font-hud line-clamp-2 leading-snug group-hover:text-cyan-200 transition-colors">
+                  ${art.title}
+                </h5>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="w-full space-y-3 animate-slide-up">
+            ${layoutToolbar}
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full">
+              
+              <!-- Left/Main: Hero Card Ativo -->
+              <div id="news-hero-stage" 
+                   class="lg:col-span-8 glass-card-stark rounded-2xl overflow-hidden border border-cyan-400/80 shadow-[0_0_50px_rgba(0,240,255,0.35)] transition-all duration-500 relative flex flex-col justify-between">
+                
+                <div class="relative w-full h-56 sm:h-72 bg-slate-950 overflow-hidden border-b border-cyan-500/30">
+                  <img id="news-hero-image" 
+                       src="${heroImg}" 
+                       alt="${activeArt.title}"
+                       class="w-full h-full object-cover transition-transform duration-700 hover:scale-105 brightness-95"
+                       onerror="this.onerror=null;this.src='${placeholderImg}';">
+                  <div class="absolute inset-0 bg-gradient-to-t from-[#020b1e] via-[#020b1e]/50 to-transparent pointer-events-none"></div>
+                  
+                  <div class="absolute top-3 left-3 flex items-center space-x-2">
+                    <span id="news-hero-badge" class="px-2.5 py-1 rounded-full bg-cyan-500/30 border border-cyan-300 text-[10px] font-mono-code font-bold text-cyan-100 animate-pulse flex items-center space-x-1 shadow-[0_0_15px_rgba(0,240,255,0.6)]">
+                      <span>ılılı</span>
+                      <span>EM DESTAQUE NARRADO</span>
+                    </span>
+                    <span id="news-hero-source" class="px-2.5 py-1 rounded-full bg-slate-950/80 border border-slate-700 text-[10px] font-mono-code font-bold text-cyan-300">
+                      ${heroSource}
+                    </span>
+                  </div>
+
+                  <div class="absolute bottom-3 right-3 px-2 py-0.5 rounded bg-slate-950/80 border border-cyan-900/50 text-[9px] font-mono-code text-cyan-300/80">
+                    ${heroDate}
+                  </div>
+                </div>
+
+                <div class="p-5 flex-1 flex flex-col justify-between bg-gradient-to-b from-[#020b1e] to-[#010614]">
+                  <div>
+                    <h3 id="news-hero-title" class="text-base sm:text-lg md:text-xl font-bold text-white font-hud tracking-wide leading-snug mb-3">
+                      ${activeArt.title}
+                    </h3>
+                    <p id="news-hero-summary" class="text-xs sm:text-sm text-slate-200 leading-relaxed font-normal mb-4">
+                      ${activeArt.summary}
+                    </p>
+                  </div>
+
+                  <div class="pt-3 border-t border-cyan-900/40 flex flex-wrap items-center justify-between gap-3">
+                    <a id="news-hero-link" 
+                       href="${activeArt.url || '#'}" 
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       class="px-3.5 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_15px_rgba(0,240,255,0.3)] flex items-center space-x-1.5">
+                      <span>LER MATÉRIA COMPLETA</span>
+                      <span>↗</span>
+                    </a>
+                    
+                    <div class="flex items-center space-x-2 text-[10px] font-mono-code text-cyan-400/80">
+                      <span>SINTONIZADOR AUDIO:</span>
+                      <span class="inline-flex space-x-0.5 items-end h-3">
+                        <span class="w-1 h-2 bg-cyan-400 animate-pulse"></span>
+                        <span class="w-1 h-3 bg-cyan-300 animate-pulse" style="animation-delay: 150ms;"></span>
+                        <span class="w-1 h-1.5 bg-cyan-500 animate-pulse" style="animation-delay: 300ms;"></span>
+                        <span class="w-1 h-3 bg-cyan-200 animate-pulse" style="animation-delay: 75ms;"></span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Secondary Dock -->
+              <div class="lg:col-span-4 flex flex-col space-y-2.5">
+                <div class="text-[10px] font-mono-code font-bold text-cyan-300/80 tracking-wider uppercase mb-0.5 flex items-center justify-between">
+                  <span>OUTRAS MATÉRIAS DO BRIEFING</span>
+                  <span>CLIQUE P/ FOCAR</span>
+                </div>
+                ${dockCardsHtml}
+              </div>
+
+            </div>
+          </div>
+        `;
+      }
+
+      // 2. LAYOUT MAGAZINE (Revista Tática com Grid Assimétrico)
+      if (layout === 'magazine') {
+        const cardsHtml = articles.map((art, idx) => {
+          const isActive = idx === activeIdx;
+          const isLarge = idx === 0;
+          const activeClass = isActive ? "card-narrated-active" : "card-narrated-inactive";
+          const imgUrl = art.imageUrl || placeholderImg;
+          const sourceName = (art.source || "RADAR").toUpperCase();
+          const colSpan = isLarge ? "md:col-span-2 md:row-span-2 min-h-[420px]" : "col-span-1 min-h-[220px]";
+
+          return `
+            <div id="news-card-item-${idx}" 
+                 data-news-idx="${idx}"
+                 onclick="window.JarvisNewsNarrator && window.JarvisNewsNarrator.jumpTo(${idx})"
+                 class="glass-card-stark rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 spring-trans relative cursor-pointer group ${colSpan} ${activeClass}">
+              
+              <div class="p-3 pb-2 flex items-center justify-between border-b border-cyan-500/20 bg-slate-950/60">
+                <span class="text-[10px] font-mono-code font-bold text-cyan-300 truncate">${sourceName}</span>
+                <div id="news-card-badge-${idx}">
+                  ${isActive ? `<span class="px-2 py-0.5 rounded-full bg-cyan-500/25 border border-cyan-400 text-[9px] font-mono-code font-bold text-cyan-200 animate-pulse">ılılı NARRANDO</span>` : `<span class="text-[9px] font-mono-code text-slate-400">#${idx + 1}</span>`}
+                </div>
+              </div>
+
+              <div class="relative w-full ${isLarge ? 'h-52' : 'h-28'} bg-slate-950 overflow-hidden">
+                <img src="${imgUrl}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+                <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
+              </div>
+
+              <div class="p-4 flex-1 flex flex-col justify-between">
+                <div>
+                  <h4 class="${isLarge ? 'text-base' : 'text-xs'} font-bold text-white font-hud line-clamp-2 leading-snug mb-2 group-hover:text-cyan-200 transition-colors">
+                    ${art.title}
+                  </h4>
+                  <p class="text-[11px] text-slate-300 leading-relaxed ${isLarge ? 'line-clamp-4' : 'line-clamp-2'}">
+                    ${art.summary}
+                  </p>
+                </div>
+                <div class="pt-2 mt-2 border-t border-cyan-900/40 flex items-center justify-between">
+                  <a href="${art.url || '#'}" target="_blank" onclick="event.stopPropagation();" class="text-[10px] font-mono-code text-cyan-400 hover:underline">LER ORIGINAL ↗</a>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="w-full space-y-3 animate-slide-up">
+            ${layoutToolbar}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5 w-full">
+              ${cardsHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      // 3. LAYOUT GRID (Grade Clássica Flexível)
+      const cardsHtml = articles.map((art, idx) => {
+        const isActive = idx === activeIdx;
+        const activeClass = isActive ? "card-narrated-active" : "card-narrated-inactive";
+        const imgUrl = art.imageUrl || placeholderImg;
+        const sourceName = (art.source || "RADAR").toUpperCase();
+
+        return `
+          <div id="news-card-item-${idx}" 
+               data-news-idx="${idx}"
+               onclick="window.JarvisNewsNarrator && window.JarvisNewsNarrator.jumpTo(${idx})"
+               class="glass-card-stark rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-300 spring-trans relative cursor-pointer group ${activeClass}"
+               style="min-height: 340px;">
+            <div class="p-3 pb-2 flex items-center justify-between border-b border-cyan-500/20 bg-slate-950/50">
+              <span class="text-[10px] font-mono-code font-bold text-cyan-300 truncate">${sourceName}</span>
+              <div id="news-card-badge-${idx}">
+                ${isActive ? `<span class="px-2 py-0.5 rounded-full bg-cyan-500/25 border border-cyan-400 text-[9px] font-mono-code font-bold text-cyan-200 animate-pulse">ılılı NARRANDO</span>` : `<span class="text-[9px] font-mono-code text-slate-400">#${idx + 1}</span>`}
+              </div>
+            </div>
+            <div class="relative w-full h-36 bg-slate-950 overflow-hidden">
+              <img src="${imgUrl}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent"></div>
+            </div>
+            <div class="p-3.5 flex-1 flex flex-col justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-white font-hud line-clamp-2 leading-snug tracking-wide mb-2 group-hover:text-cyan-200 transition-colors">
+                  ${art.title}
+                </h4>
+                <p class="text-[11px] text-slate-300 leading-relaxed line-clamp-3">
+                  ${art.summary}
+                </p>
+              </div>
+              <div class="pt-3 mt-2 border-t border-cyan-900/40 flex items-center justify-between">
+                <a href="${art.url || '#'}" target="_blank" onclick="event.stopPropagation();" class="text-[10px] font-mono-code text-cyan-400 hover:underline">LER ORIGINAL ↗</a>
+                <span class="text-[9px] font-mono-code text-slate-500">CLIQUE P/ FOCAR</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="w-full space-y-3 animate-slide-up">
+          ${layoutToolbar}
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 w-full">
+            ${cardsHtml}
+          </div>
+        </div>
+      `;
+    },
+
+    /**
+     * COMPONENTE: SEARCH RESULTS (Painel de Resultados de Pesquisa)
+     */
+    search_results(spec) {
+      const query = spec.query || "Pesquisa";
+      const results = spec.results || [];
+      const status = spec.status || (results.length ? "confirmed" : "empty");
+
+      const statusBadge = {
+        confirmed: '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[9px] font-mono-code font-bold">✓ CONFIRMADO</span>',
+        partial: '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[9px] font-mono-code font-bold">⚠ PARCIAL</span>',
+        failed: '<span class="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-300 text-[9px] font-mono-code font-bold">✕ FALHA NA PESQUISA</span>',
+        empty: '<span class="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 text-[9px] font-mono-code font-bold">SEM DADOS</span>'
+      }[status] || '';
+
+      if (!results.length) {
+        return `
+          <div class="glass-card-stark p-6 rounded-2xl w-full max-w-xl mx-auto text-center border border-rose-500/30">
+            <span class="text-3xl text-rose-400 mb-2 block">🔍</span>
+            <h3 class="text-sm font-bold text-white font-hud tracking-wider uppercase mb-1">NENHUM RESULTADO ENCONTRADO</h3>
+            <p class="text-xs text-slate-400 mb-4">Não foram encontrados dados verificados para a consulta "${query}".</p>
+            <button onclick="JarvisPresentation && JarvisPresentation.close()" class="px-3 py-1 rounded bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:text-white">VOLTAR AO NÚCLEO</button>
+          </div>
+        `;
+      }
+
+      const itemsHtml = results.map((item, idx) => `
+        <div class="p-3.5 rounded-xl bg-slate-950/70 border border-cyan-500/25 hover:border-cyan-400/60 transition-all space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-[9px] font-mono-code text-cyan-400 font-bold uppercase tracking-wider">${item.source || 'FONTE WEB'}</span>
+            ${item.badge ? `<span class="text-[8px] font-mono-code text-slate-400">${item.badge}</span>` : ''}
+          </div>
+          <h4 class="text-xs font-bold text-white font-hud leading-snug hover:text-cyan-200 transition-colors">
+            ${item.title}
+          </h4>
+          <p class="text-[11px] text-slate-300 leading-relaxed font-normal">${item.summary || item.snippet || ''}</p>
+          ${item.url ? `
+            <div class="pt-1.5 flex justify-end">
+              <a href="${item.url}" target="_blank" rel="noopener" class="text-[10px] font-mono-code text-cyan-400 hover:underline flex items-center space-x-1">
+                <span>ABRIR FONTE ORIGINAL</span>
+                <span>↗</span>
+              </a>
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+
+      return `
+        <div class="glass-card-stark p-5 rounded-2xl w-full max-w-3xl mx-auto space-y-3.5 border border-cyan-500/40">
+          <div class="flex items-center justify-between border-b border-cyan-500/20 pb-2.5">
+            <div class="flex items-center space-x-2">
+              <span class="text-base">🌐</span>
+              <div>
+                <h3 class="text-xs font-bold text-white font-hud uppercase tracking-wider">RESULTADOS DA PESQUISA: "${query}"</h3>
+                <span class="text-[9px] font-mono-code text-slate-400">${results.length} resultados indexados</span>
+              </div>
+            </div>
+            <div>${statusBadge}</div>
+          </div>
+          <div class="space-y-2.5 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+            ${itemsHtml}
+          </div>
+        </div>
+      `;
+    },
+
+    /**
+     * COMPONENTE: CHART PANEL (Gráficos e Indicadores)
+     */
+    chart_panel(spec) {
+      const title = spec.title || "TELEMETRIA DE DADOS";
+      const subtitle = spec.subtitle || "INDICADORES EM TEMPO REAL";
+      const indicator = spec.indicator || { label: "TOTAL", value: "--", change: "0%" };
+      const labels = spec.chart?.labels || [];
+      const values = spec.chart?.values || [];
+      const metrics = spec.metrics || [];
+
+      if (!values.length || values.every(v => v === 0)) {
+        return `
+          <div class="glass-card-stark p-8 rounded-2xl w-full max-w-xl mx-auto text-center border border-sky-500/30">
+            <span class="text-3xl text-sky-400 mb-2 block animate-pulse">📊</span>
+            <h3 class="text-sm font-bold text-white font-hud uppercase tracking-wider mb-1">NENHUM DADO DISPONÍVEL NO PERÍODO</h3>
+            <p class="text-xs text-slate-400 mb-4">O subsistema de telemetria não registrou dados estatísticos suficientes para gerar a curva.</p>
+            <button onclick="JarvisPresentation && JarvisPresentation.close()" class="px-3 py-1 rounded bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:text-white">VOLTAR AO NÚCLEO</button>
+          </div>
+        `;
+      }
+
+      const maxVal = Math.max(...values, 1);
+      const minVal = Math.min(...values, 0);
+      const range = (maxVal - minVal) || 1;
+      const width = 500;
+      const height = 140;
+      const padding = 20;
+
+      const points = values.map((v, i) => {
+        const x = padding + (i / Math.max(values.length - 1, 1)) * (width - 2 * padding);
+        const y = height - padding - ((v - minVal) / range) * (height - 2 * padding);
+        return { x, y, v };
+      });
+
+      let pathD = `M ${points[0].x} ${points[0].y}`;
+      for (let i = 0; i < points.length - 1; i++) {
+        const p0 = points[i];
+        const p1 = points[i + 1];
+        const cx = (p0.x + p1.x) / 2;
+        pathD += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+      }
+
+      const areaD = `${pathD} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+
+      const subMetricsHtml = metrics.map(m => `
+        <div class="p-2.5 rounded-xl bg-slate-950/70 border border-cyan-900/40 text-center">
+          <div class="text-[9px] font-mono-code text-slate-400 uppercase">${m.label}</div>
+          <div class="text-sm font-bold text-cyan-300 font-mono-code">${m.value}</div>
+          ${m.change ? `<div class="text-[9px] font-mono-code ${m.is_positive ? 'text-emerald-400' : 'text-rose-400'}">${m.change}</div>` : ''}
+        </div>
+      `).join('');
+
+      return `
+        <div class="glass-card-stark p-5 rounded-2xl w-full max-w-2xl mx-auto space-y-4 border border-cyan-500/40 animate-slide-up">
+          <div class="flex items-center justify-between border-b border-cyan-500/20 pb-3">
+            <div>
+              <h3 class="text-xs font-bold text-white font-hud uppercase tracking-wider">${title}</h3>
+              <p class="text-[10px] font-mono-code text-slate-400">${subtitle}</p>
+            </div>
+            <div class="text-right">
+              <span class="text-xl font-black text-cyan-300 font-mono-code drop-shadow-[0_0_10px_rgba(0,240,255,0.7)]">${indicator.value}</span>
+              <div class="text-[9px] font-mono-code ${indicator.is_positive ? 'text-emerald-400' : 'text-rose-400'}">${indicator.change} vs anterior</div>
+            </div>
+          </div>
+
+          <div class="w-full overflow-hidden rounded-xl bg-slate-950/80 p-2 border border-cyan-500/20">
+            <svg viewBox="0 0 ${width} ${height}" class="w-full h-32 overflow-visible">
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+              <path d="${areaD}" fill="url(#chartGrad)"/>
+              <path d="${pathD}" fill="none" stroke="#00f0ff" stroke-width="2.5" stroke-linecap="round"/>
+              ${points.map(p => `
+                <circle cx="${p.x}" cy="${p.y}" r="3" fill="#00f0ff" stroke="#010a20" stroke-width="1.5"/>
+              `).join('')}
+            </svg>
+            <div class="flex justify-between px-2 pt-1 border-t border-slate-800 text-[9px] font-mono-code text-slate-400">
+              ${labels.map(l => `<span>${l}</span>`).join('')}
+            </div>
+          </div>
+
+          ${metrics.length ? `
+            <div class="grid grid-cols-${Math.min(metrics.length, 4)} gap-2">
+              ${subMetricsHtml}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    },
+
+    /**
+     * COMPONENTE: CONFIRMATION (Autorização de Ações Sensíveis)
+     */
+    confirmation(spec) {
+      const title = spec.title || "CONFIRMAÇÃO DE AÇÃO";
+      const description = spec.description || "O J.A.R.V.I.S. solicita autorização para prosseguir com a operação.";
+      const actionId = spec.actionId || "action_" + Date.now();
+      const level = spec.level || "warning";
+      const levelColor = level === 'critical' ? 'rose' : (level === 'warning' ? 'amber' : 'cyan');
+
+      return `
+        <div class="glass-card-stark p-6 rounded-2xl w-full max-w-lg mx-auto space-y-4 border border-${levelColor}-500/60 shadow-[0_0_40px_rgba(245,158,11,0.25)] animate-slide-up">
+          <div class="flex items-center space-x-3 border-b border-slate-800 pb-3">
+            <div class="w-10 h-10 rounded-xl bg-${levelColor}-500/20 border border-${levelColor}-400 flex items-center justify-center text-xl animate-pulse">
+              🛡️
+            </div>
+            <div>
+              <span class="text-[9px] font-mono-code font-bold uppercase text-${levelColor}-400 tracking-wider">SOLICITAÇÃO DE AUTORIZAÇÃO</span>
+              <h3 class="text-sm font-bold text-white font-hud uppercase tracking-wide">${title}</h3>
+            </div>
+          </div>
+
+          <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-200 leading-relaxed font-normal">
+            ${description}
+          </div>
+
+          ${spec.details ? `
+            <div class="p-2.5 rounded-lg bg-slate-950/50 border border-slate-800 font-mono-code text-[10px] text-slate-400">
+              <code>${spec.details}</code>
+            </div>
+          ` : ''}
+
+          <div class="pt-2 flex items-center space-x-3">
+            <button onclick="JarvisUI.handleCancel('${actionId}')" 
+                    class="flex-1 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-slate-300 font-mono-code text-xs font-bold transition-all">
+              ✕ CANCELAR
+            </button>
+            <button onclick="JarvisUI.handleConfirm('${actionId}')" 
+                    class="flex-1 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400/80 text-emerald-300 font-mono-code text-xs font-bold transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+              ✓ CONFIRMAR AÇÃO
+            </button>
+          </div>
+        </div>
+      `;
+    },
+
+    /**
+     * COMPONENTE: ERROR STATE
+     */
+    error_state(spec) {
+      const title = spec.title || "FALHA DE COMUNICAÇÃO";
+      const message = spec.message || "Não foi possível sincronizar os dados com o servidor central.";
+      const retryAction = spec.retryAction || "JarvisPresentation && JarvisPresentation.close()";
+
+      return `
+        <div class="glass-card-stark p-6 rounded-2xl w-full max-w-lg mx-auto text-center border border-rose-500/50 shadow-[0_0_35px_rgba(244,63,94,0.3)] animate-slide-up">
+          <div class="w-12 h-12 rounded-xl bg-rose-500/20 border border-rose-400 flex items-center justify-center text-2xl mx-auto mb-3 animate-pulse">
+            ⚠️
+          </div>
+          <span class="text-[9px] font-mono-code font-bold uppercase text-rose-400 tracking-widest block mb-1">ERRO DE SUBSISTEMA</span>
+          <h3 class="text-sm font-bold text-white font-hud uppercase tracking-wide mb-2">${title}</h3>
+          <p class="text-xs text-slate-300 mb-4 font-normal leading-relaxed">${message}</p>
+          <div class="flex items-center justify-center space-x-3">
+            <button onclick="JarvisPresentation && JarvisPresentation.close()" class="px-4 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono-code text-slate-300 hover:text-white transition-colors">
+              VOLTAR AO NÚCLEO
+            </button>
+            <button onclick="${retryAction}" class="px-4 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-400 text-rose-200 text-xs font-mono-code font-bold transition-colors">
+              ↻ TENTAR NOVAMENTE
+            </button>
+          </div>
+        </div>
+      `;
     }
   };
 
@@ -874,6 +1467,57 @@
   // 4. MOTOR PRINCIPAL DE RENDERIZAÇÃO (JarvisUI)
   // =========================================================================
   const JarvisUI = {
+    setNewsLayout(layoutName) {
+      this._currentNewsLayout = layoutName;
+      if (this._lastNewsSpec) {
+        const mount = document.getElementById('presentation-content-area');
+        if (mount) {
+          this._lastNewsSpec.layout = layoutName;
+          mount.innerHTML = this.components.news_deck(this._lastNewsSpec);
+        }
+      }
+    },
+
+    updateNewsSpotlight(activeIdx, articles) {
+      this._lastNewsActiveIdx = activeIdx;
+      if (!this._currentNewsLayout || this._currentNewsLayout === 'spotlight') {
+        const art = articles[activeIdx];
+        if (!art) return;
+        const heroStage = document.getElementById('news-hero-stage');
+        const heroImg = document.getElementById('news-hero-image');
+        const heroTitle = document.getElementById('news-hero-title');
+        const heroSummary = document.getElementById('news-hero-summary');
+        const heroSource = document.getElementById('news-hero-source');
+        const heroLink = document.getElementById('news-hero-link');
+
+        if (heroStage) {
+          heroStage.style.opacity = '0.6';
+          setTimeout(() => {
+            if (heroImg) heroImg.src = art.imageUrl || "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80";
+            if (heroTitle) heroTitle.innerText = art.title;
+            if (heroSummary) heroSummary.innerText = art.summary;
+            if (heroSource) heroSource.innerText = (art.source || "RADAR").toUpperCase();
+            if (heroLink) heroLink.href = art.url || '#';
+            heroStage.style.opacity = '1';
+          }, 120);
+        }
+
+        articles.forEach((_, i) => {
+          const card = document.getElementById(`news-card-item-${i}`);
+          const badge = document.getElementById(`news-card-badge-${i}`);
+          if (card) {
+            if (i === activeIdx) {
+              card.className = "glass-card-stark p-2.5 rounded-xl border flex items-center space-x-3 transition-all duration-300 cursor-pointer group border-cyan-400 bg-cyan-950/70 shadow-[0_0_20px_rgba(0,240,255,0.4)] scale-[1.02]";
+              if (badge) badge.innerHTML = `<span class="px-1.5 py-0.5 rounded bg-cyan-500/90 text-[8px] font-mono-code font-bold text-slate-950 animate-pulse">ılılı</span>`;
+            } else {
+              card.className = "glass-card-stark p-2.5 rounded-xl border flex items-center space-x-3 transition-all duration-300 cursor-pointer group border-slate-800 bg-slate-950/60 hover:border-cyan-500/40 opacity-75 hover:opacity-100";
+              if (badge) badge.innerHTML = `<span class="px-1.5 py-0.5 rounded bg-slate-950/80 text-[8px] font-mono-code font-bold text-slate-400">#${i + 1}</span>`;
+            }
+          }
+        });
+      }
+    },
+
     emit,
     on,
     off,
@@ -965,6 +1609,28 @@
         input.value = newProgress;
         this.updateControlDisplay(id, newProgress, unit);
         emit('ui.control_change', { id, value: newProgress });
+      }
+    },
+
+    handleConfirm(actionId) {
+      emit('ui.confirm', { actionId });
+      this.closeStage();
+      if (typeof window !== 'undefined' && typeof window.JarvisPresentation !== 'undefined') {
+        window.JarvisPresentation.close();
+      }
+      if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
+        window.sendToOpenClaw('[CONFIRMADO] Ação autorizada pelo usuário: ' + actionId);
+      }
+    },
+
+    handleCancel(actionId) {
+      emit('ui.cancel', { actionId });
+      this.closeStage();
+      if (typeof window !== 'undefined' && typeof window.JarvisPresentation !== 'undefined') {
+        window.JarvisPresentation.close();
+      }
+      if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
+        window.sendToOpenClaw('[CANCELADO] Ação cancelada pelo usuário: ' + actionId);
       }
     }
   };

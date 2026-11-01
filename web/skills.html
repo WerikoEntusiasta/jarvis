@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>J.A.R.V.I.S. // MARKETPLACE DE SKILLS</title>
+<link rel="icon" type="image/x-icon" href="/jarvis_hud.ico">
+<style>
+  :root {
+    --bg: #01091d;
+    --panel: rgba(8, 16, 36, 0.88);
+    --panel-solid: #081024;
+    --panel-hover: rgba(14, 28, 60, 0.95);
+    --line: rgba(0, 240, 255, 0.22);
+    --cyan: #00f0ff;
+    --cyan-glow: rgba(0, 240, 255, 0.4);
+    --emerald: #10b981;
+    --emerald-glow: rgba(16, 185, 129, 0.35);
+    --amber: #fbbf24;
+    --rose: #f43f5e;
+    --purple: #a855f7;
+    --text: #e2f3ff;
+    --muted: #7fb1cc;
+    --mono: 'JetBrains Mono', 'Consolas', monospace;
+    --sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 700px at 50% -20%, rgba(0,240,255,0.09), transparent 65%),
+                radial-gradient(800px 500px at 85% 95%, rgba(16,185,129,0.05), transparent 50%),
+                linear-gradient(180deg, #01091d, #020b1c 60%, #010813);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 24px 20px 80px;
+    letter-spacing: .3px;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; }
+
+  /* HEADER & NAV */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .header-titles h1 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--cyan);
+    letter-spacing: 3.5px;
+    text-shadow: 0 0 16px var(--cyan-glow);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .header-titles .sub {
+    color: var(--muted);
+    font-size: 11.5px;
+    margin-top: 5px;
+    letter-spacing: 1.5px;
+    font-family: var(--mono);
+  }
+  .nav-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .nav-btn {
+    background: rgba(0, 240, 255, 0.08);
+    border: 1px solid var(--line);
+    color: var(--text);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nav-btn:hover {
+    background: rgba(0, 240, 255, 0.18);
+    border-color: var(--cyan);
+    box-shadow: 0 0 14px var(--cyan-glow);
+  }
+
+  /* TOOLBAR: SEARCH & FILTERS */
+  .toolbar {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .search-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 280px;
+    position: relative;
+  }
+  .search-box input {
+    width: 100%;
+    background: rgba(1, 9, 29, 0.85);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 11px 14px 11px 38px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    outline: none;
+    transition: all .2s;
+  }
+  .search-box input:focus {
+    border-color: var(--cyan);
+    box-shadow: 0 0 14px var(--cyan-glow);
+  }
+  .search-box span.icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .source-filters, .status-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-chip {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .filter-chip:hover, .filter-chip.active {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .filter-chip.source-clawhub.active {
+    background: rgba(0, 240, 255, 0.2);
+    border-color: var(--cyan);
+    color: #fff;
+    box-shadow: 0 0 10px var(--cyan-glow);
+  }
+  .filter-chip.source-hermes.active {
+    background: rgba(168, 85, 247, 0.2);
+    border-color: var(--purple);
+    color: #e9d5ff;
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+  }
+
+  .category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cat-chip {
+    background: rgba(1, 9, 29, 0.6);
+    border: 1px solid rgba(0, 240, 255, 0.12);
+    color: var(--muted);
+    font-size: 10.5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    transition: all .2s;
+  }
+  .cat-chip:hover, .cat-chip.active {
+    background: rgba(0, 240, 255, 0.2);
+    border-color: var(--cyan);
+    color: #fff;
+  }
+
+  /* STATS BANNER */
+  .stats-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 16px;
+    padding: 0 4px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* SKILLS GRID */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(370px, 1fr));
+    gap: 16px;
+  }
+  .skill-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform .2s, border-color .2s, box-shadow .2s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .skill-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--cyan);
+    box-shadow: 0 8px 30px rgba(0, 240, 255, 0.14);
+  }
+  .skill-card.installed {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: linear-gradient(160deg, rgba(16, 185, 129, 0.06) 0%, var(--panel) 60%);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .skill-name {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+  .skill-card.installed .skill-name {
+    color: #34d399;
+  }
+  .badge-source {
+    font-size: 9.5px;
+    font-family: var(--mono);
+    padding: 3px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge-hermes {
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    color: #c084fc;
+  }
+  .badge-clawhub {
+    background: rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    color: var(--cyan);
+  }
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .skill-desc {
+    font-size: 11.5px;
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    flex-grow: 1;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 14px;
+  }
+  .tag {
+    font-size: 9.5px;
+    font-family: var(--mono);
+    color: var(--muted);
+    background: rgba(255,255,255,0.03);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 240, 255, 0.08);
+  }
+  .btn-doc {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-doc:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+  .btn-install {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.18), rgba(16, 185, 129, 0.22));
+    border: 1px solid var(--cyan);
+    color: #fff;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-install:hover {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.35), rgba(16, 185, 129, 0.45));
+    box-shadow: 0 0 14px var(--cyan-glow);
+  }
+  .btn-uninstall {
+    background: rgba(244, 63, 94, 0.15);
+    border: 1px solid rgba(244, 63, 94, 0.5);
+    color: #fda4af;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn-uninstall:hover {
+    background: rgba(244, 63, 94, 0.3);
+    box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
+  }
+
+  /* LOAD MORE BUTTON */
+  .load-more-row {
+    margin-top: 30px;
+    text-align: center;
+  }
+  .btn-load-more {
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid var(--cyan);
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    padding: 12px 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .2s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .btn-load-more:hover {
+    background: rgba(0, 240, 255, 0.22);
+    box-shadow: 0 0 18px var(--cyan-glow);
+  }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(1, 9, 29, 0.85);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel-solid);
+    border: 1px solid var(--cyan);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 860px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 40px rgba(0, 240, 255, 0.25);
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--cyan);
+    letter-spacing: 1px;
+  }
+  .modal-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .modal-close:hover { color: #fff; }
+  .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #e2e8f0;
+    font-family: var(--mono);
+    white-space: pre-wrap;
+    background: rgba(0,0,0,0.3);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="header-titles">
+      <h1><span>⚡</span> J.A.R.V.I.S. // MARKETPLACE DE SKILLS</h1>
+      <div class="sub">CATÁLOGO GLOBAL SOB DEMANDA // CLAWHUB REGISTRY (MILHARES) & HERMES BUNDLE (71)</div>
+    </div>
+    <div class="nav-links">
+      <a href="/index.html" class="nav-btn"><span>⚛️</span> TACTICAL HUD</a>
+      <a href="/agents" class="nav-btn"><span>👥</span> SQUAD TÁTICO</a>
+      <a href="/nodes.html" class="nav-btn"><span>📡</span> CENTRAL DE NÓS</a>
+      <a href="/config.html" class="nav-btn"><span>⚙️</span> CONFIGURAÇÕES</a>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="search-row">
+      <div class="search-box">
+        <span class="icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Pesquisar milhares de skills (ex: telegram, crypto, pdf, docker, spotify)..." oninput="debounceSearch()">
+      </div>
+      <div class="status-filters">
+        <button class="filter-chip active" id="chip-status-all" onclick="setStatusFilter('', this)">Todas (<span id="count-all">0</span>)</button>
+        <button class="filter-chip" id="chip-status-inst" onclick="setStatusFilter('installed', this)">Instaladas (<span id="count-installed">0</span>)</button>
+        <button class="filter-chip" id="chip-status-avail" onclick="setStatusFilter('available', this)">Disponíveis (<span id="count-available">0</span>)</button>
+      </div>
+    </div>
+
+    <!-- SOURCE SELECTOR: CLAW HUB VS HERMES -->
+    <div class="source-filters">
+      <span style="font-size: 11px; font-family: var(--mono); color: var(--muted); align-self: center; margin-right: 4px;">FONTE:</span>
+      <button class="filter-chip active" onclick="setSourceFilter('all', this)">🌐 TODAS AS FONTES</button>
+      <button class="filter-chip source-clawhub" onclick="setSourceFilter('clawhub', this)">⚡ CLAWHUB ONLINE (MILHARES)</button>
+      <button class="filter-chip source-hermes" onclick="setSourceFilter('hermes', this)">🏛️ HERMES BUNDLE (71)</button>
+    </div>
+
+    <div class="category-chips" id="cat-chips">
+      <button class="cat-chip active" onclick="setCategoryFilter('', this)">TODAS AS CATEGORIAS</button>
+      <button class="cat-chip" onclick="setCategoryFilter('productivity', this)">PRODUTIVIDADE</button>
+      <button class="cat-chip" onclick="setCategoryFilter('software-development', this)">DESENVOLVIMENTO</button>
+      <button class="cat-chip" onclick="setCategoryFilter('research', this)">PESQUISA</button>
+      <button class="cat-chip" onclick="setCategoryFilter('finance', this)">FINANÇAS</button>
+      <button class="cat-chip" onclick="setCategoryFilter('media', this)">MÍDIA</button>
+      <button class="cat-chip" onclick="setCategoryFilter('smart-home', this)">SMART HOME</button>
+    </div>
+  </div>
+
+  <div class="stats-banner">
+    <span id="showing-text">Carregando catálogo de skills...</span>
+    <span id="sources-summary">CONECTANDO AO CLAWHUB OFICIAL...</span>
+  </div>
+
+  <div class="grid" id="skills-grid"></div>
+
+  <div class="load-more-row" id="load-more-container" style="display: none;">
+    <button class="btn-load-more" onclick="loadMoreSkills()">CARREGAR MAIS SKILLS DO CLAWHUB ⬇️</button>
+  </div>
+</div>
+
+<!-- MODAL DOC -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">DOCUMENTAÇÃO DA SKILL</div>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let currentSkills = [];
+let nextCursor = null;
+let currentSource = 'all';
+let currentCategory = '';
+let currentStatus = '';
+let searchDebounceTimer = null;
+let isLoading = false;
+
+async function fetchSkillsApi(append = false) {
+  if (isLoading) return;
+  isLoading = true;
+  
+  const searchVal = document.getElementById('search-input').value.trim();
+  const cursorParam = append && nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : '';
+  const url = `/api/skills/marketplace?source=${currentSource}&search=${encodeURIComponent(searchVal)}&category=${encodeURIComponent(currentCategory)}&status=${encodeURIComponent(currentStatus)}${cursorParam}`;
+
+  if (!append) {
+    document.getElementById('skills-grid').innerHTML = `<div style="grid-column: 1/-1; color: var(--cyan); font-family: var(--mono); padding: 40px; text-align: center;">⚡ Consultando catálogo do J.A.R.V.I.S. e ClawHub...</div>`;
+  }
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Status HTTP ' + res.status);
+    const data = await res.json();
+    
+    if (append) {
+      currentSkills = currentSkills.concat(data.skills || []);
+    } else {
+      currentSkills = data.skills || [];
+    }
+
+    nextCursor = data.next_cursor || null;
+    updateCountsAndStats(data);
+    renderGrid();
+  } catch (err) {
+    document.getElementById('skills-grid').innerHTML = `<div style="grid-column: 1/-1; color: var(--rose); font-family: var(--mono); padding: 30px; text-align: center;">Erro ao conectar com o Marketplace: ${err.message}</div>`;
+  } finally {
+    isLoading = false;
+  }
+}
+
+function updateCountsAndStats(data) {
+  let instCount = 0;
+  let availCount = 0;
+  currentSkills.forEach(s => {
+    if (s.installed) instCount++;
+    else availCount++;
+  });
+
+  document.getElementById('count-all').innerText = currentSkills.length;
+  document.getElementById('count-installed').innerText = instCount;
+  document.getElementById('count-available').innerText = availCount;
+
+  document.getElementById('showing-text').innerText = `EXIBINDO ${currentSkills.length} SKILLS`;
+  document.getElementById('sources-summary').innerText = `HERMES BUNDLE: ${data.total_hermes || 71} | CLAWHUB: MILHARES DISPONÍVEIS`;
+
+  const loadMoreBtn = document.getElementById('load-more-container');
+  if (nextCursor && (currentSource === 'clawhub' || currentSource === 'all')) {
+    loadMoreBtn.style.display = 'block';
+  } else {
+    loadMoreBtn.style.display = 'none';
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById('skills-grid');
+  if (currentSkills.length === 0) {
+    grid.innerHTML = `<div style="grid-column: 1/-1; color: var(--muted); font-family: var(--mono); padding: 40px; text-align: center;">Nenhuma skill encontrada para os critérios selecionados.</div>`;
+    return;
+  }
+
+  grid.innerHTML = currentSkills.map(s => {
+    const isHermes = s.source.includes('Hermes');
+    const badgeClass = isHermes ? 'badge-hermes' : 'badge-clawhub';
+    const cardClass = s.installed ? 'skill-card installed' : 'skill-card';
+    const actionBtn = s.installed
+      ? `<button class="btn-uninstall" onclick="toggleSkill('${s.id}', false)">DESINSTALAR</button>`
+      : `<button class="btn-install" onclick="toggleSkill('${s.id}', true)">INSTALAR SKILL</button>`;
+
+    const tagsHtml = (s.tags || []).slice(0, 3).map(t => `<span class="tag">#${t}</span>`).join('');
+    const dls = s.downloads ? `${Number(s.downloads).toLocaleString()} downloads` : 'Novo';
+
+    return `
+      <div class="${cardClass}">
+        <div>
+          <div class="card-top">
+            <div class="skill-name">${s.name}</div>
+            <span class="badge-source ${badgeClass}">${s.source}</span>
+          </div>
+          <div class="meta-row">
+            <span>📁 ${s.category} // v${s.version || '1.0'}</span>
+            <span>⭐ ${s.stars || 0} | 📥 ${dls}</span>
+          </div>
+          <div class="skill-desc">${s.description}</div>
+          <div class="tags-list">${tagsHtml}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-doc" onclick="showDoc('${s.id}')">DOCUMENTAÇÃO</button>
+          ${actionBtn}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setSourceFilter(src, btn) {
+  currentSource = src;
+  document.querySelectorAll('.source-filters .filter-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  nextCursor = null;
+  fetchSkillsApi(false);
+}
+
+function setCategoryFilter(cat, btn) {
+  currentCategory = cat;
+  document.querySelectorAll('.cat-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fetchSkillsApi(false);
+}
+
+function setStatusFilter(st, btn) {
+  currentStatus = st;
+  document.querySelectorAll('.status-filters .filter-chip').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  fetchSkillsApi(false);
+}
+
+function debounceSearch() {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    nextCursor = null;
+    fetchSkillsApi(false);
+  }, 400);
+}
+
+function loadMoreSkills() {
+  if (nextCursor) {
+    fetchSkillsApi(true);
+  }
+}
+
+async function toggleSkill(skillId, install) {
+  const endpoint = install ? '/api/skills/install' : '/api/skills/uninstall';
+  const skill = currentSkills.find(s => s.id === skillId);
+  const name = skill ? skill.name : skillId;
+
+  if (!confirm(`Deseja ${install ? 'instalar' : 'desinstalar'} a skill "${name}" no J.A.R.V.I.S.?`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: skillId })
+    });
+    const result = await res.json();
+    if (result.success) {
+      if (skill) skill.installed = install;
+      renderGrid();
+      alert(`Sucesso: ${result.message}`);
+    } else {
+      alert(`Erro: ${result.error || 'Falha ao processar skill'}`);
+    }
+  } catch (e) {
+    alert(`Erro na requisição: ${e.message}`);
+  }
+}
+
+async function showDoc(skillId) {
+  document.getElementById('modal-title').innerText = `DOCUMENTAÇÃO // ${skillId.toUpperCase()}`;
+  document.getElementById('modal-body').innerText = 'Carregando SKILL.md diretamente do repositório...';
+  document.getElementById('modal-overlay').classList.add('open');
+
+  try {
+    const res = await fetch(`/api/skills/details?id=${encodeURIComponent(skillId)}`);
+    const data = await res.json();
+    if (data.skill && data.skill.readme) {
+      document.getElementById('modal-body').innerText = data.skill.readme;
+    } else {
+      document.getElementById('modal-body').innerText = 'Nenhuma documentação detalhada encontrada para esta skill.';
+    }
+  } catch (e) {
+    document.getElementById('modal-body').innerText = `Erro ao carregar documentação: ${e.message}`;
+  }
+}
+
+function closeModal(event) {
+  if (!event || event.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => fetchSkillsApi(false));
+</script>
+</body>
+</html>

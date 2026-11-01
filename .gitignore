@@ -96,3 +96,12 @@ Thumbs.db
 
 jarvis_screen_router_zima.py
 scripts/inspect_sessions_json.py
+
+# Logs & Temp files
+*.log
+*.tmp
+*.bak
+err.txt
+out.txt
+snapshot.json
+read_hud_nav.py
