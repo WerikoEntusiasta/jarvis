@@ -102,6 +102,26 @@ def create_hud_icon() -> QIcon:
     painter.end()
     return QIcon(pixmap)
 
+def force_window_to_front(hwnd: int):
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        user32.AllowSetForegroundWindow(-1)
+        fore_hwnd = user32.GetForegroundWindow()
+        fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
+        app_thread = kernel32.GetCurrentThreadId()
+        if fore_thread and fore_thread != app_thread:
+            user32.AttachThreadInput(fore_thread, app_thread, True)
+        user32.ShowWindow(hwnd, 3)
+        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
+        user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002)
+        user32.SetForegroundWindow(hwnd)
+        user32.BringWindowToTop(hwnd)
+        if fore_thread and fore_thread != app_thread:
+            user32.AttachThreadInput(fore_thread, app_thread, False)
+    except Exception as e:
+        _log(f"force_window_to_front erro: {e}")
+
 def start_ipc_server(hud_window: JarvisHUDWindow):
     def _loop():
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -124,13 +144,7 @@ def start_ipc_server(hud_window: JarvisHUDWindow):
                         hud_window.showMaximized()
                         hud_window.raise_()
                         hud_window.activateWindow()
-                        try:
-                            hwnd = int(hud_window.winId())
-                            ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
-                            ctypes.windll.user32.ShowWindow(hwnd, 3)
-                            ctypes.windll.user32.SetForegroundWindow(hwnd)
-                        except Exception:
-                            pass
+                        force_window_to_front(int(hud_window.winId()))
                     QTimer.singleShot(0, _show_act)
                 elif b"RELOAD" in data:
                     from PyQt6.QtCore import QTimer
