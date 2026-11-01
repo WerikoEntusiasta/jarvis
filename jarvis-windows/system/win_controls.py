@@ -26,6 +26,10 @@ def _send_vk(vk_code: int):
     user32.keybd_event(vk_code, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0)
 
 APP_MAP = {
+    "google": "https://www.google.com",
+    "youtube": "https://www.youtube.com",
+    "gmail": "https://mail.google.com",
+    "whatsapp": "https://web.whatsapp.com",
     "chrome": "chrome",
     "google chrome": "chrome",
     "navegador": "chrome",
@@ -45,6 +49,24 @@ APP_MAP = {
     "discord": "discord",
     "steam": "steam"
 }
+
+def google_search(query: str, open_browser: bool = True) -> Dict[str, Any]:
+    """Abre o Google Search no navegador com o termo pesquisado e retorna status."""
+    import urllib.parse
+    encoded = urllib.parse.quote_plus(query.strip())
+    url = f"https://www.google.com/search?q={encoded}"
+    try:
+        if open_browser:
+            webbrowser.open(url)
+        return {
+            "success": True,
+            "action": "google_search",
+            "query": query,
+            "url": url,
+            "info": f"Pesquisa por '{query}' aberta no Google com sucesso."
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def open_application(app_name: str) -> Dict[str, Any]:
     norm = app_name.lower().strip()

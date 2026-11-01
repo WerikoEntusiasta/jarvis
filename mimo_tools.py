@@ -249,6 +249,21 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "google_search",
+                "description": "Abre o Google Search no navegador do PC Windows pesquisando por qualquer termo, pessoa, assunto ou dúvida (ex: 'Manoel Gomes', 'previsão do tempo', 'notícias'), além de buscar informações na web.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Termo de busca a pesquisar no Google (ex: 'Manoel Gomes')."},
+                        "open_browser": {"type": "boolean", "description": "Se deve abrir a aba de pesquisa no navegador do PC (padrão: true)."}
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "mouse_click",
                 "description": "Clica com o mouse no PC Windows (botão esquerdo, direito, meio, ou duplo clique). Se x e y forem fornecidos, move o cursor até a posição antes de clicar.",
                 "parameters": {
@@ -417,7 +432,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         if not IS_WINDOWS and name in (
             "pc_volume", "pc_media", "open_app", "close_app", "lock_pc",
             "analyze_screen", "generate_and_show_screen", "close_screen", "self_reload_hud",
-            "mouse_click", "mouse_move", "mouse_scroll",
+            "google_search", "mouse_click", "mouse_move", "mouse_scroll",
             "keyboard_type", "keyboard_press", "keyboard_hotkey"
         ):
             return _dispatch_to_windows_pc(name, args)
@@ -503,6 +518,32 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 return _dispatch_to_windows_pc("self_reload_hud", {})
             from self_evolution import self_reload_hud
             return self_reload_hud()
+
+        if name == "google_search":
+            query = str(args.get("query", "") or args.get("q", "") or args.get("termo", ""))
+            summary_info = ""
+            try:
+                import urllib.parse, urllib.request, json
+                encoded = urllib.parse.quote(query)
+                api_url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+                req = urllib.request.Request(api_url, headers={"User-Agent": "JARVIS-Assistant/5.0"})
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    ddg = json.loads(resp.read().decode("utf-8"))
+                    summary_info = ddg.get("AbstractText") or ddg.get("Definition") or ""
+            except Exception:
+                pass
+
+            if not IS_WINDOWS:
+                res = _dispatch_to_windows_pc("google_search", {"query": query, "open_browser": True})
+                if summary_info:
+                    res["resumo_web"] = summary_info
+                return res
+
+            mod = _pc_module("win_controls")
+            res = mod.google_search(query) if mod else {"ok": True, "info": f"Pesquisa por '{query}' aberta no Google."}
+            if summary_info:
+                res["resumo_web"] = summary_info
+            return res
 
         if name in ("mouse_click", "mouse_move", "mouse_scroll", "keyboard_type", "keyboard_press", "keyboard_hotkey"):
             mod = _pc_module("pc_automation")
