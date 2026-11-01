@@ -547,10 +547,11 @@ void SetDisplayMode(DisplayMode new_mode, bool force) {
         g_voice_status_until = 0;
     }
     if (g_current_mode == DisplayMode::kStandby) {
-        g_lcd.setBrightness(77); // 30% de brilho no modo Standby
+        g_lcd.setBrightness(0); // TELA APAGADA NO STANDBY (Backlight 0%)
+        g_lcd.fillScreen(TFT_BLACK);
         g_is_custom_screen_active = false;
     } else {
-        g_lcd.setBrightness(255); // 100% de brilho ao interagir/falar
+        g_lcd.setBrightness(255); // 100% DE BRILHO AO ACENDER (FALAR/TOCAR/INTERAGIR)
     }
 }
 
@@ -703,6 +704,10 @@ void FetchCatanduvaWeather() {
 }
 
 void DrawStandbyClockWeather() {
+    if (g_current_mode == DisplayMode::kStandby) {
+        // Tela apagada em Standby: backlight OFF sem render desnecessario
+        return;
+    }
     // Dashboard executivo compacto, com todos os elementos dentro da área segura circular.
     g_canvas.fillScreen(kDashboardBackground);
     g_canvas.fillCircle(120, 120, 107, kDashboardSurface);
@@ -3560,8 +3565,15 @@ if (millis() - g_last_weather_fetch > 600000) {
             } else {
                 // Toque Simples (TAP / CLIQUE)
                 if (g_current_mode == DisplayMode::kStandby) {
-                    // Toque no Relogio vai direto para o Rostinho do Jarvis!
-                    SetDisplayMode(DisplayMode::kHappy);
+                    // Ao tocar na tela apagada (Standby), acende imediatamente e ativa a escuta do J.A.R.V.I.S.
+                    g_mic_speech_active = true;
+                    g_mic_silence_frames = 0;
+                    SetDisplayMode(DisplayMode::kVoiceListening);
+                    PlayWakeBeep();
+                    if (g_web_socket.isConnected()) {
+                        g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+                    }
+                    Serial.println("[TOUCH-WAKE] Tela acesa e escuta ativada pelo toque na tela!");
                 } else if (g_current_mode == DisplayMode::kHappy) {
                     // Toque no Rostinho vai para a Iluminacao!
                     SetDisplayMode(DisplayMode::kLights);
