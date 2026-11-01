@@ -521,10 +521,10 @@
   <canvas id="organicVortexCanvas" class="absolute inset-0 pointer-events-none z-0 m-auto opacity-40"></canvas>
 
   <!-- TOP HEADER HUD -->
-  <header class="w-full h-11 px-6 flex items-center justify-between z-40 relative border-b border-blue-500/20 bg-[#030922]/60 backdrop-blur-md">
+  <header class="w-full h-11 px-5 flex items-center justify-between z-40 relative border-b border-blue-500/20 bg-[#030922]/70 backdrop-blur-md">
     <!-- Left: Title -->
     <div class="flex items-center gap-2">
-      <span class="text-cyan-400 text-xs shadow-[0_0_8px_#00f0ff]">◆</span>
+      <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]"></span>
       <span class="text-xs font-bold tracking-widest text-white uppercase font-hud">CENTRAL DE COMANDO</span>
     </div>
 
@@ -536,29 +536,34 @@
 
     <!-- Right Controls -->
     <div class="flex items-center gap-3">
-      <button onclick="toggleCinematicMode()" class="px-2.5 py-0.5 rounded-md bg-blue-950/80 hover:bg-blue-900 border border-blue-500/30 text-[10px] font-mono font-bold text-cyan-300 tracking-wider">
+      <button onclick="toggleCinematicMode()" class="px-2.5 py-0.5 rounded-md bg-blue-950/80 hover:bg-blue-900 border border-blue-500/30 text-[10px] font-mono font-bold text-cyan-300 tracking-wider transition-colors">
         CINEMA
       </button>
 
       <!-- Search Bar -->
-      <div class="relative hidden sm:block">
-        <input type="text" placeholder="Buscar..." onkeydown="if(event.key==='Enter') sendToOpenClaw(this.value)" class="w-36 px-2.5 py-1 rounded-lg bg-blue-950/60 border border-blue-500/30 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400">
+      <div class="relative hidden sm:flex items-center bg-blue-950/60 border border-blue-500/30 rounded-lg px-2.5 py-1">
+        <svg class="w-3.5 h-3.5 text-slate-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" placeholder="Buscar..." onkeydown="if(event.key==='Enter') sendToOpenClaw(this.value)" class="w-32 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none font-sans">
       </div>
 
       <!-- Quick icon toggles -->
       <div class="flex items-center gap-2 text-slate-400 text-xs">
-        <button onclick="toggleTheme()" class="hover:text-white" title="Tema">🌙</button>
-        <button onclick="openNewsModal()" class="hover:text-white relative" title="Notificações">
-          🔔
-          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 absolute -top-0.5 -right-0.5"></span>
+        <button onclick="toggleRadarRotation()" class="p-1 rounded hover:text-cyan-300 hover:bg-blue-900/40" title="Controle do Globo">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </button>
-        <button onclick="toggleFullScreen()" class="hover:text-white" title="Tela Cheia">⛶</button>
+        <button onclick="openNewsModal()" class="p-1 rounded hover:text-cyan-300 hover:bg-blue-900/40 relative" title="Notificações">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 absolute top-0 right-0 shadow-[0_0_5px_#00f0ff]"></span>
+        </button>
+        <button onclick="toggleFullScreen()" class="p-1 rounded hover:text-cyan-300 hover:bg-blue-900/40" title="Tela Cheia">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        </button>
       </div>
 
       <!-- Live Clock & Date -->
       <div class="text-right pl-2 border-l border-blue-500/20 font-mono">
-        <div id="top-digital-clock" class="text-xs font-bold text-white leading-none">14:58</div>
-        <div id="top-digital-date" class="text-[9px] text-slate-400 leading-none mt-0.5">Dom, 1 de nov de 2026</div>
+        <div id="top-digital-clock" class="text-xs font-bold text-white leading-none">08:28</div>
+        <div id="top-digital-date" class="text-[9px] text-slate-400 leading-none mt-0.5">dom., 1 de nov. de 2026</div>
       </div>
     </div>
   </header>
@@ -569,7 +574,7 @@
     <!-- ========================================== -->
     <!-- 1. LEFT SIDEBAR (WORKSPACE PESSOAL)        -->
     <!-- ========================================== -->
-    <aside class="w-[230px] shrink-0 h-full border-r border-blue-500/20 bg-[#030922]/75 backdrop-blur-xl p-3 flex flex-col justify-between z-30">
+    <aside class="w-[225px] shrink-0 h-full border-r border-blue-500/20 bg-[#030922]/80 backdrop-blur-xl p-3 flex flex-col justify-between z-30 select-none">
       <div>
         <!-- Top Logo -->
         <div class="flex items-center gap-2.5 pb-3 border-b border-blue-500/20">
@@ -580,53 +585,89 @@
           </div>
           <div>
             <div class="text-sm font-extrabold tracking-widest text-white leading-none font-hud">JARVIS</div>
-            <div class="text-[8.5px] font-semibold tracking-[0.25em] text-blue-400 uppercase leading-none mt-1">INTELLIGENT SYSTEM</div>
+            <div class="text-[8.5px] font-semibold tracking-[0.22em] text-cyan-400 uppercase leading-none mt-1">INTELLIGENT SYSTEM</div>
           </div>
         </div>
 
         <!-- Section Label -->
-        <div class="text-[9.5px] font-mono font-bold tracking-wider text-blue-400/70 uppercase mt-3 mb-1 px-2">
+        <div class="text-[9px] font-mono font-bold tracking-wider text-blue-400/80 uppercase mt-3 mb-1 px-2">
           WORKSPACE PESSOAL
         </div>
 
         <!-- Menu Navigation -->
         <nav class="space-y-0.5" id="sidebar-nav-menu">
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, listar minhas tarefas pendentes')">
-            <span class="flex items-center gap-2"><span>☑</span> Lista de Tarefas</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              <span>Tarefas</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, verificar minha caixa de e-mails')">
-            <span class="flex items-center gap-2"><span>✉</span> E-mails</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              <span>E-mails</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="openNewsModal()">
-            <span class="flex items-center gap-2"><span>📰</span> Notícias</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              <span>Notícias</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, relatório e cotações de finanças')">
-            <span class="flex items-center gap-2"><span>📈</span> Finanças</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              <span>Finanças</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, consultar compromissos no calendário')">
-            <span class="flex items-center gap-2"><span>📅</span> Calendário</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+              <span>Calendário</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, listar documentos recentes')">
-            <span class="flex items-center gap-2"><span>📄</span> Documentos</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>Documentos</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, listar integrações ativas do sistema')">
-            <span class="flex items-center gap-2"><span>🔗</span> Integrações</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <span>Integrações</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, tocar músicas no Spotify')">
-            <span class="flex items-center gap-2"><span>🔊</span> Spotify</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c3-1 6-1 8 0"/><path d="M7 14.5c4-1 7-1 10 0"/><path d="M9 8.5c3-1 5-1 7 0"/></svg>
+              <span>Spotify</span>
+            </span>
           </div>
           <div class="jarvis-nav-item active" onclick="sendToOpenClaw('Jarvis, status das automações do sistema')">
-            <span class="flex items-center gap-2"><span>⚡</span> Automações</span>
-            <span class="text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span class="font-semibold text-white">Automações</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, status dos projetos ativos')">
-            <span class="flex items-center gap-2"><span>📁</span> Projetos</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Projetos</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, status dos dispositivos da casa inteligente')">
-            <span class="flex items-center gap-2"><span>🏠</span> Casa Inteligente</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <span>Casa Inteligente</span>
+            </span>
           </div>
           <div class="jarvis-nav-item" onclick="sendToOpenClaw('Jarvis, abrir configurações do sistema')">
-            <span class="flex items-center gap-2"><span>⚙</span> Configurações</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42m12.72-12.72 1.42-1.42"/></svg>
+              <span>Configurações</span>
+            </span>
           </div>
         </nav>
       </div>
@@ -640,14 +681,16 @@
         <div class="flex items-center justify-between p-2 rounded-xl bg-blue-950/40 border border-blue-500/20">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center font-bold text-slate-950 text-xs shadow-[0_0_8px_rgba(0,210,255,0.5)]">
-              W
+              M
             </div>
             <div>
-              <div class="text-[11px] font-bold text-white leading-tight">Werik</div>
-              <div class="text-[8.5px] text-slate-400 leading-tight">Administrador • Mark VII</div>
+              <div class="text-[11px] font-bold text-white leading-tight">Marcelo</div>
+              <div class="text-[8.5px] text-slate-400 leading-tight">Administrador • Sessão V5</div>
             </div>
           </div>
-          <button class="text-slate-400 hover:text-cyan-300 text-xs">ⓘ</button>
+          <button class="text-slate-400 hover:text-cyan-300 p-1" title="Informações do Usuário">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          </button>
         </div>
       </div>
     </aside>
@@ -655,35 +698,20 @@
     <!-- ========================================== -->
     <!-- 2. CENTER STAGE (3D GLOBE + 4 HOLO CARDS)  -->
     <!-- ========================================== -->
-    <main class="flex-1 h-full flex flex-col items-center justify-between p-4 relative overflow-hidden">
+    <main class="flex-1 h-full flex flex-col items-center justify-between p-3 relative overflow-hidden">
       
       <!-- Top Center Curved Arc Projection -->
-      <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-[650px] h-[140px] rounded-[100%] border-t-2 border-cyan-400/80 shadow-[0_0_35px_rgba(0,210,255,0.6)] pointer-events-none z-10 opacity-75"></div>
-      <div class="absolute -top-16 left-1/2 -translate-x-1/2 w-[780px] h-[180px] rounded-[100%] border-t border-blue-500/40 shadow-[0_0_50px_rgba(0,100,255,0.3)] pointer-events-none z-10 opacity-50"></div>
+      <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[100px] border-b border-cyan-400/30 rounded-b-[100%] pointer-events-none shadow-[0_15px_30px_rgba(0,180,255,0.12)]"></div>
 
-      <!-- DYNAMIC L.A.Y.A. HOLOGRAPHIC OVERLAY VIEWPORT -->
-      <div id="laya-autonomous-stage" class="absolute inset-4 z-40 bg-slate-950/92 backdrop-blur-2xl p-6 rounded-2xl hidden opacity-0 flex flex-col border border-cyan-400/40 shadow-[0_0_40px_rgba(0,210,255,0.3)] transition-all duration-300">
-        <div class="flex items-center justify-between pb-3 border-b border-cyan-500/30 mb-4">
-          <div id="laya-engine-indicator" class="text-xs font-mono font-bold tracking-widest text-cyan-300 uppercase flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-            L.A.Y.A. GENERATIVE HUD
-          </div>
-          <button onclick="closeLayaStage()" class="px-2.5 py-1 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 hover:text-white text-xs font-mono">
-            ✕ [ESC]
-          </button>
-        </div>
-        <div id="laya-screen-content" class="flex-1 w-full overflow-auto"></div>
-      </div>
+      <!-- Central Stage Viewport (Cards Flanking 3D Globe) -->
+      <div class="w-full flex-1 flex items-center justify-between max-w-5xl px-4 z-10 relative">
 
-      <!-- 3D Holographic Stage Area (Globe flanked by the 4 cards) -->
-      <div class="w-full flex-1 flex items-center justify-between relative px-2 max-w-6xl mx-auto">
-        
         <!-- Left Flanking Cards -->
         <div class="flex flex-col gap-4 z-20">
           <!-- Card 1: DESEMPENHO -->
           <div class="jarvis-holo-card p-3.5 rounded-2xl w-52">
             <div class="flex items-center justify-between text-[10.5px] font-mono font-bold text-slate-300 pb-1.5 border-b border-blue-500/20">
-              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> DESEMPENHO</span>
+              <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#00f0ff]"></span> DESEMPENHO</span>
               <span class="text-[8.5px] px-1.5 py-0.2 rounded bg-blue-900/60 text-blue-300 border border-blue-500/30">DEMO</span>
             </div>
             <div class="text-2xl font-bold text-cyan-300 mt-2 tracking-wide font-mono">+27%</div>
@@ -692,10 +720,10 @@
             <div class="flex items-end gap-1.5 h-9 w-full pt-1 border-t border-blue-500/20">
               <div class="flex-1 bg-cyan-500/30 rounded-t h-[35%] hover:bg-cyan-400 transition-all"></div>
               <div class="flex-1 bg-cyan-500/45 rounded-t h-[55%] hover:bg-cyan-400 transition-all"></div>
-              <div class="flex-1 bg-cyan-500/60 rounded-t h-[75%] hover:bg-cyan-400 transition-all"></div>
-              <div class="flex-1 bg-cyan-500/40 rounded-t h-[45%] hover:bg-cyan-400 transition-all"></div>
-              <div class="flex-1 bg-cyan-400/80 rounded-t h-[85%] hover:bg-cyan-400 transition-all shadow-[0_0_8px_#00f0ff]"></div>
-              <div class="flex-1 bg-cyan-400 rounded-t h-[100%] hover:bg-cyan-400 transition-all shadow-[0_0_12px_#00f0ff]"></div>
+              <div class="flex-1 bg-cyan-500/60 rounded-t h-[40%] hover:bg-cyan-400 transition-all"></div>
+              <div class="flex-1 bg-cyan-400/80 rounded-t h-[75%] hover:bg-cyan-300 transition-all shadow-[0_0_8px_rgba(0,210,255,0.4)]"></div>
+              <div class="flex-1 bg-cyan-500/50 rounded-t h-[60%] hover:bg-cyan-400 transition-all"></div>
+              <div class="flex-1 bg-cyan-400 rounded-t h-[95%] shadow-[0_0_10px_rgba(0,210,255,0.6)]"></div>
             </div>
           </div>
 
@@ -732,10 +760,10 @@
         </div>
 
         <!-- Central 3D Earth Globe with Orbital Rings -->
-        <div class="relative w-[440px] h-[440px] flex items-center justify-center mx-auto my-auto">
+        <div class="relative w-[420px] h-[420px] flex items-center justify-center mx-auto my-auto">
           <!-- Deep Blue Radial Halo -->
-          <div class="absolute w-[420px] h-[420px] rounded-full bg-cyan-500/12 blur-[50px] pointer-events-none"></div>
-          <div class="absolute w-[320px] h-[320px] rounded-full bg-blue-600/20 blur-[35px] pointer-events-none"></div>
+          <div class="absolute w-[400px] h-[400px] rounded-full bg-cyan-500/15 blur-[55px] pointer-events-none"></div>
+          <div class="absolute w-[300px] h-[300px] rounded-full bg-blue-600/25 blur-[35px] pointer-events-none"></div>
 
           <!-- SVG Satellite Orbital Trajectories -->
           <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" viewBox="0 0 500 500">
@@ -750,7 +778,7 @@
           </svg>
 
           <!-- 3D COBE Canvas Container -->
-          <div id="holo-3d-canvas-container" class="relative w-[360px] h-[360px] flex items-center justify-center z-10 cursor-grab active:cursor-grabbing">
+          <div id="holo-3d-canvas-container" class="relative w-[350px] h-[350px] flex items-center justify-center z-10 cursor-grab active:cursor-grabbing">
             <canvas id="cobe-globe-canvas" class="block mx-auto"></canvas>
             <div id="cobe-flight-overlays" class="absolute inset-0 pointer-events-none z-10"></div>
           </div>
@@ -808,13 +836,13 @@
       <!-- Holographic Floor Pedestal & Status Rings -->
       <div class="relative w-full max-w-xl flex flex-col items-center pointer-events-none mt-1">
         <div class="px-5 py-1.5 rounded-full bg-blue-950/80 border border-cyan-400/50 shadow-[0_0_20px_rgba(0,210,255,0.35)] backdrop-blur-md flex items-center gap-2 z-20 pointer-events-auto">
-          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+          <svg class="w-3.5 h-3.5 text-cyan-400 animate-pulse" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           <span class="text-xs font-mono font-bold text-white tracking-widest uppercase">NÚCLEO JARVIS</span>
           <span class="text-slate-400 text-xs">•</span>
           <span class="text-[11px] text-cyan-300 font-mono" id="voice-indicator-status-text">Microfone ativo - ouvindo você</span>
         </div>
 
-        <div class="relative w-[480px] h-[50px] flex items-center justify-center">
+        <div class="relative w-[480px] h-[45px] flex items-center justify-center">
           <div class="absolute inset-0 rounded-[100%] border border-cyan-400/30 shadow-[0_0_15px_rgba(0,210,255,0.2)]"></div>
           <div class="absolute inset-2 rounded-[100%] border border-blue-500/25"></div>
           <div class="absolute inset-3 rounded-[100%] border border-dashed border-cyan-300/40 animate-spin" style="animation-duration: 25s;"></div>
@@ -843,15 +871,15 @@
         <!-- Status Chips -->
         <div class="flex items-center gap-3 mt-2">
           <div id="status-chip-thinking" class="jarvis-status-chip">
-            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><path d="M9 21h6"/></svg>
             <span>Pensando</span>
           </div>
           <div id="status-chip-executing" class="jarvis-status-chip">
-            <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+            <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <span>Executando</span>
           </div>
           <div id="status-chip-verifying" class="jarvis-status-chip">
-            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             <span>Verificando</span>
           </div>
         </div>
@@ -860,17 +888,17 @@
     </main>
 
     <!-- ========================================== -->
-    <!-- 3. RIGHT PANEL (EGM CENTRAL PESSOAL)       -->
+    <!-- 3. RIGHT PANEL (ECM CENTRAL PESSOAL)       -->
     <!-- ========================================== -->
-    <aside class="w-[300px] shrink-0 h-full border-l border-blue-500/20 bg-[#030922]/75 backdrop-blur-xl p-4 flex flex-col justify-between z-30">
+    <aside class="w-[290px] shrink-0 h-full border-l border-blue-500/20 bg-[#030922]/80 backdrop-blur-xl p-4 flex flex-col justify-between z-30 select-none">
       <div>
         <!-- Header Tag -->
         <div class="text-[9.5px] font-mono font-bold tracking-widest text-cyan-400 flex items-center gap-1.5 mb-1 uppercase">
           <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]"></span>
-          EGM CENTRAL PESSOAL
+          ECM CENTRAL PESSOAL
         </div>
         <div class="text-xl font-extrabold text-white font-hud tracking-wide mt-1">
-          Olá, <span class="text-cyan-400">Senhor Werik</span>
+          Olá, <span class="text-cyan-400">Marcelo</span>
         </div>
         <div class="text-[11px] text-slate-400 mt-0.5">
           Como posso te ajudar hoje?
@@ -893,41 +921,68 @@
         <!-- Quick Action Buttons -->
         <div class="space-y-1.5 mt-3">
           <button onclick="sendToOpenClaw('Jarvis, verificar meus emails e agenda do dia')" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>✉</span> E-mails e Agenda</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+              <span>E-mails e Agenda</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onclick="sendToOpenClaw('Jarvis, abrir WhatsApp e mensagens')" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>💬</span> WhatsApp e Ligações</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <span>WhatsApp e Ligações</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onclick="sendToOpenClaw('Jarvis, tocar música no Spotify')" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>🔊</span> Spotify e Música</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c3-1 6-1 8 0"/><path d="M7 14.5c4-1 7-1 10 0"/><path d="M9 8.5c3-1 5-1 7 0"/></svg>
+              <span>Spotify e Música</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onclick="sendToOpenClaw('Jarvis, listar documentos e arquivos recentes')" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>📄</span> Documentos e Arquivos</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-cyan-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>Documentos e Arquivos</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onclick="sendToOpenClaw('Jarvis, apresentar análise e estratégia operacional')" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>📊</span> Análise e Estratégia</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>
+              <span>Análise e Estratégia</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
           <button onclick="openNewsModal()" class="jarvis-action-btn">
-            <span class="flex items-center gap-2"><span>📰</span> Notícias e Mercado</span>
-            <span class="text-cyan-400 text-xs">›</span>
+            <span class="flex items-center gap-2.5">
+              <svg class="w-3.5 h-3.5 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              <span>Notícias e Mercado</span>
+            </span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
       </div>
 
       <!-- Bottom Toggles -->
       <div class="pt-3 border-t border-blue-500/20 space-y-1.5 text-xs">
+        <div class="text-[9px] text-slate-400 text-center italic mb-1">
+          Você no controle. Sempre.
+        </div>
         <button onclick="toggleVisualExperience()" class="w-full py-1.5 px-2.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/20 text-slate-300 hover:text-white flex items-center justify-between transition-all">
-          <span class="flex items-center gap-2"><span>👁</span> Ajustar experiência visual</span>
-          <span class="text-cyan-400">›</span>
+          <span class="flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <span>Ajustar experiência visual</span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
         <button onclick="toggleRadarRotation()" class="w-full py-1.5 px-2.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-500/20 text-slate-300 hover:text-white flex items-center justify-between transition-all">
-          <span class="flex items-center gap-2"><span>🌐</span> Planeta e voz</span>
-          <span class="text-cyan-400">›</span>
+          <span class="flex items-center gap-2">
+            <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>Planeta e voz</span>
+          </span>
+          <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
     </aside>
@@ -937,56 +992,55 @@
   <!-- ========================================== -->
   <!-- 4. BOTTOM APP DOCK (PERSISTENT LAUNCHER)   -->
   <!-- ========================================== -->
-  <footer class="w-full px-4 pb-2 pt-1 z-30">
+  <footer class="w-full px-4 pb-2 pt-1 z-30 select-none">
     <div class="jarvis-bottom-dock flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-[#040b22]/90 border border-blue-500/30 backdrop-blur-xl shadow-[0_0_30px_rgba(0,100,255,0.2)]">
       <button onclick="sendToOpenClaw('Jarvis, ler meus novos emails')" class="jarvis-dock-btn">
-        <div class="text-sm">✉</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">E-MAILS</div>
+        <svg class="w-4 h-4 text-blue-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">E-MAILS</div>
         <div class="text-[8px] text-slate-400 leading-tight">Organize sua caixa</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, o que tenho na agenda?')" class="jarvis-dock-btn">
-        <div class="text-sm">📅</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">AGENDA</div>
+        <svg class="w-4 h-4 text-indigo-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">AGENDA</div>
         <div class="text-[8px] text-slate-400 leading-tight">Seus compromissos</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, verificar conversas no WhatsApp')" class="jarvis-dock-btn">
-        <div class="text-sm">💬</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">WHATSAPP</div>
+        <svg class="w-4 h-4 text-emerald-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">WHATSAPP</div>
         <div class="text-[8px] text-slate-400 leading-tight">Conecte e converse</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, tocar minhas músicas no Spotify')" class="jarvis-dock-btn">
-        <div class="text-sm">🎵</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">SPOTIFY</div>
+        <svg class="w-4 h-4 text-emerald-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c3-1 6-1 8 0"/><path d="M7 14.5c4-1 7-1 10 0"/><path d="M9 8.5c3-1 5-1 7 0"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">SPOTIFY</div>
         <div class="text-[8px] text-slate-400 leading-tight">Suas músicas</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, acessar documentos')" class="jarvis-dock-btn">
-        <div class="text-sm">📄</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">DOCUMENTOS</div>
+        <svg class="w-4 h-4 text-cyan-300 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">DOCUMENTOS</div>
         <div class="text-[8px] text-slate-400 leading-tight">Acesse seus arquivos</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, relatório financeiro e cotações')" class="jarvis-dock-btn">
-        <div class="text-sm">📈</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">FINANÇAS</div>
+        <svg class="w-4 h-4 text-emerald-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">FINANÇAS</div>
         <div class="text-[8px] text-slate-400 leading-tight">Controle e insights</div>
       </button>
       <button onclick="openNewsModal()" class="jarvis-dock-btn">
-        <div class="text-sm">📰</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">NOTÍCIAS</div>
+        <svg class="w-4 h-4 text-sky-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">NOTÍCIAS</div>
         <div class="text-[8px] text-slate-400 leading-tight">Seu resumo diário</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, listar status das automações')" class="jarvis-dock-btn">
-        <div class="text-sm">⚡</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">AUTOMAÇÕES</div>
+        <svg class="w-4 h-4 text-cyan-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">AUTOMAÇÕES</div>
         <div class="text-[8px] text-slate-400 leading-tight">Deixe no automático</div>
       </button>
       <button onclick="sendToOpenClaw('Jarvis, status dos dispositivos da casa')" class="jarvis-dock-btn">
-        <div class="text-sm">🏠</div>
-        <div class="font-bold text-white text-[10px] leading-tight mt-0.5">CASA INTELIGENTE</div>
-        <div class="text-[8px] text-slate-400 leading-tight">Sua casa na sua mão</div>
+        <svg class="w-4 h-4 text-blue-400 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <div class="font-bold text-white text-[10px] leading-tight mt-1">CASA INTELIGENTE</div>
+        <div class="text-[8px] text-slate-400 leading-tight">Sua casa na palma</div>
       </button>
     </div>
   </footer>
-
 
   <!-- PLAYER DE ÁUDIO OCULTO PARA ANÁLISE DE ESPECTRO EM TEMPO REAL -->
   <audio id="jarvis-audio-player" class="hidden" preload="auto" crossorigin="anonymous"></audio>
