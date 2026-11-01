@@ -246,7 +246,7 @@ PREROLL_SEC = 0.3
 
 WAKE_WORDS = ("jarvis", "jervis", "javis", "jarves", "jarviz", "jardis", "joves", "javes", "jovis", "jairz", "charvis", "iarvis", "yarvis", "darvis", "jarvi", "jarve", "hey jarvis", "ei jarvis", "oi jarvis", "j.a.r.v.i.s.")
 
-FOLLOWUP_SEC = float(os.environ.get("WAKE_FOLLOWUP_SEC", "25.0"))
+FOLLOWUP_SEC = float(os.environ.get("WAKE_FOLLOWUP_SEC", "8.0"))
 
 wake_state: Dict[str, float] = {}
 
@@ -1643,12 +1643,13 @@ async def process_utterance(ws: web.WebSocketResponse, device_id: str, pcm: byte
             # processa diretamente mesmo que não tenha dito a palavra "Jarvis" explicitamente!
             direct_intent = bool(parse_lighting_intent(text) or parse_alexa_intent(text) or parse_timer_alarm_intent(text) or parse_windows_intent(text))
 
-            # Se a esfera está em repouso, não falou "Jarvis", não é comando direto e tem poucas palavras aleatórias:
-            if not has_wake and not is_awake and not direct_intent and len(text.strip().split()) <= 2:
+            # Se a esfera está em repouso, não falou "Jarvis" e não é comando direto: IGNORA SEMPRE!
+            if not has_wake and not is_awake and not direct_intent:
                 logging.info(f"[VOZ] {device_id}: Ignorado silenciosamente (repouso sem 'Jarvis' e sem comando direto: {text!r}).")
+                if was_awake_at_start:
+                    await ws.send_str(json.dumps({"type": "emotion", "emotion": "standby"}))
                 return
 
-            wake_state[device_id] = now
 
             if has_wake:
                 wake_state[device_id] = now
@@ -1897,8 +1898,6 @@ def handle_binary(ws: web.WebSocketResponse, device_id: str, data: bytes):
 
     active_vad = 1200 if (time.time() - wake_state.get(device_id, 0.0) <= FOLLOWUP_SEC) else VAD_RMS
     if rms >= active_vad:
-        if time.time() - wake_state.get(device_id, 0.0) <= FOLLOWUP_SEC:
-            wake_state[device_id] = now
         st["speaking"] = True
         st["silence_start"] = 0.0
         st["buf"].extend(data)
