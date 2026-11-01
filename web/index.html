@@ -839,7 +839,10 @@
           <svg class="w-3.5 h-3.5 text-cyan-400 animate-pulse" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           <span class="text-xs font-mono font-bold text-white tracking-widest uppercase">NÚCLEO JARVIS</span>
           <span class="text-slate-400 text-xs">•</span>
+          <span id="jarvis-state-text" class="text-[10px] font-mono text-cyan-400 font-bold tracking-wider">ONLINE</span>
+          <span class="text-slate-400 text-xs">•</span>
           <span class="text-[11px] text-cyan-300 font-mono" id="voice-indicator-status-text">Microfone ativo - ouvindo você</span>
+          <span id="voice-status" class="hidden"></span>
         </div>
 
         <div class="relative w-[480px] h-[45px] flex items-center justify-center">
@@ -851,14 +854,20 @@
             ESCUTANDO microfone ativo - ouvindo você
           </div>
         </div>
+
+        <!-- Live Subtitle Display -->
+        <div id="live-subtitle" class="text-center text-xs text-cyan-200 font-medium max-w-xl mx-auto my-0.5 tracking-wide z-20 pointer-events-auto min-h-[18px]">
+          "Aguardando instrução..."
+        </div>
       </div>
 
       <!-- Center Command Bar & Status Chips -->
       <div class="w-full max-w-2xl flex flex-col items-center z-30 mb-1">
         <div class="w-full flex items-center gap-3 px-3 py-2 rounded-2xl bg-[#061233]/90 border border-cyan-400/50 shadow-[0_0_25px_rgba(0,180,255,0.35)] backdrop-blur-xl">
-          <!-- Microphone Button -->
-          <button id="mic-btn" onclick="manualMicToggle()" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_15px_rgba(0,210,255,0.6)] hover:scale-105 active:scale-95 transition-all">
-            <svg class="w-5 h-5 text-slate-950" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+          <!-- Microphone Button with Halo -->
+          <button id="mic-btn" onclick="manualMicToggle()" class="relative w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 text-slate-950 flex items-center justify-center font-bold shadow-[0_0_15px_rgba(0,210,255,0.6)] hover:scale-105 active:scale-95 transition-all">
+            <div id="mic-halo" class="absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse pointer-events-none"></div>
+            <svg class="w-5 h-5 text-slate-950 relative z-10" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
           </button>
           <!-- Text Input -->
           <input id="user-input" type="text" placeholder="Fale com o JARVIS..." onkeydown="if(event.key==='Enter') sendToOpenClaw()" class="flex-1 bg-transparent border-none text-white text-sm placeholder-slate-400 focus:outline-none font-medium">
@@ -870,20 +879,27 @@
 
         <!-- Status Chips -->
         <div class="flex items-center gap-3 mt-2">
-          <div id="status-chip-thinking" class="jarvis-status-chip">
+          <div id="status-chip-thinking" class="jarvis-status-chip transition-all duration-300">
             <svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><path d="M9 21h6"/></svg>
             <span>Pensando</span>
           </div>
-          <div id="status-chip-executing" class="jarvis-status-chip">
+          <div id="status-chip-executing" class="jarvis-status-chip transition-all duration-300">
             <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <span>Executando</span>
           </div>
-          <div id="status-chip-verifying" class="jarvis-status-chip">
+          <div id="status-chip-verifying" class="jarvis-status-chip transition-all duration-300">
             <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             <span>Verificando</span>
           </div>
         </div>
       </div>
+
+      <!-- Hidden Fallback Containers for Legacy Widgets -->
+      <div id="jarvis-visual-stage" class="hidden"></div>
+      <div id="card-custom" class="hidden"></div>
+      <div id="card-news" class="hidden"></div>
+      <div id="weather-temp" class="hidden"></div>
+      <div id="live-agent-finance-notes" class="hidden"></div>
 
     </main>
 
@@ -1831,8 +1847,8 @@
       jarvisAudioEl.onplay = () => {
         isJarvisSpeaking = true;
         isSpeakingOrListening = true;
-        document.getElementById('jarvis-state-text').innerText = 'F A L A N D O';
-        document.getElementById('mic-halo').className = 'absolute -inset-1.5 rounded-full bg-cyan-400/40 blur-md animate-ping';
+        const _st = document.getElementById('jarvis-state-text'); if (_st) _st.innerText = 'F A L A N D O';
+        const _mh = document.getElementById('mic-halo'); if (_mh) _mh.className = 'absolute -inset-1.5 rounded-full bg-cyan-400/40 blur-md animate-ping';
         if (voiceStatusActive === 'success' && voiceStatusTimer) {
           clearTimeout(voiceStatusTimer);
           voiceStatusTimer = null;
@@ -1841,8 +1857,8 @@
 
       jarvisAudioEl.onended = () => {
         liveOutputAudioLevel = 0.0;
-        document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
-        document.getElementById('mic-halo').className = 'absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse';
+        const _st2 = document.getElementById('jarvis-state-text'); if (_st2) _st2.innerText = 'O N L I N E';
+        const _mh2 = document.getElementById('mic-halo'); if (_mh2) _mh2.className = 'absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse';
         try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) {}
         // Anti-Echo Guard: 400ms de amortecimento acústico para dissipar eco na sala
         setTimeout(() => {
@@ -4052,6 +4068,15 @@
       }, 2500);
     }
 
+    
+    window.showJarvisToast = function(msg) {
+      console.log("[J.A.R.V.I.S. Toast]", msg);
+      const sub = document.getElementById('live-subtitle');
+      if (sub && msg) sub.innerText = `"${msg.replace(/^Senhor:\s*|^J\.A\.R\.V\.I\.S\.:\s*/, '')}"`;
+      const statusText = document.getElementById('voice-indicator-status-text');
+      if (statusText && msg) statusText.innerText = msg;
+    };
+
     function showHudAlert(title, message, level = 'aviso') {
       const banner = document.getElementById('hud-alert-banner');
       if (!banner) return;
@@ -5054,7 +5079,7 @@
       // MODO NATIVO (App Windows): intercepta comandos do sistema antes do núcleo LLM
       if (await tryNativeCommand(val)) {
         if (fromVoice) setVoiceStatus('success', 'Comando executado.');
-        else document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
+        else const _st2 = document.getElementById('jarvis-state-text'); if (_st2) _st2.innerText = 'O N L I N E';
         isProcessing = false;
         activeVoiceCommand = '';
         processNextVoiceCommand();
@@ -5064,14 +5089,15 @@
       if (fromVoice) {
         setVoiceStatus('sending', 'Enviando sua fala ao núcleo Jarvis...');
       } else {
-        document.getElementById('jarvis-state-text').innerText = 'P E N S A N D O';
-        document.getElementById('live-subtitle').innerText = `"Aguardando envio..."`;
+        const _stP = document.getElementById('jarvis-state-text'); if (_stP) _stP.innerText = 'P E N S A N D O';
+        const _chipT = document.getElementById('status-chip-thinking'); if (_chipT) _chipT.style.borderColor = '#00f0ff';
+        const _ls1 = document.getElementById('live-subtitle'); if (_ls1) _ls1.innerText = `"Aguardando envio..."`;
       }
 
       // Pequena pausa para o visor mostrar o envio sem atrasar a fala.
       await new Promise(resolve => setTimeout(resolve, 50));
       if (fromVoice) setVoiceStatus('thinking', 'O núcleo recebeu sua fala e está preparando a resposta...');
-      else document.getElementById('live-subtitle').innerText = `"Processando instrução com o núcleo Jarvis..."`;
+      else const _ls2 = document.getElementById('live-subtitle'); if (_ls2) _ls2.innerText = `"Processando instrução com o núcleo Jarvis..."`;
 
       try {
         const res = await fetch('/api/chat', {
@@ -5099,7 +5125,9 @@
             subtitleText = subtitleText.substring(0, 95).trim() + '...';
           }
         }
-        document.getElementById('live-subtitle').innerText = `"${subtitleText}"`;
+        const _ls3 = document.getElementById('live-subtitle'); if (_ls3) _ls3.innerText = `"${subtitleText}"`;
+        const _chipE = document.getElementById('status-chip-executing'); if (_chipE) _chipE.style.borderColor = '#38bdf8';
+        const _chipV = document.getElementById('status-chip-verifying'); if (_chipV) _chipV.style.borderColor = '#34d399';
         
         // L.A.Y.A. SOBERANA: Se a IA generativa arquitetou uma tela do zero, exibe-a com exclusividade total
         if (data.laya_screen) {
@@ -5238,7 +5266,7 @@
           if (fromVoice) setVoiceStatus('error', 'Não consegui confirmar o envio ao núcleo. Tente novamente.');
           else {
             document.getElementById('live-subtitle').innerText = `"Erro na comunicação com o Núcleo Jarvis, Senhor Werik."`;
-            document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
+            const _st2 = document.getElementById('jarvis-state-text'); if (_st2) _st2.innerText = 'O N L I N E';
           }
         }
         return false;
@@ -5327,13 +5355,13 @@
           if (isVoiceActive) {
             hasUserSpoken = true;
             lastVoiceDetectedTime = now;
-            document.getElementById('jarvis-state-text').innerText = 'O U V I N D O';
+            const _stOuv = document.getElementById('jarvis-state-text'); if (_stOuv) _stOuv.innerText = 'O U V I N D O';
           } else if (hasUserSpoken) {
             // A pessoa falou e agora parou de falar!
             const silenceElapsed = now - lastVoiceDetectedTime;
             if (silenceElapsed >= SILENCE_TIMEOUT_MS) {
               console.log(`[VAD RMS] Silêncio de ${silenceElapsed}ms detectado após a fala. Enviando agora!`);
-              document.getElementById('jarvis-state-text').innerText = 'E N V I A N D O';
+              const _stEnv = document.getElementById('jarvis-state-text'); if (_stEnv) _stEnv.innerText = 'E N V I A N D O';
               stopAudioRecordingAndSend();
               return;
             }
@@ -5388,7 +5416,7 @@
           }
 
           document.getElementById('mic-btn').classList.remove('bg-rose-950', 'border-rose-400');
-          document.getElementById('mic-halo').className = 'absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse';
+          const _mh2 = document.getElementById('mic-halo'); if (_mh2) _mh2.className = 'absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse';
 
           // Libera o microfone assim que a captura termina; transcrição e núcleo seguem em segundo plano.
           stream.getTracks().forEach(track => track.stop());
@@ -5398,8 +5426,9 @@
             return;
           }
 
-          if (!hasUserSpoken) {
-            setVoiceStatus('error', 'Não detectei uma fala. Quando voltar ao relógio, tente novamente.');
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          if (!hasUserSpoken && audioBlob.size <= 1500) {
+            setVoiceStatus('error', 'Não detectei uma fala. Tente novamente.');
             return;
           }
 
@@ -5443,8 +5472,8 @@
         isRecordingAudio = true;
         isSpeakingOrListening = true;
         setVoiceStatus('listening', 'Pode falar. Estou ouvindo você.');
-        document.getElementById('mic-btn').classList.add('bg-rose-950', 'border-rose-400');
-        document.getElementById('mic-halo').className = 'absolute -inset-2 rounded-full bg-rose-500/50 blur-lg animate-ping';
+        const _mb = document.getElementById('mic-btn'); if (_mb) _mb.classList.add('bg-rose-950', 'border-rose-400');
+        const _mh3 = document.getElementById('mic-halo'); if (_mh3) _mh3.className = 'absolute -inset-2 rounded-full bg-rose-500/50 blur-lg animate-ping';
         
         startVadMonitoring(stream);
       } catch (err) {
@@ -5553,7 +5582,7 @@
           speechSilenceTimer = setTimeout(() => {
             if (isAwake && isRecordingAudio && hasUserSpoken) {
               console.log("[Speech Engine VAD] 1.5s de silêncio pós-fala detectado. Enviando:", cleanCommand);
-              document.getElementById('jarvis-state-text').innerText = 'E N V I A N D O';
+              const _stEnv = document.getElementById('jarvis-state-text'); if (_stEnv) _stEnv.innerText = 'E N V I A N D O';
               stopAudioRecordingAndSend();
             }
           }, 1500);
