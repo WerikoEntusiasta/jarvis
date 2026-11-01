@@ -180,7 +180,69 @@ if IS_WINDOWS:
             "type": "function",
             "function": {
                 "name": "close_screen",
-                "description": "Fecha a tela dinâmica aberta pela L.A.Y.A. e restaura o núcleo e cards originais do HUD.",
+                "description": "Fecha a tela dinamica aberta pela L.A.Y.A. e restaura o nucleo e cards originais do HUD.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_read_code",
+                "description": "Auto-programacao: le arquivos-fonte do proprio J.A.R.V.I.S. (codigo, HUD, agentes, firmware, etc.) para auto-inspecao e auto-programacao.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Caminho relativo do arquivo (ex: 'web/index.html', 'self_evolution.py', 'jarvis-windows/main.py', 'agents/SOUL.md')."},
+                        "start_line": {"type": "integer", "description": "Linha inicial a ler (padrao 1)."},
+                        "end_line": {"type": "integer", "description": "Linha final a ler (padrao 500)."}
+                    },
+                    "required": ["file_path"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_modify_code",
+                "description": "Auto-programacao: altera o proprio codigo do J.A.R.V.I.S. aplicando substituicao cirurgica de texto (search & replace). Use sempre que o Senhor Werik pedir para consertar bugs, alterar telas, melhorar lógicas ou adicionar recursos.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Caminho relativo do arquivo a ser modificado."},
+                        "search_target": {"type": "string", "description": "Trecho exato de codigo existente a ser substituido."},
+                        "replacement": {"type": "string", "description": "Novo codigo substituto."}
+                    },
+                    "required": ["file_path", "search_target", "replacement"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_git_sync",
+                "description": "Auto-programacao: sincroniza, commita e envia (git commit & push) as melhorias que voce fez no seu codigo diretamente para o repositorio central soberano no GitHub (origin/main).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "commit_message": {"type": "string", "description": "Mensagem descritiva do commit (ex: 'feat: melhoria autonoma do sistema de tela')."}
+                    },
+                    "required": ["commit_message"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_git_pull",
+                "description": "Auto-programacao: puxa as ultimas atualizacoes do repositorio soberano no GitHub (git pull) feitas por voce, por outras IAs ou pelo Senhor Werik.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "self_reload_hud",
+                "description": "Auto-programacao: recarrega a interface do HUD Windows (F5 / Reload) para aplicar instantaneamente na tela qualquer modificacao feita no codigo.",
                 "parameters": {"type": "object", "properties": {}},
             },
         },
