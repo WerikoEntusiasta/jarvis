@@ -3040,16 +3040,16 @@ void AudioTask(void* pvParameters) {
                                 s_preroll_full = false;
                             }
 
-                            float start_threshold = max(4800.0f, g_mic_noise_floor * 2.0f);
-                            float silence_threshold = max(3300.0f, g_mic_noise_floor * 1.38f);
+                            float start_threshold = max(1500.0f, g_mic_noise_floor * 1.35f);
+                            float silence_threshold = max(1000.0f, g_mic_noise_floor * 1.12f);
 
                             if (!g_mic_speech_active && !tts_active_frame) {
                                 g_mic_active_frames = 0;
                                 if (rms < start_threshold) {
                                     g_mic_loud_frames = 0;
-                                    g_mic_noise_floor = (g_mic_noise_floor * 0.94f) + (min(rms, 3600.0f) * 0.06f);
+                                    g_mic_noise_floor = (g_mic_noise_floor * 0.94f) + (min(rms, 2500.0f) * 0.06f);
                                     if (g_mic_noise_floor < 350.0f) g_mic_noise_floor = 350.0f;
-                                    if (g_mic_noise_floor > 3400.0f) g_mic_noise_floor = 3400.0f;
+                                    if (g_mic_noise_floor > 1600.0f) g_mic_noise_floor = 1600.0f;
                                 } else {
                                     if (++g_mic_loud_frames >= 2) {
                                         g_mic_speech_active = true;
@@ -3057,6 +3057,9 @@ void AudioTask(void* pvParameters) {
                                         g_mic_silence_frames = 0;
                                         g_mic_loud_frames = 0;
                                         Serial.printf("[MIC-VAD] Fala detectada (RMS=%.1f >= %.1f)! Enviando pre-roll + stream.\n", rms, start_threshold);
+                                        if (g_web_socket.isConnected()) {
+                                            g_web_socket.sendTXT("{\"type\":\"voice_start\"}");
+                                        }
                                         size_t count = s_preroll_full ? kOpusPreRollCount : s_preroll_idx;
                                         size_t start = s_preroll_full ? s_preroll_idx : 0;
                                         for (size_t p = 0; p < count; ++p) {

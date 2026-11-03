@@ -865,10 +865,10 @@
         <div class="flex items-center justify-between p-2 rounded-xl bg-blue-950/40 border border-blue-500/20">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center font-bold text-slate-950 text-xs shadow-[0_0_8px_rgba(0,210,255,0.5)]">
-              M
+              W
             </div>
             <div>
-              <div class="text-[11px] font-bold text-white leading-tight">Marcelo</div>
+              <div class="text-[11px] font-bold text-white leading-tight">Werik</div>
               <div class="text-[8.5px] text-slate-400 leading-tight">Administrador • Sessão V5</div>
             </div>
           </div>
@@ -1104,7 +1104,7 @@
           ECM CENTRAL PESSOAL
         </div>
         <div class="text-xl font-extrabold text-white font-hud tracking-wide mt-1">
-          Olá, <span class="text-cyan-400">Marcelo</span>
+          Olá, <span class="text-cyan-400">Werik</span>
         </div>
         <div class="text-[11px] text-slate-400 mt-0.5">
           Como posso te ajudar hoje?
@@ -5270,8 +5270,12 @@
 
       // MODO NATIVO (App Windows): intercepta comandos do sistema antes do núcleo LLM
       if (await tryNativeCommand(val)) {
-        if (fromVoice) setVoiceStatus('success', 'Comando executado.');
-        else const _st2 = document.getElementById('jarvis-state-text'); if (_st2) _st2.innerText = 'O N L I N E';
+        if (fromVoice) {
+          setVoiceStatus('success', 'Comando executado.');
+        } else {
+          const _st2 = document.getElementById('jarvis-state-text');
+          if (_st2) _st2.innerText = 'O N L I N E';
+        }
         isProcessing = false;
         activeVoiceCommand = '';
         processNextVoiceCommand();
@@ -5288,8 +5292,12 @@
 
       // Pequena pausa para o visor mostrar o envio sem atrasar a fala.
       await new Promise(resolve => setTimeout(resolve, 50));
-      if (fromVoice) setVoiceStatus('thinking', 'O núcleo recebeu sua fala e está preparando a resposta...');
-      else const _ls2 = document.getElementById('live-subtitle'); if (_ls2) _ls2.innerText = `"Processando instrução com o núcleo Jarvis..."`;
+      if (fromVoice) {
+        setVoiceStatus('thinking', 'O núcleo recebeu sua fala e está preparando a resposta...');
+      } else {
+        const _ls2 = document.getElementById('live-subtitle');
+        if (_ls2) _ls2.innerText = `"Processando instrução com o núcleo Jarvis..."`;
+      }
 
       try {
         const res = await fetch('/api/chat', {
