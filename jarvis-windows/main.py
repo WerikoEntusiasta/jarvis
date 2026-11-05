@@ -138,13 +138,10 @@ def start_ipc_server(hud_window: JarvisHUDWindow):
                         primary = QGuiApplication.primaryScreen()
                         if primary:
                             hud_window.setScreen(primary)
-                            geom = primary.availableGeometry()
-                            hud_window.setGeometry(geom.x(), geom.y(), geom.width(), geom.height())
-                        hud_window.showNormal()
-                        hud_window.showMaximized()
+                        if not hud_window.isVisible():
+                            hud_window.show()
                         hud_window.raise_()
                         hud_window.activateWindow()
-                        force_window_to_front(int(hud_window.winId()))
                     QTimer.singleShot(0, _show_act)
                 elif b"RELOAD" in data:
                     from PyQt6.QtCore import QTimer
@@ -269,8 +266,12 @@ def main():
 
     def _on_speech(txt):
         from PyQt6.QtCore import QTimer
-        safe = txt.replace("'", "\\'").replace('"', '\\"')
-        js = f"if (window.showJarvisToast) window.showJarvisToast('Senhor: {safe}'); const inp = document.getElementById('user-input'); if (inp) inp.value = '{safe}';"
+        safe = txt.replace("'", "\\'").replace('"', '\\"').replace('\n', ' ')
+        js = (
+            f"if (window.showJarvisToast) window.showJarvisToast('Senhor: {safe}'); "
+            f"const inp = document.getElementById('user-input'); if (inp) inp.value = '{safe}'; "
+            f"if (window.sendToOpenClaw) window.sendToOpenClaw('{safe}', {{fromVoice: true}});"
+        )
         QTimer.singleShot(0, lambda: hud.web_view.page().runJavaScript(js))
     if voice:
         voice.on_speech_recognized = _on_speech
@@ -324,18 +325,13 @@ def main():
         hud.setGeometry(geom.x(), geom.y(), geom.width(), geom.height())
 
     hud.show()
-    hud.showMaximized()
     hud.raise_()
     hud.activateWindow()
     try:
-        user32 = ctypes.windll.user32
         hwnd = int(hud.winId())
-        user32.SwitchToThisWindow(hwnd, True)
-        user32.ShowWindow(hwnd, 3)  # SW_MAXIMIZE
-        user32.SetForegroundWindow(hwnd)
-        _log(f"Janela HUD (HWND {hwnd}) colocada no monitor principal físico (X={geom.x()}, Y={geom.y()}, W={geom.width()}, H={geom.height()}).")
+        _log(f"Janela HUD (HWND {hwnd}) posicionada no monitor principal.")
     except Exception as e:
-        _log(f"Erro ao focar HWND: {e}")
+        _log(f"Erro ao registrar HWND: {e}")
     _log("hud.show() chamado com sucesso. Iniciando app.exec()...")
     print("[JarvisDesktop] J.A.R.V.I.S. Windows v2 iniciado com sucesso.")
     ret = app.exec()

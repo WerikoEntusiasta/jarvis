@@ -220,10 +220,6 @@ class JarvisVoiceEngine(threading.Thread):
 
     # ------------------------------------------------------------------ wake word / hotkey
     def _init_wake_model(self):
-        if getattr(sys, 'frozen', False):
-            # Executável: acionamento por hotkey (Ctrl+Espaço / Win+Shift+J) + modo conversa contínua.
-            self.wake_model = None
-            return
         try:
             from openwakeword.model import Model
             self.wake_model = Model(wakeword_models=["hey_jarvis_v0.1"], inference_framework="onnx")
@@ -290,9 +286,11 @@ class JarvisVoiceEngine(threading.Thread):
                 if self.wake_model is not None:
                     try:
                         scores = self.wake_model.predict(pcm16)
-                        if scores.get("hey_jarvis_v0.1", 0.0) >= 0.35:
-                            print("[VoiceEngine] ⚡ Wake Word detectado!")
-                            self.trigger_manual_listen()
+                        for k, score in scores.items():
+                            if score >= 0.30:
+                                print(f"[VoiceEngine] ⚡ Wake Word '{k}' detectado ({score:.2f})!")
+                                self.trigger_manual_listen()
+                                break
                     except Exception as e:
                         logger.debug("Wake model: %s", e)
 

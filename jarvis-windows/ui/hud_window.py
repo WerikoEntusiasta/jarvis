@@ -155,8 +155,7 @@ class JarvisHUDWindow(QMainWindow):
         # Injeta script defensivo antes de qualquer código da página rodar
         bootstrap_script = QWebEngineScript()
         bootstrap_script.setSourceCode("""
-            delete window.webkitSpeechRecognition;
-            delete window.SpeechRecognition;
+            /* speech recognition habilitado */
             window.__JARVIS_DESKTOP_STANDALONE = true;
             try {
                 localStorage.setItem('jarvis_session_token', '8145760953033109');
@@ -302,7 +301,11 @@ class JarvisHUDWindow(QMainWindow):
         super().changeEvent(event)
 
     def _sync_window_state_ui(self):
-        is_max = self.isMaximized()
+        is_max = self.isMaximized() or self.isFullScreen()
+        if getattr(self, '_last_synced_state', None) == is_max:
+            return
+        self._last_synced_state = is_max
+
         if hasattr(self, 'btn_max'):
             if is_max:
                 self.btn_max.setText("❐")
@@ -310,17 +313,6 @@ class JarvisHUDWindow(QMainWindow):
             else:
                 self.btn_max.setText("□")
                 self.btn_max.setToolTip("Maximizar Janela")
-
-        if hasattr(self, 'central_layout') and hasattr(self, 'central_widget'):
-            if is_max or self.isFullScreen():
-                self.central_layout.setContentsMargins(0, 0, 0, 0)
-                self.central_widget.setStyleSheet("background-color: #010614; margin: 0; padding: 0;")
-            else:
-                self.central_layout.setContentsMargins(3, 0, 3, 3)
-                self.central_widget.setStyleSheet("""
-                    background-color: #010614;
-                    border: 1px solid rgba(0, 240, 255, 0.35);
-                """)
 
     def eventFilter(self, watched, event):
         """Intercepta arraste e duplo clique nativo na barra de título Stark."""
