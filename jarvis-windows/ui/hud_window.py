@@ -300,6 +300,26 @@ class JarvisHUDWindow(QMainWindow):
             self._sync_window_state_ui()
         super().changeEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        try:
+            if hasattr(self, 'web_view') and self.web_view:
+                self.web_view.page().runJavaScript(
+                    "if (typeof applyDynamicLayoutAdaptation === 'function') applyDynamicLayoutAdaptation();"
+                )
+        except Exception:
+            pass
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        try:
+            if hasattr(self, 'web_view') and self.web_view:
+                self.web_view.page().runJavaScript(
+                    "if (typeof applyDynamicLayoutAdaptation === 'function') applyDynamicLayoutAdaptation();"
+                )
+        except Exception:
+            pass
+
     def _sync_window_state_ui(self):
         is_max = self.isMaximized() or self.isFullScreen()
         if getattr(self, '_last_synced_state', None) == is_max:

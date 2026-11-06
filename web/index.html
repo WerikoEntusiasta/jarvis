@@ -282,6 +282,134 @@
     .animate-scan {
       animation: scanMove 2.2s ease-in-out infinite;
     }
+  
+    /* ==========================================================================
+       AJUSTE DINÂMICO DE JANELA & REDIMENSIONAMENTO INTELIGENTE (STARK HUD)
+       ========================================================================== */
+    .stark-draggable-header {
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .stark-no-drag,
+    .stark-draggable-header button,
+    .stark-draggable-header a,
+    .stark-draggable-header input,
+    .stark-draggable-header select {
+      -webkit-app-region: no-drag !important;
+    }
+
+    /* Transições suaves ao redimensionar a janela */
+    #left-dock, #organicVortexCanvas, main, footer, header, #live-subtitle {
+      transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  left 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  padding 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.25s ease;
+    }
+
+    /* Barra de Pega Stark para Arrastar Janela */
+    .window-drag-grip {
+      -webkit-app-region: drag;
+      cursor: grab;
+    }
+    .window-drag-grip:active {
+      cursor: grabbing;
+    }
+
+    /* MODO COMPACTO (1024px <= largura < 1360px - Ex: Tela Dividida ou Monitor Secundário) */
+    body.layout-compact #left-dock {
+      width: 17rem !important; /* 272px */
+      left: 0.75rem !important;
+    }
+    body.layout-compact #left-dock .glass-card-stark {
+      padding: 0.55rem !important;
+    }
+    body.layout-compact #left-dock .text-xs {
+      font-size: 0.7rem !important;
+    }
+    body.layout-compact #left-dock .text-[9px] {
+      font-size: 0.52rem !important;
+    }
+    body.layout-compact #live-subtitle {
+      font-size: 1.05rem !important;
+    }
+
+    /* MODO ESTREITO / SNAPPED (largura < 1024px - Ex: Janela lateral encaixada em 1/2 ou 1/3) */
+    body.layout-narrow #left-dock {
+      position: fixed !important;
+      left: 0.75rem !important;
+      top: 4.5rem !important;
+      transform: none !important;
+      max-height: calc(100vh - 10rem) !important;
+      width: 18rem !important;
+      z-index: 60 !important;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.95), 0 0 30px rgba(0, 200, 255, 0.35) !important;
+    }
+    body.layout-narrow #left-dock.dock-collapsed {
+      display: none !important;
+    }
+    body.layout-narrow #live-subtitle {
+      font-size: 0.95rem !important;
+      min-height: 2.2rem !important;
+    }
+    body.layout-narrow #main-command-container {
+      max-width: 96vw !important;
+    }
+
+    /* MODO BAIXA ALTURA (altura < 780px - Ex: Monitor ultrawide com barra de tarefas ou janela baixa) */
+    body.layout-short header {
+      padding-top: 0.35rem !important;
+      padding-bottom: 0.15rem !important;
+    }
+    body.layout-short #left-dock {
+      space-y: 0.35rem !important;
+    }
+    body.layout-short #left-dock .glass-card-stark {
+      padding: 0.45rem !important;
+      margin-bottom: 0.25rem !important;
+    }
+    body.layout-short footer {
+      padding-bottom: 0.75rem !important;
+      padding-top: 0.25rem !important;
+    }
+    body.layout-short #live-subtitle {
+      font-size: 0.95rem !important;
+      margin-bottom: 0.25rem !important;
+      min-height: 1.8rem !important;
+    }
+
+    /* Indicador HUD de Adaptação Dinâmica */
+    #hud-dynamic-badge {
+      position: fixed;
+      bottom: 0.75rem;
+      right: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9px;
+      color: rgba(0, 240, 255, 0.75);
+      background: rgba(2, 24, 70, 0.85);
+      border: 1px solid rgba(0, 200, 255, 0.4);
+      border-radius: 9999px;
+      padding: 2px 10px;
+      z-index: 45;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      transform: translateY(6px);
+      box-shadow: 0 0 15px rgba(0, 200, 255, 0.3);
+    }
+    #hud-dynamic-badge.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Botão flutuante para alternar Dock em telas estreitas */
+    #narrow-dock-toggle {
+      display: none;
+    }
+    body.layout-narrow #narrow-dock-toggle {
+      display: flex !important;
+    }
+
   </style>
 </head>
 <body class="bg-[#01091d] text-slate-100 select-none overflow-x-hidden overflow-y-auto lg:overflow-hidden h-screen w-screen relative flex flex-col justify-between">
@@ -299,7 +427,7 @@
   <canvas id="organicVortexCanvas" class="absolute inset-0 pointer-events-none z-10 m-auto"></canvas>
 
   <!-- TOP HEADER HUD -->
-  <header class="w-full flex flex-col items-center pt-3 pb-1 z-40 relative pointer-events-auto safe-top">
+  <header class="w-full flex flex-col items-center pt-1 pb-1 z-40 relative pointer-events-auto safe-top stark-draggable-header">
     <!-- PWA Install Banners (Mobile) -->
     <div id="pwa-install-banner" class="hidden w-full max-w-md mx-auto mb-2 px-3 py-2 rounded-2xl bg-cyan-950/95 border border-cyan-400 shadow-[0_0_30px_rgba(0,210,255,0.45)] backdrop-blur-xl flex items-center justify-between space-x-3 spring-trans">
       <div class="flex items-center space-x-2.5">
@@ -1711,17 +1839,32 @@
       // Transição orgânica entre calmaria e intensidade de fala
       speechIntensity += (targetIntensity - speechIntensity) * 0.16;
 
-      // Escala responsiva automática para telas mobile (celular/tablet)
-      const scaleFactor = Math.min(1.0, Math.max(0.48, (width * 0.85) / 600));
+      // CÁLCULO DE ESCALA DINÂMICA INTELIGENTE (ADAPTAÇÃO A QUALQUER TAMANHO DE JANELA)
+      const availW = width;
+      const availH = height;
+      const leftDockEl = document.getElementById('left-dock');
+      const isDockOpen = leftDockEl && !leftDockEl.classList.contains('hidden') && !leftDockEl.classList.contains('dock-collapsed') && window.innerWidth >= 1150;
+      
+      // Espaço vertical livre entre header e footer
+      const vertFree = Math.max(260, availH - 220);
+      // Espaço horizontal livre considerando o dock lateral
+      const horizFree = isDockOpen ? Math.max(300, availW - 330) : Math.max(300, availW - 60);
+
+      // Escala contínua que nunca deixa a aura colidir ou cortar
+      const scaleFactor = Math.min(1.20, Math.max(0.38, Math.min(vertFree / 560, horizFree / 620)));
+
+      // Centro dinâmico: centralizado no espaço visual livre
+      const activeCx = isDockOpen ? ((availW + 310) / 2) : (availW / 2);
+      const activeCy = Math.max(100, Math.min(availH - 120, availH / 2 - 12));
 
       // Glow Central proporcional
-      const coreGlow = ctx.createRadialGradient(cx, cy, 30 * scaleFactor, cx, cy, 380 * scaleFactor);
+      const coreGlow = ctx.createRadialGradient(activeCx, activeCy, 30 * scaleFactor, activeCx, activeCy, 380 * scaleFactor);
       coreGlow.addColorStop(0, `rgba(0, 140, 255, ${0.15 + speechIntensity * 0.25})`);
       coreGlow.addColorStop(0.4, `rgba(0, 80, 220, ${0.05 + speechIntensity * 0.12})`);
       coreGlow.addColorStop(1, 'transparent');
       ctx.fillStyle = coreGlow;
       ctx.beginPath();
-      ctx.arc(cx, cy, 380 * scaleFactor, 0, Math.PI * 2);
+      ctx.arc(activeCx, activeCy, 380 * scaleFactor, 0, Math.PI * 2);
       ctx.fill();
 
       // Desenha cada anel orgânico proporcional à tela
@@ -1743,8 +1886,8 @@
           const offset = Math.sin(theta * layer.waves + time * currentSpeed * 60) * currentAmp
                        + Math.cos(theta * 3 - time * currentSpeed * 30) * (currentAmp * 0.4);
           const r = (layer.baseRadius * scaleFactor) + offset;
-          const x = cx + Math.cos(theta) * r;
-          const y = cy + Math.sin(theta) * r;
+          const x = activeCx + Math.cos(theta) * r;
+          const y = activeCy + Math.sin(theta) * r;
 
           if (i === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
@@ -6080,6 +6223,68 @@
         })
         .catch(()=>{});
     };
+  
+    /* ==========================================================================
+       SISTEMA DE ADAPTAÇÃO DINÂMICA DE REDIMENSIONAMENTO E ARRASTE
+       ========================================================================== */
+    let resizeToastTimer = null;
+
+    function toggleNarrowDock() {
+      const leftDock = document.getElementById('left-dock');
+      if (!leftDock) return;
+      leftDock.classList.toggle('dock-collapsed');
+      const isCollapsed = leftDock.classList.contains('dock-collapsed');
+      const label = document.getElementById('narrow-dock-label');
+      if (label) label.innerText = isCollapsed ? 'CARDS (4)' : 'OCULTAR';
+    }
+
+    function applyDynamicLayoutAdaptation() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+
+      // Classes de estado responsivo no elemento <body>
+      document.body.classList.toggle('layout-ultrawide', w >= 2100);
+      document.body.classList.toggle('layout-standard', w >= 1360 && w < 2100);
+      document.body.classList.toggle('layout-compact', w >= 1024 && w < 1360);
+      document.body.classList.toggle('layout-narrow', w < 1024);
+      document.body.classList.toggle('layout-short', h < 780);
+
+      // Gerencia visibilidade automática do dock em janelas estreitas
+      const leftDock = document.getElementById('left-dock');
+      if (leftDock) {
+        if (w < 1024) {
+          if (!leftDock.hasAttribute('data-user-toggled')) {
+            leftDock.classList.add('dock-collapsed');
+          }
+        } else {
+          leftDock.classList.remove('dock-collapsed');
+          leftDock.classList.remove('hidden');
+          leftDock.removeAttribute('data-user-toggled');
+        }
+      }
+
+      // Atualiza badge discreto de telemetria de resolução
+      const badge = document.getElementById('hud-dynamic-badge');
+      if (badge) {
+        badge.innerText = `⚡ HUD AUTO-ADAPT: ${w}x${h}`;
+        badge.classList.add('active');
+        clearTimeout(resizeToastTimer);
+        resizeToastTimer = setTimeout(() => {
+          badge.classList.remove('active');
+        }, 1800);
+      }
+
+      // Notifica o Flight Radar 3D se aberto
+      if (typeof resizeFlightGlobe === 'function') {
+        try { resizeFlightGlobe(); } catch(e) {}
+      }
+    }
+
+    // Registra listeners de redimensionamento e orientação
+    window.addEventListener('resize', applyDynamicLayoutAdaptation);
+    window.addEventListener('orientationchange', applyDynamicLayoutAdaptation);
+    setTimeout(applyDynamicLayoutAdaptation, 100);
+
   </script>
   <button id="push-enable-btn" onclick="enablePushNotifications()" title="Ativar notificações push do J.A.R.V.I.S." class="hidden fixed z-[90] bottom-24 right-4 safe-bottom w-12 h-12 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 text-xl shadow-[0_0_18px_rgba(0,240,255,0.5)] active:scale-95 transition-transform">🔔</button>
 </body>
