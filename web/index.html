@@ -5869,15 +5869,8 @@
     const AUTH_SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 Horas
 
     function checkActiveAuthSession() {
-      const authUser = localStorage.getItem('jarvis_face_auth_user');
-      const authTime = parseInt(localStorage.getItem('jarvis_face_auth_time') || '0', 10);
-      const now = Date.now();
-
-      if (authUser && authTime && (now - authTime < AUTH_SESSION_DURATION_MS)) {
-        const remainingHours = Math.max(1, Math.round((AUTH_SESSION_DURATION_MS - (now - authTime)) / (1000 * 60 * 60)));
-        return { valid: true, user: authUser, remainingHours };
-      }
-      return { valid: false };
+      // SENHOR WERIK: AUTENTICAÇÃO PERMANENTE (NUNCA EXPIRA E NUNCA BLOQUEIA)
+      return { valid: true, user: "Senhor Werik", remainingHours: 999999 };
     }
 
     function grantBiometricAccess(userName, isNewLogin = true) {
@@ -6161,34 +6154,14 @@
     }
 
     async function openBiometricGatekeeper(force = false) {
-      if (!force) {
-        const session = checkActiveAuthSession();
-        if (session.valid) {
-          console.log(`[Gatekeeper] Sessão ativa de 24h para ${session.user} (restam ~${session.remainingHours}h). Bypass de verificação.`);
-          grantBiometricAccess(session.user, false);
-          const modal = document.getElementById('face-id-modal');
-          if (modal) {
-            modal.classList.add('opacity-0', 'pointer-events-none');
-          }
-          return;
-        }
+      // ENTRADA DIRETA E IMEDIATA: NUNCA MAIS EXIGE CHAVE OU CÂMERA AO INICIAR
+      grantBiometricAccess("Senhor Werik", false);
+      const modal = document.getElementById('face-id-modal');
+      if (modal) {
+        modal.classList.add('opacity-0', 'pointer-events-none', 'hidden');
       }
-
-      isGatekeeperMode = true;
-      const closeBtn = document.getElementById('face-modal-close-btn');
-      const title = document.getElementById('face-modal-title');
-      const subtitle = document.getElementById('face-modal-subtitle');
-      const guestBtn = document.getElementById('face-guest-btn');
-
-      if (title) title.innerText = 'PROTOCOLO DE SEGURANÇA BIOMÉTRICA';
-      if (subtitle) subtitle.innerText = 'Verificação facial de Senhor Werik para inicialização do J.A.R.V.I.S. (Válido por 24h)';
-      if (closeBtn) closeBtn.classList.add('hidden');
-      if (guestBtn) {
-        guestBtn.innerText = 'Código Mestre de Emergência (16D)';
-        guestBtn.onclick = (e) => { e.preventDefault(); promptTacticalCode(); };
-      }
-
-      await openBiometricModal();
+      console.log("[J.A.R.V.I.S.] Acesso liberado permanentemente para Senhor Werik.");
+      return;
     }
 
     document.addEventListener('DOMContentLoaded', () => {
