@@ -112,7 +112,7 @@ def force_window_to_front(hwnd: int):
         app_thread = kernel32.GetCurrentThreadId()
         if fore_thread and fore_thread != app_thread:
             user32.AttachThreadInput(fore_thread, app_thread, True)
-        user32.ShowWindow(hwnd, 3)
+        user32.ShowWindow(hwnd, 9)
         user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
         user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002)
         user32.SetForegroundWindow(hwnd)
@@ -138,10 +138,16 @@ def start_ipc_server(hud_window: JarvisHUDWindow):
                         primary = QGuiApplication.primaryScreen()
                         if primary:
                             hud_window.setScreen(primary)
-                        if not hud_window.isVisible():
+                        if hud_window.isMinimized():
+                            hud_window.showNormal()
+                        else:
                             hud_window.show()
                         hud_window.raise_()
                         hud_window.activateWindow()
+                        try:
+                            force_window_to_front(int(hud_window.winId()))
+                        except Exception:
+                            pass
                     QTimer.singleShot(0, _show_act)
                 elif b"RELOAD" in data:
                     from PyQt6.QtCore import QTimer
@@ -329,7 +335,8 @@ def main():
     hud.activateWindow()
     try:
         hwnd = int(hud.winId())
-        _log(f"Janela HUD (HWND {hwnd}) posicionada no monitor principal.")
+        force_window_to_front(hwnd)
+        _log(f"Janela HUD (HWND {hwnd}) posicionada no monitor principal com force_window_to_front.")
     except Exception as e:
         _log(f"Erro ao registrar HWND: {e}")
     _log("hud.show() chamado com sucesso. Iniciando app.exec()...")
