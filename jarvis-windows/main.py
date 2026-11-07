@@ -73,10 +73,31 @@ def ensure_single_instance() -> bool:
         print("[SingleInstance] Outra instância detectada. Tentando contato via IPC...")
         contacted = _try_contact_existing_instance()
         if not contacted:
-            print("[SingleInstance] Instância anterior inativa ou sem IPC. Assumindo lock órfão e iniciando...")
-            return True
-        print("[SingleInstance] Instância ativa contatada com sucesso. Encerrando duplicata.")
-        return False
+            for _ in range(5):
+                time.sleep(0.4)
+                contacted = _try_contact_existing_instance()
+                if contacted:
+                    break
+        if contacted:
+            print("[SingleInstance] Instância ativa contatada com sucesso. Encerrando duplicata.")
+            return False
+
+        current_pid = os.getpid()
+        try:
+            import psutil
+            for p in psutil.process_iter(['pid', 'name']):
+                try:
+                    pname = (p.info.get('name') or '').upper()
+                    if p.info.get('pid') != current_pid and 'JARVIS' in pname:
+                        print(f"[SingleInstance] Processo {pname} (PID {p.info['pid']}) já está ativo no Windows. Abortando duplicata.")
+                        return False
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        print("[SingleInstance] Instância anterior inativa ou sem IPC. Assumindo lock órfão e iniciando...")
+        return True
     return True
 
 def release_mutex():
@@ -105,20 +126,10 @@ def create_hud_icon() -> QIcon:
 def force_window_to_front(hwnd: int):
     try:
         user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
         user32.AllowSetForegroundWindow(-1)
-        fore_hwnd = user32.GetForegroundWindow()
-        fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
-        app_thread = kernel32.GetCurrentThreadId()
-        if fore_thread and fore_thread != app_thread:
-            user32.AttachThreadInput(fore_thread, app_thread, True)
         user32.ShowWindow(hwnd, 9)
-        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
-        user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002)
         user32.SetForegroundWindow(hwnd)
         user32.BringWindowToTop(hwnd)
-        if fore_thread and fore_thread != app_thread:
-            user32.AttachThreadInput(fore_thread, app_thread, False)
     except Exception as e:
         _log(f"force_window_to_front erro: {e}")
 

@@ -221,9 +221,33 @@ class JarvisVoiceEngine(threading.Thread):
     # ------------------------------------------------------------------ wake word / hotkey
     def _init_wake_model(self):
         try:
+            import openwakeword
             from openwakeword.model import Model
-            self.wake_model = Model(wakeword_models=["hey_jarvis_v0.1"], inference_framework="onnx")
-            print("[VoiceEngine] Wake Word 'hey_jarvis_v0.1' carregado com sucesso (ONNX).")
+
+            models_search_dirs = []
+            if hasattr(sys, "_MEIPASS"):
+                models_search_dirs.append(os.path.join(sys._MEIPASS, "openwakeword", "resources", "models"))
+            if hasattr(sys, "executable"):
+                models_search_dirs.append(os.path.join(os.path.dirname(sys.executable), "_internal", "openwakeword", "resources", "models"))
+            try:
+                models_search_dirs.append(os.path.join(os.path.dirname(openwakeword.__file__), "resources", "models"))
+            except Exception:
+                pass
+            models_search_dirs.append(r"C:\Users\werik\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\openwakeword\resources\models")
+
+            model_file = None
+            for d in models_search_dirs:
+                cand = os.path.join(d, "hey_jarvis_v0.1.onnx")
+                if os.path.exists(cand):
+                    model_file = cand
+                    break
+
+            if model_file:
+                self.wake_model = Model(wakeword_models=[model_file], inference_framework="onnx")
+                print(f"[VoiceEngine] ⚡ Wake Word 'hey_jarvis_v0.1' carregado com sucesso via {model_file}")
+            else:
+                self.wake_model = Model(wakeword_models=["hey_jarvis_v0.1"], inference_framework="onnx")
+                print("[VoiceEngine] ⚡ Wake Word 'hey_jarvis_v0.1' carregado com sucesso (ONNX padrão).")
         except BaseException as e:
             print(f"[VoiceEngine] Aviso: Wake Word neural indisponível ({e}). Escuta por hotkey ativa.")
             self.wake_model = None
