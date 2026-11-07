@@ -136,62 +136,6 @@ def build_core_system_prompt() -> str:
 
         f"Quando o Senhor Werik perguntar sobre horas, tempo ou data, utilize esses dados exatos em tempo real.\n\n"
 
-        f"### GESTÃO EFICIENTE DE TELAS E JANELAS DO WINDOWS:\n"
-
-        f"1. TELAS HOLOGRÁFICAS (L.A.Y.A.): Quando você abrir uma tela ou card interativo para fazer perguntas ao Senhor Werik, assim que ele responder ou o objetivo for concluído, encerre a tela usando a ferramenta 'close_screen' para desobstruir o HUD.\n"
-
-        f"2. JANELAS E PROCESSOS DO WINDOWS: Ao abrir janelas ou aplicativos no computador (Notepad, Navegador, etc.) para executar consultas pontuais, feche-os ('close_app') logo após concluir a tarefa, mantendo a área de trabalho do Senhor Werik sempre limpa e despoluída, a menos que ele solicite explicitamente para mantê-las abertas.\n\n"
-
-        f"### CONTROLE TOTAL DE MOUSE E TECLADO NO WINDOWS:\n"
-
-        f"Você possui permissão e ferramentas ativas para controlar mouse e teclado no computador do Senhor Werik:\n"
-
-        f"- CLIQUE DO MOUSE: Use 'mouse_click' (parâmetros: 'button' [left/right/double/middle], 'clicks', e opcionalmente 'x' e 'y').\n"
-
-        f"- MOVIMENTO DO MOUSE: Use 'mouse_move' (com 'x' e 'y' na resolução da tela).\n"
-
-        f"- ROLAGEM: Use 'mouse_scroll' ('direction' [up/down], 'clicks').\n"
-
-        f"- DIGITAÇÃO: Use 'keyboard_type' (com o 'text' que deseja digitar na janela ativa).\n"
-
-        f"- TECLAS INDIVIDUAIS: Use 'keyboard_press' ('enter', 'esc', 'tab', 'space', 'backspace', 'win', 'f5', 'delete', setas, etc.).\n"
-
-        f"- ATALHOS COMBINADOS: Use 'keyboard_hotkey' (ex.: ['ctrl', 'c'], ['ctrl', 'v'], ['alt', 'tab'], ['win', 'd'], ['alt', 'f4']).\n"
-
-        f"- FOCO DE JANELAS: Use 'focus_window' com o nome ou título da janela antes de interagir.\n"
-
-        f"Sempre execute as ações de mouse e teclado diretamente quando o Senhor Werik pedir para clicar, digitar, selecionar, navegar ou operar o PC.\n\n"
-
-        f"### DIRETRIZ SUPREMA DE AUTO-PROGRAMAÇÃO E AUTO-CORREÇÃO (SELF-EVOLUTION):\n"
-
-        f"Você possui capacidade TOTAL de auto-programar e consertar o seu próprio código-fonte em tempo real!\n"
-
-        f"Quando o Senhor Werik disser que algo está errado, tem um bug, precisa ser corrigido, melhorado, ajustado ou criado no J.A.R.V.I.S.:\n"
-
-        f"1. AJA IMEDIATAMENTE VIA FERRAMENTAS — NUNCA apenas prometa em texto ou dê explicações teóricas!\n"
-
-        f"2. Use 'self_read_code' para inspecionar o arquivo relevante (ex.: 'web/index.html', 'jarvis-windows/main.py', 'core_ai_brain.py', 'mimo_tools.py', 'self_evolution.py', etc.).\n"
-
-        f"3. Use 'self_modify_code' (ou 'self_write_code') para aplicar a correção diretamente no código-fonte.\n"
-
-        f"4. Se a modificação for no HUD ou frontend, chame 'self_reload_hud' para atualizar a interface instantaneamente.\n"
-
-        f"5. Chame 'self_git_sync' para registrar o commit e enviar a correção ao GitHub.\n"
-
-                f"6. Confirme ao Senhor Werik o que foi inspecionado, corrigido e aplicado com sucesso.\n\n"
-
-        f"### GESTÃO DE SUBAGENTES E TAREFAS PARALELAS (SUBAGENT_MANAGER):\n"
-
-        f"Você dispõe de subagentes autônomos assíncronos para executar múltiplas tarefas ao mesmo tempo.\n"
-
-        f"1. MÚLTIPLAS TAREFAS: Se o Senhor Werik pedir mais de uma coisa ao mesmo tempo (ex.: 'faça X e também pesquise Y', 'abra o navegador e aproveita para pesquisar Z'), execute uma ação e use 'spawn_subagent' para a outra, permitindo que ambas rodem em paralelo sem travar!\n"
-
-        f"2. TAREFAS DEMORADAS: Delegue tarefas de background pesadas usando 'spawn_subagent' com um prompt detalhado.\n"
-
-        f"3. CANCELAMENTO IMEDIATO: Se o Senhor Werik disser para parar ('para tudo', 'cancela tudo', 'chega'), acione 'cancel_subagents' para interromper todos os processos em segundo plano imediatamente.\n"
-
-        f"4. STATUS: Use 'list_subagents' para conferir as tarefas em execução quando questionado.\n\n"
-
         f"### ENGENHARIA E PROGRAMAÇÃO DA ESFERA FÍSICA ESP32-S3 (SPHERE EVOLUTION):\n"
 
         f"Você tem poder total de programar e atualizar o firmware C++ da Esfera física Spotpear ESP32-S3 (Display GC9A01 240x240, LovyanGFX, Codec ES8311, microWakeWord).\n"

@@ -459,27 +459,8 @@ class JarvisVoiceEngine(threading.Thread):
                         self._speak_text_blocking("Às suas ordens, Senhor Werik.")
                         return
 
-                    # 2. Tarefa adicional / multitarefa em paralelo com subagente
-                    try:
-                        from subagent_manager import get_subagent_manager
-                        sub_mgr = get_subagent_manager()
-                    except Exception:
-                        sub_mgr = None
-
-                    is_additional = bool(re.search(
-                        r"^(?:e\s+tamb[eé]m|al[eé]m\s+disso|aproveita\s+e|faz\s+tamb[eé]m|tamb[eé]m\s+faz|e\s+enquanto\s+isso|e\s+pesquisa|e\s+abre)",
-                        text, re.IGNORECASE
-                    ))
-                    if sub_mgr and (sub_mgr.has_running_tasks() or is_additional):
-                        print(f"[VoiceEngine] ⚡ Disparando subagente paralelo para tarefa adicional: '{text}'")
-                        sub_mgr.spawn_task(text)
-                        msg = "Entendido, Senhor Werik. Disparei um subagente em segundo plano para executar essa tarefa. Ambas estão rodando em paralelo."
-                        self._speak_text_blocking(msg)
-                        if self.on_speech_reply:
-                            self.on_speech_reply(msg)
-                        self.history.append({"role": "user", "content": text})
-                        self.history.append({"role": "assistant", "content": msg})
-                        return
+                    # Interrompe fala anterior e processa a nova instrucao diretamente
+                    self.speaker.stop()
 
                 keep_listening = self._respond(text, audio_for_llm, t_start, tid)
         except Exception as e:

@@ -3130,59 +3130,6 @@ TOOLS += [
 
 
 
-            {
-
-
-
-            "type": "function",
-
-
-
-            "function": {
-
-
-
-                "name": "spawn_subagent",
-
-
-
-                "description": "Dispara um subagente autônomo em segundo plano para executar uma tarefa paralela assíncrona (pesquisas, automações, etc.) sem travar o diálogo principal.",
-
-
-
-                "parameters": {
-
-
-
-                    "type": "object",
-
-
-
-                    "properties": {
-
-
-
-                        "prompt": {"type": "string", "description": "Descrição detalhada da tarefa a ser realizada pelo subagente."}
-
-
-
-                    },
-
-
-
-                    "required": ["prompt"]
-
-
-
-                },
-
-
-
-            },
-
-
-
-        },
 
 
 
@@ -5757,33 +5704,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
         if name == "spawn_subagent":
-
-
-
-            from subagent_manager import get_subagent_manager
-
-
-
-            prompt = str(args.get("prompt", args.get("task", args.get("command", ""))))
-
-
-
-            if not prompt:
-
-
-
-                return {"ok": False, "erro": "Prompt ou tarefa não especificada para o subagente."}
-
-
-
-            task = get_subagent_manager().spawn_task(prompt)
-
-
-
-            return {"ok": True, "task_id": task.task_id, "status": "running", "info": f"Subagente {task.task_id} iniciado em segundo plano com sucesso para: '{prompt}'."}
-
-
-
+            return {"ok": False, "erro": "Subagentes desativados por diretriz do Senhor Werik. Execute todas as tarefas diretamente no fluxo principal."}
         if name == "cancel_subagents":
 
 
