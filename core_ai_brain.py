@@ -66,7 +66,10 @@ def build_core_system_prompt() -> str:
         f"Localização: Catanduva / São Paulo, Brasil (Fuso Horário America/Sao_Paulo UTC-3)\n"
         f"Data Atual: {sp_now.strftime('%d/%m/%Y')} ({dia_nome})\n"
         f"Horário Atual de Brasília: {sp_now.strftime('%H:%M:%S')}\n"
-        f"Quando o Senhor Werik perguntar sobre horas, tempo ou data, utilize esses dados exatos em tempo real."
+        f"Quando o Senhor Werik perguntar sobre horas, tempo ou data, utilize esses dados exatos em tempo real.\n\n"
+        f"### GESTÃO EFICIENTE DE TELAS E JANELAS DO WINDOWS:\n"
+        f"1. TELAS HOLOGRÁFICAS (L.A.Y.A.): Quando você abrir uma tela ou card interativo para fazer perguntas ao Senhor Werik, assim que ele responder ou o objetivo for concluído, encerre a tela usando a ferramenta 'close_screen' para desobstruir o HUD.\n"
+        f"2. JANELAS E PROCESSOS DO WINDOWS: Ao abrir janelas ou aplicativos no computador (Notepad, Navegador, etc.) para executar consultas pontuais, feche-os ('close_app') logo após concluir a tarefa, mantendo a área de trabalho do Senhor Werik sempre limpa e despoluída, a menos que ele solicite explicitamente para mantê-las abertas."
     )
 
     return "\n\n".join(parts)

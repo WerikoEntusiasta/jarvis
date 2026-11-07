@@ -638,7 +638,11 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         else:
 
-                            reply = f"Comando {pending_act.get('description', 'solicitado')} confirmado e executado com sucesso."
+                            from core_ai_brain import query_direct_ai
+                            desc = pending_act.get('description', '')
+                            confirmed_context = f"[O USUÁRIO CONFIRMOU/RESPONDEU A SEGUINTE SOLICITAÇÃO ANTERIOR: '{desc}']"
+                            hist = session_manager.get_history(device_id)
+                            reply = query_direct_ai(user_msg, context=confirmed_context, history=hist)
 
                     elif conf_status == "cancelled":
 
@@ -648,9 +652,16 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         from core_ai_brain import query_direct_ai
 
+                        active_screen = data.get("active_screen")
+                        screen_ctx = ""
+                        if active_screen and isinstance(active_screen, dict):
+                            title = active_screen.get("title", "")
+                            preview = active_screen.get("preview", "")
+                            screen_ctx = f"[TELA / PERGUNTA INTERATIVA ATUALMENTE EXIBIDA AO USUÁRIO]: Título: '{title}'. Opções / Conteúdo: {preview}. O usuário está respondendo a esta tela."
+
                         hist = session_manager.get_history(device_id)
 
-                        reply = query_direct_ai(user_msg, history=hist)
+                        reply = query_direct_ai(user_msg, context=screen_ctx, history=hist)
 
                         if reply and any(q in reply.lower() for q in ["confirma", "confirmar", "deseja que", "tem certeza"]):
 

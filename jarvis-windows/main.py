@@ -287,7 +287,7 @@ def main():
         js = (
             f"if (window.showJarvisToast) window.showJarvisToast('Senhor: {safe}'); "
             f"const inp = document.getElementById('user-input'); if (inp) inp.value = '{safe}'; "
-            f"if (window.sendToOpenClaw) window.sendToOpenClaw('{safe}', {{fromVoice: true}});"
+            f"const sub = document.getElementById('live-subtitle'); if (sub) sub.innerText = '{safe[:95]}';"
         )
         QTimer.singleShot(0, lambda: hud.web_view.page().runJavaScript(js))
     if voice:

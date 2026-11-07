@@ -2386,8 +2386,11 @@
     // ==========================================
     // L.A.Y.A. DYNAMIC SCREEN & PANEL RENDERER
     // ==========================================
+    let currentLayaScreenData = null;
+
     function renderLayaScreen(screenData) {
       if (!screenData) return;
+      currentLayaScreenData = screenData;
       console.log("[L.A.Y.A.] Projetando interface sob demanda:", screenData.title);
       const stage = document.getElementById('jarvis-visual-stage');
       const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
@@ -2424,12 +2427,29 @@
           stage.classList.add('opacity-100');
         }, 20);
 
+        // Delegação de cliques em botões/opções geradas na tela LAYA
+        const layaContent = stage.querySelector('.laya-screen-content');
+        if (layaContent) {
+          layaContent.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('button, [data-action], .laya-btn, .laya-option');
+            if (btn && !btn.getAttribute('onclick')) {
+              const val = btn.getAttribute('data-value') || btn.innerText.trim();
+              if (val) {
+                console.log("[L.A.Y.A.] Opção selecionada pelo usuário:", val);
+                sendToOpenClaw(val, { fromScreen: true, screenTitle: screenData.title });
+                closeLayaScreen();
+              }
+            }
+          });
+        }
+
         const cardCustom = document.getElementById('card-custom');
         if (cardCustom) cardCustom.classList.add('hidden');
       }
     }
 
     function closeLayaScreen() {
+      currentLayaScreenData = null;
       const stage = document.getElementById('jarvis-visual-stage');
       const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
       const leftDock = document.getElementById('left-dock');
@@ -4580,10 +4600,22 @@
       else document.getElementById('live-subtitle').innerText = `"Processando instrução com o núcleo Jarvis..."`;
 
       try {
+        const reqPayload = {
+          message: val,
+          active_screen: currentLayaScreenData ? {
+            title: currentLayaScreenData.title,
+            subtitle: currentLayaScreenData.subtitle,
+            preview: (currentLayaScreenData.html || '').replace(/<[^>]+>/g, ' ').substring(0, 300)
+          } : null
+        };
+        // Auto-fecha a tela de pergunta anterior ao responder
+        if (currentLayaScreenData && !options.keepScreenOpen) {
+          closeLayaScreen();
+        }
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: jarvisSessionHeaders(),
-          body: JSON.stringify({message: val})
+          body: JSON.stringify(reqPayload)
         });
         const data = await res.json();
         if (!res.ok || !data || !data.reply || data.target_widget === 'system') {
