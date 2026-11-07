@@ -1854,7 +1854,8 @@
       const scaleFactor = Math.min(1.20, Math.max(0.38, Math.min(vertFree / 560, horizFree / 620)));
 
       // Centro dinâmico: centralizado no espaço visual livre
-      const activeCx = isDockOpen ? ((availW + 310) / 2) : (availW / 2);
+      // Centro visual: rigorosamente centralizado no meio da tela (alinhado ao radar, subtítulo e input)
+      const activeCx = availW / 2;
       const activeCy = Math.max(100, Math.min(availH - 120, availH / 2 - 12));
 
       // Glow Central proporcional
