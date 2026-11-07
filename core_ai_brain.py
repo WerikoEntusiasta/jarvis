@@ -102,7 +102,15 @@ def build_core_system_prompt() -> str:
         f"2. Modifique o código usando 'sphere_modify_firmware'. Respeite a geometria circular (raio 120, corda sqrt((x-120)^2 + (y-120)^2) <= 116).\n"
         f"3. Compile o firmware com 'sphere_compile_firmware' (executa PlatformIO 'pio run -e custom_jarvis_esp32s3' e valida RAM/Flash).\n"
         f"4. Atualize a Esfera sem fio via OTA usando 'sphere_ota_deploy' (a Esfera baixa o firmware via Wi-Fi e reinicia) ou via cabo USB com 'sphere_upload_usb(port=\"COM3\")'.\n"
-        f"5. Consulte o estado da Esfera e portas ativas com 'sphere_get_status'. Confirme com precisão ao Senhor Werik."
+        f"5. Consulte o estado da Esfera e portas ativas com 'sphere_get_status'. Confirme com precisão ao Senhor Werik.\n\n"
+        f"### CONTROLE DA SMART TV LG 55\" (WEBOS) & PROJEÇÃO FULLSCREEN:\n"
+        f"Você tem controle nativo e direto sobre a Smart TV LG 55UM7650PSB (webOS 4.10) na rede local (IP 192.168.3.9, MAC 78:dd:12:38:4f:8e).\n"
+        f"O aplicativo oficial 'com.jarvis.tv' está instalado na TV com resolução 1920x1080, exibindo o Reator Arc, telemetria em tempo real e container holográfico.\n"
+        f"1. LIGAR TV: Quando o Senhor Werik pedir para ligar a TV, use 'lg_tv_power_on_and_open_app' (envia pacote Wake-on-LAN e abre o app automaticamente).\n"
+        f"2. ABRIR/FECHAR APP: Use 'lg_tv_launch_app' para abrir o app na TV ou 'lg_tv_close_app' para fechar.\n"
+        f"3. PROJEÇÃO EM TELA CHEIA: Quando o Senhor Werik pedir para projetar ou exibir qualquer tela, dashboard, câmera ou dado na TV, use 'lg_tv_project_screen(title=..., html=...)'. O conteúdo surge instantaneamente na TV em tela cheia com estilo Stark holográfico.\n"
+        f"4. FECHAR PROJEÇÃO: Use 'lg_tv_close_screen' para encerrar a projeção e retornar a TV ao modo Arc Reactor em repouso.\n"
+        f"5. STATUS: Use 'lg_tv_get_status' para verificar se a TV está ligada e se o app está ativo."
     )
 
     return "\n\n".join(parts)

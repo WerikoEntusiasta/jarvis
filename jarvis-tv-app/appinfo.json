@@ -1,0 +1,16 @@
+{
+  "id": "com.jarvis.tv",
+  "version": "1.0.0",
+  "vendor": "Stark Industries / J.A.R.V.I.S.",
+  "type": "web",
+  "main": "index.html",
+  "title": "J.A.R.V.I.S. TV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgImage": "bg.png",
+  "splashBackground": "splash.png",
+  "resolution": "1920x1080",
+  "requiredACG": [],
+  "supportTouchMode": "none",
+  "disableBackHistoryAPI": true
+}

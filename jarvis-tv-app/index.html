@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>J.A.R.V.I.S. STARK MARK VII — SMART TV HUD</title>
+  <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, user-scalable=no">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background-color: #030712;
+      background-image: 
+        radial-gradient(circle at 50% 50%, rgba(0, 140, 255, 0.08) 0%, transparent 70%),
+        linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 60px 60px, 60px 60px;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      color: #e2e8f0;
+      position: relative;
+    }
+
+    /* Scanlines Stark */
+    body::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+      background-size: 100% 4px;
+      pointer-events: none;
+      z-index: 99;
+    }
+
+    /* Arc Reactor Canvas Central */
+    #vortexCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1920px;
+      height: 1080px;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* Glass Panels */
+    .glass-card {
+      background: rgba(8, 20, 42, 0.72);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      border-radius: 16px;
+      box-shadow: 0 0 30px rgba(0, 140, 255, 0.18), inset 0 0 15px rgba(0, 240, 255, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    /* Header Superior */
+    #header-bar {
+      position: absolute;
+      top: 24px;
+      left: 36px;
+      right: 36px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 20;
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 3px;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    #clock-widget {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #00f0ff;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.7);
+    }
+
+    /* Left Sidebar: Telemetria & Nós */
+    #left-sidebar {
+      position: absolute;
+      top: 110px;
+      left: 36px;
+      width: 320px;
+      padding: 20px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .metric-val {
+      font-family: monospace;
+      font-weight: 700;
+      color: #00f0ff;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7, #00f0ff);
+      box-shadow: 0 0 8px #00f0ff;
+      transition: width 0.5s ease;
+    }
+
+    /* Bottom Bar: Legendas e Voz */
+    #footer-bar {
+      position: absolute;
+      bottom: 24px;
+      left: 36px;
+      right: 36px;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      z-index: 20;
+    }
+
+    #live-subtitles {
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #f8fafc;
+      text-shadow: 0 0 14px rgba(0, 240, 255, 0.7);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #node-status-pill {
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 6px 14px;
+      border-radius: 20px;
+      margin-left: 20px;
+    }
+
+    /* Fullscreen Holographic Projection Modal */
+    #projection-modal {
+      position: absolute;
+      top: 100px;
+      bottom: 110px;
+      left: 380px;
+      right: 380px;
+      z-index: 50;
+      display: none;
+      flex-direction: column;
+      padding: 32px;
+      opacity: 0;
+      transform: scale(0.95);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    #projection-modal.active {
+      display: flex;
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .modal-title {
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #00f0ff;
+      text-shadow: 0 0 14px rgba(0, 240, 255, 0.7);
+    }
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #cbd5e1;
+    }
+    .modal-actions {
+      margin-top: 24px;
+      display: flex;
+      gap: 16px;
+      justify-content: flex-end;
+    }
+    .tv-btn {
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.4), rgba(0, 240, 255, 0.4));
+      border: 1px solid #00f0ff;
+      color: #ffffff;
+      padding: 10px 24px;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border-radius: 8px;
+      cursor: pointer;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .tv-btn:focus, .tv-btn:hover {
+      background: #00f0ff;
+      color: #030712;
+      box-shadow: 0 0 20px #00f0ff;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Arc Reactor Canvas (Visual Core Centrado) -->
+  <canvas id="vortexCanvas"></canvas>
+
+  <!-- Header Superior -->
+  <header id="header-bar" class="glass-card">
+    <div class="brand-title">
+      <div class="status-dot"></div>
+      <span>J.A.R.V.I.S. MARK VII</span>
+      <span style="font-size: 12px; font-weight: 400; color: #94a3b8; margin-left: 8px;">[TV PROJECTION HUD]</span>
+    </div>
+    <div id="clock-widget">--:--:--</div>
+    <div style="font-size: 14px; color: #38bdf8; font-weight: 600;">CATANDUVA / SP</div>
+  </header>
+
+  <!-- Left Sidebar (Telemetria do Núcleo PC) -->
+  <aside id="left-sidebar" class="glass-card">
+    <div style="font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #38bdf8; margin-bottom: 4px;">NÚCLEO SOBERANO</div>
+    
+    <div>
+      <div class="metric-row"><span>CPU WINDOWS</span><span id="cpu-val" class="metric-val">12%</span></div>
+      <div class="progress-bar-bg"><div id="cpu-bar" class="progress-bar-fill" style="width: 12%;"></div></div>
+    </div>
+
+    <div>
+      <div class="metric-row"><span>MEMÓRIA RAM</span><span id="ram-val" class="metric-val">8.2 / 16 GB</span></div>
+      <div class="progress-bar-bg"><div id="ram-bar" class="progress-bar-fill" style="width: 51%;"></div></div>
+    </div>
+
+    <div style="border-top: 1px solid rgba(0, 240, 255, 0.2); padding-top: 10px; margin-top: 4px;">
+      <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">NÓS CONECTADOS</div>
+      <div class="metric-row"><span>🖥️ PC WINDOWS</span><span class="metric-val" style="color:#10b981;">192.168.3.50</span></div>
+      <div class="metric-row" style="margin-top:4px;"><span>🔮 ESFERA ESP32-S3</span><span class="metric-val" style="color:#10b981;">ONLINE</span></div>
+      <div class="metric-row" style="margin-top:4px;"><span>📺 SMART TV LG</span><span class="metric-val" style="color:#00f0ff;">192.168.3.9</span></div>
+    </div>
+  </aside>
+
+  <!-- Bottom Bar (Legenda e Status da IA) -->
+  <footer id="footer-bar" class="glass-card">
+    <div id="live-subtitles">"J.A.R.V.I.S. online. Aguardando comando do Senhor Werik."</div>
+    <div id="node-status-pill">SINC: 192.168.3.50:8085</div>
+  </footer>
+
+  <!-- Projeção Holográfica Fullscreen (Laya Screens / Dashboards) -->
+  <div id="projection-modal" class="glass-card">
+    <div class="modal-header">
+      <div id="proj-title" class="modal-title">PROJEÇÃO TÁTICA</div>
+      <div style="font-size: 13px; color: #94a3b8;">[BACK / VOLTAR PARA FECHAR]</div>
+    </div>
+    <div id="proj-body" class="modal-body"></div>
+    <div id="proj-actions" class="modal-actions">
+      <button class="tv-btn" onclick="closeProjection()">FECHAR PROJEÇÃO</button>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------------------
+    // 1. Arc Reactor / Plasma Vortex (Rigorosamente Centrado em 1920x1080)
+    // -------------------------------------------------------------------------
+    const canvas = document.getElementById('vortexCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1920;
+    canvas.height = 1080;
+
+    const cx = 960;
+    const cy = 540;
+    let time = 0;
+    let voicePulse = 0.0;
+
+    const layers = [
+      { radius: 260, waves: 6, amp: 4, speed: 0.005, color: 'rgba(0, 140, 255, 0.40)', width: 2 },
+      { radius: 220, waves: 8, amp: 5, speed: -0.007, color: 'rgba(0, 210, 255, 0.65)', width: 2.5 },
+      { radius: 180, waves: 5, amp: 4, speed: 0.008, color: 'rgba(0, 240, 255, 0.85)', width: 3 },
+      { radius: 140, waves: 7, amp: 3, speed: -0.006, color: 'rgba(56, 189, 248, 0.70)', width: 2 },
+      { radius: 100, waves: 4, amp: 2, speed: 0.010, color: 'rgba(125, 211, 252, 0.90)', width: 2 }
+    ];
+
+    function renderVortex() {
+      ctx.clearRect(0, 0, 1920, 1080);
+
+      // Glow Central
+      const glowRadius = 380 + voicePulse * 60;
+      const radGlow = ctx.createRadialGradient(cx, cy, 40, cx, cy, glowRadius);
+      radGlow.addColorStop(0, 'rgba(0, 240, 255, 0.22)');
+      radGlow.addColorStop(0.5, 'rgba(0, 140, 255, 0.08)');
+      radGlow.addColorStop(1, 'transparent');
+      ctx.fillStyle = radGlow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Desenho dos Anéis Orgânicos
+      layers.forEach(l => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.strokeStyle = l.color;
+        ctx.lineWidth = l.width + voicePulse * 1.5;
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 14 + voicePulse * 20;
+
+        const amp = l.amp + voicePulse * 18;
+        const pts = 180;
+        for (let i = 0; i <= pts; i++) {
+          const theta = (i / pts) * Math.PI * 2;
+          const offset = Math.sin(theta * l.waves + time * l.speed * 60) * amp;
+          const r = l.radius + offset;
+          const x = cx + Math.cos(theta) * r;
+          const y = cy + Math.sin(theta) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      time++;
+      if (voicePulse > 0.01) voicePulse *= 0.94;
+      requestAnimationFrame(renderVortex);
+    }
+    renderVortex();
+
+    // -------------------------------------------------------------------------
+    // 2. Relógio em Tempo Real
+    // -------------------------------------------------------------------------
+    function updateClock() {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, '0');
+      const m = String(now.getMinutes()).padStart(2, '0');
+      const s = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('clock-widget').innerText = `${h}:${m}:${s}`;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // -------------------------------------------------------------------------
+    // 3. Projeção Holográfica & Controle Remoto
+    // -------------------------------------------------------------------------
+    const modal = document.getElementById('projection-modal');
+    const projTitle = document.getElementById('proj-title');
+    const projBody = document.getElementById('proj-body');
+
+    function showProjection(title, htmlContent) {
+      projTitle.innerText = title || "PROJEÇÃO TÁTICA";
+      projBody.innerHTML = htmlContent || "";
+      modal.classList.add('active');
+      const firstBtn = modal.querySelector('button');
+      if (firstBtn) firstBtn.focus();
+    }
+
+    function closeProjection() {
+      modal.classList.remove('active');
+    }
+
+    // Tecla Back / Voltar no Controle Remoto da TV LG (webOS keyCode 461)
+    window.addEventListener('keydown', function(e) {
+      if (e.keyCode === 461 || e.key === 'Escape' || e.key === 'Back') {
+        if (modal.classList.contains('active')) {
+          closeProjection();
+          e.preventDefault();
+        }
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // 4. Conexão SSE em Tempo Real com o PC Windows (192.168.3.50:8085)
+    // -------------------------------------------------------------------------
+    const CORE_HOST = "192.168.3.50:8085";
+
+    function connectSSE() {
+      const evtSource = new EventSource(`http://${CORE_HOST}/api/events`);
+
+      evtSource.onopen = function() {
+        document.getElementById('node-status-pill').innerText = "CONECTADO: NÚCLEO PC";
+        document.getElementById('node-status-pill').style.color = "#10b981";
+      };
+
+      evtSource.addEventListener('voice_speech', function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.text) {
+            document.getElementById('live-subtitles').innerText = `"${data.text}"`;
+            voicePulse = 1.0;
+          }
+        } catch(err) {}
+      });
+
+      evtSource.addEventListener('voice_reply', function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.reply) {
+            document.getElementById('live-subtitles').innerText = `"${data.reply}"`;
+            voicePulse = 1.0;
+          }
+        } catch(err) {}
+      });
+
+      evtSource.addEventListener('project_screen', function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          showProjection(data.title, data.html || data.content);
+        } catch(err) {}
+      });
+
+      evtSource.addEventListener('close_screen', function(e) {
+        closeProjection();
+      });
+
+      evtSource.onerror = function() {
+        document.getElementById('node-status-pill').innerText = "RECONECTANDO...";
+        document.getElementById('node-status-pill').style.color = "#ef4444";
+        evtSource.close();
+        setTimeout(connectSSE, 4000);
+      };
+    }
+    connectSSE();
+
+    // Polling de telemetria básica do hardware do Windows a cada 5s
+    async function updateTelemetry() {
+      try {
+        const res = await fetch(`http://${CORE_HOST}/api/status`);
+        if (res.ok) {
+          const d = await res.json();
+          if (d.cpu) {
+            document.getElementById('cpu-val').innerText = `${d.cpu}%`;
+            document.getElementById('cpu-bar').style.width = `${d.cpu}%`;
+          }
+          if (d.ram_used && d.ram_total) {
+            document.getElementById('ram-val').innerText = `${d.ram_used} / ${d.ram_total} GB`;
+            document.getElementById('ram-bar').style.width = `${Math.min(100, (d.ram_used/d.ram_total)*100)}%`;
+          }
+        }
+      } catch(e) {}
+    }
+    setInterval(updateTelemetry, 5000);
+  </script>
+</body>
+</html>
