@@ -2383,16 +2383,117 @@
 
     // CONEXÃO SSE EM TEMPO REAL COM O SERVIDOR MCP E HUD
 
+    // ==========================================
+    // L.A.Y.A. DYNAMIC SCREEN & PANEL RENDERER
+    // ==========================================
+    function renderLayaScreen(screenData) {
+      if (!screenData) return;
+      console.log("[L.A.Y.A.] Projetando interface sob demanda:", screenData.title);
+      const stage = document.getElementById('jarvis-visual-stage');
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
+      const leftDock = document.getElementById('left-dock');
+
+      if (screenData.hide_vortex && vortex) {
+        vortex.classList.add('opacity-10', 'scale-75');
+      }
+      if (screenData.hide_cards && leftDock) {
+        leftDock.classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      if (stage) {
+        stage.innerHTML = `
+          <div class="relative w-full rounded-2xl glass-card-stark p-5 border border-cyan-400/60 shadow-[0_0_40px_rgba(0,210,255,0.35)] backdrop-blur-2xl transition-all">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-cyan-500/20">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span class="text-xs font-mono-code font-bold tracking-widest text-cyan-300 uppercase">${screenData.title || 'INTERFACE DINÂMICA'}</span>
+                <span class="text-[10px] text-slate-400 font-mono-code">${screenData.subtitle || '// L.A.Y.A. PROJECTION'}</span>
+              </div>
+              <button onclick="closeLayaScreen()" class="px-2.5 py-1 text-[11px] font-mono-code text-cyan-400 hover:text-white rounded bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/30 transition-all flex items-center space-x-1">
+                <span>✕</span> <span>FECHAR</span>
+              </button>
+            </div>
+            <div class="laya-screen-content w-full overflow-y-auto max-h-[70vh]">
+              ${screenData.html || ''}
+            </div>
+          </div>
+        `;
+        stage.classList.remove('hidden');
+        setTimeout(() => {
+          stage.classList.remove('opacity-0');
+          stage.classList.add('opacity-100');
+        }, 20);
+
+        const cardCustom = document.getElementById('card-custom');
+        if (cardCustom) cardCustom.classList.add('hidden');
+      }
+    }
+
+    function closeLayaScreen() {
+      const stage = document.getElementById('jarvis-visual-stage');
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
+      const leftDock = document.getElementById('left-dock');
+
+      if (vortex) {
+        vortex.classList.remove('opacity-10', 'scale-75');
+      }
+      if (leftDock) {
+        leftDock.classList.remove('opacity-0', 'pointer-events-none');
+      }
+      if (stage) {
+        stage.classList.add('opacity-0');
+        setTimeout(() => {
+          stage.classList.add('hidden');
+          stage.innerHTML = '';
+        }, 300);
+      }
+    }
+
     function connectHudEvents() {
       if (!window.EventSource) return;
       try {
         const evtSource = new EventSource('/api/hud/events');
+
+        evtSource.addEventListener('laya_screen', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            renderLayaScreen(data);
+          } catch(err) {
+            console.warn("[LAYA SSE] Erro ao renderizar:", err);
+          }
+        });
+
+        evtSource.addEventListener('close_laya_screen', () => {
+          closeLayaScreen();
+        });
+
+        evtSource.addEventListener('toast', (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (window.showJarvisToast) showJarvisToast(d.message || d.text || 'Notificação');
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('command', (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (d.action) tryNativeCommand(d.action);
+          } catch(err) {}
+        });
 
         evtSource.onmessage = (e) => {
           try {
             const event = JSON.parse(e.data);
 
             // Stream em tempo real contínuo (ZimaOS & Hardware & Visão)
+            if (event.action === "laya_screen") {
+              renderLayaScreen(event);
+              return;
+            }
+            if (event.action === "close_laya_screen") {
+              closeLayaScreen();
+              return;
+            }
             if (event.action === "vision_telemetry" && event.vision) {
               updateVisionWidget(event.vision);
               return;
@@ -2510,6 +2611,8 @@
     // ==========================================
     // CONTROLES DE VISÃO COMPUTACIONAL (WEBCAM DO NAVEGADOR)
     // ==========================================
+    let isFlightRadarOpen = false;
+    let isHolo3DLabOpen = false;
     let browserVideoStream = null;
     let isBrowserCameraStreaming = false;
     let isFrameProcessing = false;
@@ -2861,7 +2964,7 @@
     // ==========================================
     // RADAR AÉREO 3D • COBE WEBGL ENGINE (~5kB SHUDING / VERCEL)
     // ==========================================
-    let isFlightRadarOpen = false;
+    isFlightRadarOpen = false;
     let cobeGlobe = null;
     let cobeAnimId = null;
     let flightRadarRegion = 'sa'; // 'sa' = Brasil / América do Sul, 'all' = Global
@@ -4469,8 +4572,10 @@
         document.getElementById('live-subtitle').innerText = `"Aguardando envio..."`;
       }
 
-      // Pequena pausa para o visor mostrar o envio sem atrasar a fala.
-      await new Promise(resolve => setTimeout(resolve, fromVoice ? 300 : 1500));
+      // Resposta ágil sem pausas desnecessárias
+      if (fromVoice) {
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
       if (fromVoice) setVoiceStatus('thinking', 'O núcleo recebeu sua fala e está preparando a resposta...');
       else document.getElementById('live-subtitle').innerText = `"Processando instrução com o núcleo Jarvis..."`;
 
@@ -4508,6 +4613,11 @@
         // JARVIS DYNAMIC VISUAL OS ENGINE RENDERER (Renderização de UI Estruturada)
         const visualStage = document.getElementById('jarvis-visual-stage');
         let renderedVisual = false;
+        if (data.laya_screen || data._screen_data) {
+          renderLayaScreen(data.laya_screen || data._screen_data);
+          renderedVisual = true;
+        }
+
         if (window.JarvisUI && visualStage) {
           if (data.visual) {
             JarvisUI.render(data.visual, visualStage, val);
@@ -4843,6 +4953,10 @@
     }
 
     function initSpeechEngine() {
+      if (window.__JARVIS_DESKTOP_STANDALONE) {
+        console.log("[J.A.R.V.I.S. Desktop] Motor de Voz Nativo ativo via Python + Whisper. Web Speech API suprimida para estabilidade.");
+        return;
+      }
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
 
@@ -6095,14 +6209,26 @@
 
     async function detectNativeMode() {
       try {
-        if (window.pywebview) {
+        if (window.pywebview && window.pywebview.api) {
           if (window.pywebview.ready) await window.pywebview.ready;
-          jarvisNativeApi = window.pywebview.api || null;
-          if (jarvisNativeApi) {
-            showHudAlert("MODO NATIVO ATIVADO", "Controle total do PC Windows liberado para o J.A.R.V.I.S. neste app.", "sucesso");
-          }
+          jarvisNativeApi = window.pywebview.api;
+          showHudAlert("MODO NATIVO ATIVADO", "Controle total do PC liberado via pywebview.", "sucesso");
+        } else if (window.__JARVIS_DESKTOP_STANDALONE || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+          jarvisNativeApi = {
+            execute: async function(action, params = {}) {
+              const res = await fetch('/api/system/control', {
+                method: 'POST',
+                headers: jarvisSessionHeaders(),
+                body: JSON.stringify({ action: action, params: params })
+              });
+              return await res.json();
+            }
+          };
+          console.log("[J.A.R.V.I.S.] Modo Nativo Local Bridge ativo via /api/system/control.");
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("[J.A.R.V.I.S.] Erro ao inicializar Modo Nativo:", e);
+      }
     }
 
     function nativeReply(msg) {

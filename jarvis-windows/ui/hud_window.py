@@ -155,9 +155,12 @@ class JarvisHUDWindow(QMainWindow):
         # Injeta script defensivo antes de qualquer código da página rodar
         bootstrap_script = QWebEngineScript()
         bootstrap_script.setSourceCode("""
-            /* speech recognition habilitado */
             window.__JARVIS_DESKTOP_STANDALONE = true;
             try {
+                delete window.SpeechRecognition;
+                delete window.webkitSpeechRecognition;
+                window.SpeechRecognition = undefined;
+                window.webkitSpeechRecognition = undefined;
                 localStorage.setItem('jarvis_session_token', '8145760953033109');
                 localStorage.setItem('jarvis_client_id', 'desktop_windows_standalone');
             } catch(e) {}
@@ -245,7 +248,14 @@ class JarvisHUDWindow(QMainWindow):
         _log(f"web_view loadFinished ok={ok}, url={self.web_view.url().toString()}")
         if not ok:
             _log("Falha ao carregar URL principal! Verifique conexão ou certificado.")
+            self._load_retries = getattr(self, '_load_retries', 0) + 1
+            if self._load_retries <= 5:
+                delay_ms = 800 * self._load_retries
+                _log(f"Tentativa automática #{self._load_retries} de reconectar HUD em {delay_ms}ms...")
+                QTimer.singleShot(delay_ms, self.web_view.reload)
             return
+
+        self._load_retries = 0
 
         js_bootstrap = """
         (function() {

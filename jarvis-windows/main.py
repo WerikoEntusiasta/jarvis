@@ -316,6 +316,31 @@ def main():
     tray_menu.addAction(action_telem)
 
     tray_menu.addSeparator()
+    def shutdown_all():
+        _log("Encerrando J.A.R.V.I.S. Windows e liberando recursos...")
+        try:
+            if voice:
+                voice.stop()
+        except Exception:
+            pass
+        try:
+            if network:
+                network.stop()
+        except Exception:
+            pass
+        try:
+            from vision import get_vision_engine
+            get_vision_engine().stop()
+        except Exception:
+            pass
+        try:
+            release_mutex()
+        except Exception:
+            pass
+        _log("Recursos liberados com sucesso.")
+
+    app.aboutToQuit.connect(shutdown_all)
+
     action_quit = QAction("Encerrar J.A.R.V.I.S.", tray_menu)
     action_quit.triggered.connect(app.quit)
     tray_menu.addAction(action_quit)

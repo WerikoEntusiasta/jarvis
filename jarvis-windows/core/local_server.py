@@ -95,7 +95,11 @@ def broadcast_hud_event(event_type: str, data: dict):
 
     """Envia evento SSE em tempo real para todas as abas conectadas do HUD."""
 
-    msg = f"event: {event_type}\ndata: {json.dumps(data)}\n\n".encode("utf-8")
+    payload = dict(data) if isinstance(data, dict) else {"payload": data}
+    if "action" not in payload:
+        payload["action"] = event_type
+    raw_json = json.dumps(payload)
+    msg = f"event: {event_type}\ndata: {raw_json}\n\n".encode("utf-8")
 
     with _SSE_LOCK:
 
@@ -294,6 +298,54 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
 
+
+        # 2b. Visão Computacional Status
+        if path in ("/api/vision/status", "/api/vision"):
+            try:
+                from vision import get_vision_engine
+                st = get_vision_engine().get_status()
+                self._send_json(st)
+            except Exception as e:
+                self._send_json({
+                    "enabled": False, "fps": 0.0, "camera_device": "Standby Seguro",
+                    "resolution": "640x480", "gesture": "none", "gesture_pt": "Nenhum",
+                    "action_pt": "Nenhuma ação", "gesture_emoji": "", "confidence": 0.0,
+                    "confidence_pct": 0, "hand": "Nenhuma"
+                })
+            return
+
+        # 2c. Consultas Nativas do Windows (Janelas, Processos, Monitores, Info)
+        if path == "/api/system/windows":
+            try:
+                from system import win_controls
+                self._send_json(win_controls.list_windows())
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/system/processes":
+            try:
+                from system import win_controls
+                self._send_json(win_controls.list_processes(top_n=20))
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/system/monitors":
+            try:
+                from system import win_controls
+                self._send_json(win_controls.list_monitors())
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/system/info":
+            try:
+                from system import win_controls
+                self._send_json(win_controls.get_system_info())
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, status=500)
+            return
 
         # 3. Telemetria do Sistema (CPU, RAM, GPU)
 
@@ -750,6 +802,26 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+
+        # 4b. Controle da Câmera e Visão Computacional
+        if path in ("/api/vision/toggle", "/api/vision/enable", "/api/vision/disable"):
+            try:
+                from vision import get_vision_engine
+                v = get_vision_engine()
+                if path == "/api/vision/toggle":
+                    enabled = v.toggle_camera()
+                elif path == "/api/vision/enable":
+                    v.enable_camera()
+                    enabled = True
+                else:
+                    v.disable_camera()
+                    enabled = False
+                st = v.get_status()
+                st["enabled"] = enabled
+                self._send_json(st)
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, status=500)
+            return
 
         # 5. Controle do Sistema Windows (Apps, Mídia, Volume, PowerShell, Bloqueio)
 

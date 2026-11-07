@@ -3039,6 +3039,8 @@
     // ==========================================
     // CONTROLES DE VISÃO COMPUTACIONAL (WEBCAM DO NAVEGADOR)
     // ==========================================
+    let isFlightRadarOpen = false;
+    let isHolo3DLabOpen = false;
     let browserVideoStream = null;
     let isBrowserCameraStreaming = false;
     let isFrameProcessing = false;
@@ -3390,7 +3392,7 @@
     // ==========================================
     // RADAR AÉREO 3D • COBE WEBGL ENGINE (~5kB SHUDING / VERCEL)
     // ==========================================
-    let isFlightRadarOpen = false;
+    isFlightRadarOpen = false;
     let cobeGlobe = null;
     let cobeAnimId = null;
     let flightRadarRegion = 'sa'; // 'sa' = Brasil / América do Sul, 'all' = Global
