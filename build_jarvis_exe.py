@@ -37,6 +37,9 @@ cmd = [
     "--hidden-import", "sounddevice",
     "--hidden-import", "numpy",
     "--hidden-import", "services.tuya_service",
+    "--hidden-import", "requests",
+    "--hidden-import", "unified_memory",
+    "--hidden-import", "mimo_brain",
     "--hidden-import", "core_ai_brain",
     "--hidden-import", "session_manager",
     "--hidden-import", "mimo_tools",
@@ -59,6 +62,14 @@ cmd = [
     "--hidden-import", "voice.voice_engine",
     "--hidden-import", "ui.hud_window",
     "--hidden-import", "config.settings",
+    "--hidden-import", "vision",
+    "--hidden-import", "vision.engine",
+    "--hidden-import", "vision.camera",
+    "--hidden-import", "vision.gestures",
+    "--hidden-import", "vision.actions",
+    "--hidden-import", "vision.events",
+    "--hidden-import", "vision.config",
+    "--hidden-import", "vision.auth",
     SRC_MAIN
 ]
 
