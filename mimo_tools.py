@@ -781,6 +781,36 @@ TOOLS += [
         },
 
 
+            {
+            "type": "function",
+            "function": {
+                "name": "spawn_subagent",
+                "description": "Dispara um subagente autônomo em segundo plano para executar uma tarefa paralela assíncrona (pesquisas, automações, etc.) sem travar o diálogo principal.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string", "description": "Descrição detalhada da tarefa a ser realizada pelo subagente."}
+                    },
+                    "required": ["prompt"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "cancel_subagents",
+                "description": "Interrompe e cancela todos os subagentes e tarefas em segundo plano em execução.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_subagents",
+                "description": "Lista todas as tarefas e subagentes ativos rodando em segundo plano.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
     ]
 
 
@@ -809,28 +839,7 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
         return base64.b64encode(buf.getvalue()).decode("ascii")
 
-        if name == "list_windows":
-            mod = _pc_module("win_controls")
-            return mod.list_windows() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "focus_window":
-            mod = _pc_module("win_controls")
-            target = str(args.get("target", args.get("nome", args.get("janela", ""))))
-            return mod.focus_window(target) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_processes":
-            mod = _pc_module("win_controls")
-            top_n = int(args.get("top_n", 15))
-            sort_by = str(args.get("sort_by", "cpu"))
-            return mod.list_processes(top_n=top_n, sort_by=sort_by) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_monitors":
-            mod = _pc_module("win_controls")
-            return mod.list_monitors() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "get_system_info":
-            mod = _pc_module("win_controls")
-            return mod.get_system_info() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "run_powershell":
-            mod = _pc_module("win_controls")
-            cmd = str(args.get("command", args.get("comando", "")))
-            return mod.run_powershell(cmd) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
+
     except Exception as e:  # noqa: BLE001
 
         logger.error("Falha ao capturar a tela: %s", e)
@@ -1263,6 +1272,24 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             mod = _pc_module("win_controls")
             cmd = str(args.get("command", args.get("comando", "")))
             return mod.run_powershell(cmd) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
+        if name == "spawn_subagent":
+            from subagent_manager import get_subagent_manager
+            prompt = str(args.get("prompt", args.get("task", args.get("command", ""))))
+            if not prompt:
+                return {"ok": False, "erro": "Prompt ou tarefa não especificada para o subagente."}
+            task = get_subagent_manager().spawn_task(prompt)
+            return {"ok": True, "task_id": task.task_id, "status": "running", "info": f"Subagente {task.task_id} iniciado em segundo plano com sucesso para: '{prompt}'."}
+        if name == "cancel_subagents":
+            from subagent_manager import get_subagent_manager
+            count = get_subagent_manager().cancel_all()
+            return {"ok": True, "count": count, "info": f"{count} subagente(s) cancelados imediatamente."}
+        if name == "list_subagents":
+            from subagent_manager import get_subagent_manager
+            tasks = get_subagent_manager().get_active_tasks()
+            return {"ok": True, "tasks": tasks, "count": len(tasks)}
+
+
+
     except Exception as e:  # noqa: BLE001
 
         logger.exception("Falha na ferramenta %s", name)

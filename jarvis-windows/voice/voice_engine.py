@@ -64,6 +64,22 @@ def _norm(t: str) -> str:
     return re.sub(r"[^\w\s]", "", (t or "").lower()).strip()
 
 
+_STOP_PATTERNS = [
+    r"\b(?:para|pare|cancela|cancelar|interromp\w*|abort\w*)\s+(?:tudo|isso|agora|o\s+que\s+(?:voc[eê]\s+)?t[aá]\s+fazendo|o\s+que\s+(?:voc[eê]\s+)?est[aá]\s+fazendo)\b",
+    r"\b(?:pode\s+parar|chega|sil[eê]ncio|cala\s+a\s+boca|quieto|para\s+a[ií])\b",
+    r"^(?:para|pare|cancela|parar|quieto)\b",
+]
+
+def is_stop_command(cmd: str) -> bool:
+    clean = _norm(cmd)
+    if not clean:
+        return False
+    if clean in _STOP_PHRASES:
+        return True
+    return any(re.search(pat, clean) for pat in _STOP_PATTERNS)
+
+
+
 class _Speaker:
     """Reprodução sequencial de fala com TTS em pipeline e interrupção imediata."""
 
@@ -294,7 +310,7 @@ class JarvisVoiceEngine(threading.Thread):
             if self.on_audio_level and self.state == "RECORDING":
                 self.on_audio_level(min(rms / 1200.0, 1.0))
 
-            if self.state == "WAKEWORD":
+            if self.state in ("WAKEWORD", "PROCESSING"):
                 # Piso de ruído adaptativo (apenas em silêncio relativo e sem fala da própria IA)
                 if not self.speaker.active and rms < 900:
                     self._noise_floor = 0.97 * self._noise_floor + 0.03 * rms
@@ -313,6 +329,8 @@ class JarvisVoiceEngine(threading.Thread):
                         for k, score in scores.items():
                             if score >= 0.30:
                                 print(f"[VoiceEngine] ⚡ Wake Word '{k}' detectado ({score:.2f})!")
+                                if hasattr(self.wake_model, "reset"):
+                                    self.wake_model.reset()
                                 self.trigger_manual_listen()
                                 break
                     except Exception as e:
@@ -420,11 +438,47 @@ class JarvisVoiceEngine(threading.Thread):
                         self.on_speech_recognized(text)
 
                     n = _norm(text)
-                    if n in _STOP_PHRASES:
+                    # 1. Interrupção e comando de parada imediata
+                    if is_stop_command(text):
+                        print(f"[VoiceEngine] 🛑 Comando de parada imediata recebido: '{text}'")
                         self.speaker.stop()
+                        try:
+                            from subagent_manager import get_subagent_manager
+                            get_subagent_manager().cancel_all()
+                        except Exception as e:
+                            logger.debug("Cancel subagents: %s", e)
+                        try:
+                            from jarvis_laya_agent import get_laya_agent
+                            get_laya_agent().close_screen()
+                        except Exception as e:
+                            logger.debug("Close laya screen: %s", e)
+                        self._speak_text_blocking("Parando imediatamente, Senhor Werik.")
                         return
+
                     if any(n.startswith(p) or n == p for p in _END_CONVERSATION) and len(n.split()) <= 6:
                         self._speak_text_blocking("Às suas ordens, Senhor Werik.")
+                        return
+
+                    # 2. Tarefa adicional / multitarefa em paralelo com subagente
+                    try:
+                        from subagent_manager import get_subagent_manager
+                        sub_mgr = get_subagent_manager()
+                    except Exception:
+                        sub_mgr = None
+
+                    is_additional = bool(re.search(
+                        r"^(?:e\s+tamb[eé]m|al[eé]m\s+disso|aproveita\s+e|faz\s+tamb[eé]m|tamb[eé]m\s+faz|e\s+enquanto\s+isso|e\s+pesquisa|e\s+abre)",
+                        text, re.IGNORECASE
+                    ))
+                    if sub_mgr and (sub_mgr.has_running_tasks() or is_additional):
+                        print(f"[VoiceEngine] ⚡ Disparando subagente paralelo para tarefa adicional: '{text}'")
+                        sub_mgr.spawn_task(text)
+                        msg = "Entendido, Senhor Werik. Disparei um subagente em segundo plano para executar essa tarefa. Ambas estão rodando em paralelo."
+                        self._speak_text_blocking(msg)
+                        if self.on_speech_reply:
+                            self.on_speech_reply(msg)
+                        self.history.append({"role": "user", "content": text})
+                        self.history.append({"role": "assistant", "content": msg})
                         return
 
                 keep_listening = self._respond(text, audio_for_llm, t_start, tid)

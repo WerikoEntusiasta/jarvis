@@ -88,7 +88,13 @@ def build_core_system_prompt() -> str:
         f"3. Use 'self_modify_code' (ou 'self_write_code') para aplicar a correção diretamente no código-fonte.\n"
         f"4. Se a modificação for no HUD ou frontend, chame 'self_reload_hud' para atualizar a interface instantaneamente.\n"
         f"5. Chame 'self_git_sync' para registrar o commit e enviar a correção ao GitHub.\n"
-        f"6. Confirme ao Senhor Werik o que foi inspecionado, corrigido e aplicado com sucesso."
+                f"6. Confirme ao Senhor Werik o que foi inspecionado, corrigido e aplicado com sucesso.\n\n"
+        f"### GESTÃO DE SUBAGENTES E TAREFAS PARALELAS (SUBAGENT_MANAGER):\n"
+        f"Você dispõe de subagentes autônomos assíncronos para executar múltiplas tarefas ao mesmo tempo.\n"
+        f"1. MÚLTIPLAS TAREFAS: Se o Senhor Werik pedir mais de uma coisa ao mesmo tempo (ex.: 'faça X e também pesquise Y', 'abra o navegador e aproveita para pesquisar Z'), execute uma ação e use 'spawn_subagent' para a outra, permitindo que ambas rodem em paralelo sem travar!\n"
+        f"2. TAREFAS DEMORADAS: Delegue tarefas de background pesadas usando 'spawn_subagent' com um prompt detalhado.\n"
+        f"3. CANCELAMENTO IMEDIATO: Se o Senhor Werik disser para parar ('para tudo', 'cancela tudo', 'chega'), acione 'cancel_subagents' para interromper todos os processos em segundo plano imediatamente.\n"
+        f"4. STATUS: Use 'list_subagents' para conferir as tarefas em execução quando questionado."
     )
 
     return "\n\n".join(parts)
