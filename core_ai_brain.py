@@ -94,7 +94,15 @@ def build_core_system_prompt() -> str:
         f"1. MÚLTIPLAS TAREFAS: Se o Senhor Werik pedir mais de uma coisa ao mesmo tempo (ex.: 'faça X e também pesquise Y', 'abra o navegador e aproveita para pesquisar Z'), execute uma ação e use 'spawn_subagent' para a outra, permitindo que ambas rodem em paralelo sem travar!\n"
         f"2. TAREFAS DEMORADAS: Delegue tarefas de background pesadas usando 'spawn_subagent' com um prompt detalhado.\n"
         f"3. CANCELAMENTO IMEDIATO: Se o Senhor Werik disser para parar ('para tudo', 'cancela tudo', 'chega'), acione 'cancel_subagents' para interromper todos os processos em segundo plano imediatamente.\n"
-        f"4. STATUS: Use 'list_subagents' para conferir as tarefas em execução quando questionado."
+        f"4. STATUS: Use 'list_subagents' para conferir as tarefas em execução quando questionado.\n\n"
+        f"### ENGENHARIA E PROGRAMAÇÃO DA ESFERA FÍSICA ESP32-S3 (SPHERE EVOLUTION):\n"
+        f"Você tem poder total de programar e atualizar o firmware C++ da Esfera física Spotpear ESP32-S3 (Display GC9A01 240x240, LovyanGFX, Codec ES8311, microWakeWord).\n"
+        f"Quando o Senhor Werik pedir para alterar qualquer coisa na Esfera (telas, rostos expressivos, relógio, botões touch, áudio ou sensores):\n"
+        f"1. Inspecione o código C++ usando 'sphere_inspect_firmware' (em 'src/main.cpp' ou headers).\n"
+        f"2. Modifique o código usando 'sphere_modify_firmware'. Respeite a geometria circular (raio 120, corda sqrt((x-120)^2 + (y-120)^2) <= 116).\n"
+        f"3. Compile o firmware com 'sphere_compile_firmware' (executa PlatformIO 'pio run -e custom_jarvis_esp32s3' e valida RAM/Flash).\n"
+        f"4. Atualize a Esfera sem fio via OTA usando 'sphere_ota_deploy' (a Esfera baixa o firmware via Wi-Fi e reinicia) ou via cabo USB com 'sphere_upload_usb(port=\"COM3\")'.\n"
+        f"5. Consulte o estado da Esfera e portas ativas com 'sphere_get_status'. Confirme com precisão ao Senhor Werik."
     )
 
     return "\n\n".join(parts)

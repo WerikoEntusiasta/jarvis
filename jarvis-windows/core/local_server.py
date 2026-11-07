@@ -257,6 +257,23 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+        # Firmware OTA Mirror
+        if path == "/firmware.bin":
+            from pathlib import Path
+            bin_path = Path("c:/JARVIS/firmware_jarvis_custom/.pio/build/custom_jarvis_esp32s3/firmware.bin")
+            if bin_path.exists():
+                data = bin_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_cors_headers()
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            else:
+                self._send_json({"error": "Firmware binary not found"}, status=404)
+                return
+
         # 2. Status Geral
 
         if path in ("/api/pc/mouse", "/api/pc/status"):

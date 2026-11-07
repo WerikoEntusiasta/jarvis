@@ -811,6 +811,84 @@ TOOLS += [
                 "parameters": {"type": "object", "properties": {}},
             },
         },
+            {
+            "type": "function",
+            "function": {
+                "name": "sphere_inspect_firmware",
+                "description": "Inspeciona trechos do código-fonte C++ ou cabeçalhos do firmware da Esfera ESP32-S3 (display circular 240x240, LovyanGFX, Codec ES8311).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Caminho do arquivo relativo a firmware_jarvis_custom (ex: 'src/main.cpp', 'include/jarvis_sphere_secrets.h')."},
+                        "start_line": {"type": "integer", "description": "Linha inicial a ler (padrão 1)."},
+                        "end_line": {"type": "integer", "description": "Linha final a ler (padrão 200)."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sphere_modify_firmware",
+                "description": "Modifica o código C++ do firmware da Esfera ESP32-S3 aplicando substituição cirúrgica de texto (search & replace).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Caminho do arquivo relativo a firmware_jarvis_custom (ex: 'src/main.cpp')."},
+                        "search_target": {"type": "string", "description": "Trecho exato de código a ser substituído."},
+                        "replacement": {"type": "string", "description": "Novo trecho de código substituto."}
+                    },
+                    "required": ["file_path", "search_target", "replacement"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sphere_compile_firmware",
+                "description": "Compila o firmware PlatformIO da Esfera ESP32-S3 gerando o binário oficial firmware.bin e retornando métricas de RAM/Flash e erros de compilação.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "clean": {"type": "boolean", "description": "Se deve limpar a build anterior antes de compilar (padrão: false)."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sphere_upload_usb",
+                "description": "Grava o firmware compilado diretamente na Esfera ESP32-S3 conectada ao PC via cabo USB na porta serial especificada (ex: COM3).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "port": {"type": "string", "description": "Porta serial COM onde a Esfera está conectada (padrão: 'COM3')."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sphere_ota_deploy",
+                "description": "Envia o binário de firmware compilado para o servidor e dispara a atualização sem fio (OTA) na Esfera ESP32-S3 via Wi-Fi sem necessidade de cabos.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url_firmware": {"type": "string", "description": "URL HTTP opcional do binário de firmware. Se omitido, utiliza o espelho oficial/local."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "sphere_get_status",
+                "description": "Obtém o status de hardware, compilação, portas COM e conectividade da Esfera ESP32-S3.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
     ]
 
 
@@ -1287,6 +1365,33 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             from subagent_manager import get_subagent_manager
             tasks = get_subagent_manager().get_active_tasks()
             return {"ok": True, "tasks": tasks, "count": len(tasks)}
+        if name == "sphere_inspect_firmware":
+            from sphere_evolution import sphere_inspect_firmware
+            return sphere_inspect_firmware(
+                file_path=str(args.get("file_path", "src/main.cpp")),
+                start_line=int(args.get("start_line", 1)),
+                end_line=int(args.get("end_line", 200))
+            )
+        if name == "sphere_modify_firmware":
+            from sphere_evolution import sphere_modify_firmware
+            return sphere_modify_firmware(
+                file_path=str(args.get("file_path", "")),
+                search_target=str(args.get("search_target", "")),
+                replacement=str(args.get("replacement", ""))
+            )
+        if name == "sphere_compile_firmware":
+            from sphere_evolution import sphere_compile_firmware
+            return sphere_compile_firmware(clean=bool(args.get("clean", False)))
+        if name == "sphere_upload_usb":
+            from sphere_evolution import sphere_upload_usb
+            return sphere_upload_usb(port=str(args.get("port", "COM3")))
+        if name == "sphere_ota_deploy":
+            from sphere_evolution import sphere_ota_deploy
+            return sphere_ota_deploy(url_firmware=args.get("url_firmware"))
+        if name == "sphere_get_status":
+            from sphere_evolution import sphere_get_status
+            return sphere_get_status()
+
 
 
 
