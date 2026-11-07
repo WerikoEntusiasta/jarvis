@@ -77,29 +77,6 @@ def _pc_module(name: str):
         import importlib
 
         return importlib.import_module(f"system.{name}")
-
-        if name == "list_windows":
-            mod = _pc_module("win_controls")
-            return mod.list_windows() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "focus_window":
-            mod = _pc_module("win_controls")
-            target = str(args.get("target", args.get("nome", args.get("janela", ""))))
-            return mod.focus_window(target) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_processes":
-            mod = _pc_module("win_controls")
-            top_n = int(args.get("top_n", 15))
-            sort_by = str(args.get("sort_by", "cpu"))
-            return mod.list_processes(top_n=top_n, sort_by=sort_by) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_monitors":
-            mod = _pc_module("win_controls")
-            return mod.list_monitors() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "get_system_info":
-            mod = _pc_module("win_controls")
-            return mod.get_system_info() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "run_powershell":
-            mod = _pc_module("win_controls")
-            cmd = str(args.get("command", args.get("comando", "")))
-            return mod.run_powershell(cmd) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
     except Exception as e:  # noqa: BLE001
 
         logger.warning("Módulo de PC '%s' indisponível: %s", name, e)
@@ -117,29 +94,6 @@ def device_catalog_prompt() -> str:
     try:
 
         reg = _tuya().registry()
-
-        if name == "list_windows":
-            mod = _pc_module("win_controls")
-            return mod.list_windows() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "focus_window":
-            mod = _pc_module("win_controls")
-            target = str(args.get("target", args.get("nome", args.get("janela", ""))))
-            return mod.focus_window(target) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_processes":
-            mod = _pc_module("win_controls")
-            top_n = int(args.get("top_n", 15))
-            sort_by = str(args.get("sort_by", "cpu"))
-            return mod.list_processes(top_n=top_n, sort_by=sort_by) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "list_monitors":
-            mod = _pc_module("win_controls")
-            return mod.list_monitors() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "get_system_info":
-            mod = _pc_module("win_controls")
-            return mod.get_system_info() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
-        if name == "run_powershell":
-            mod = _pc_module("win_controls")
-            cmd = str(args.get("command", args.get("comando", "")))
-            return mod.run_powershell(cmd) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
     except Exception as e:  # noqa: BLE001
 
         logger.warning("Catálogo de dispositivos indisponível: %s", e)
@@ -1221,7 +1175,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-        if name in ("mouse_click", "mouse_move", "mouse_scroll", "keyboard_type", "keyboard_press", "keyboard_hotkey", "list_windows", "focus_window", "list_processes", "list_monitors", "get_system_info", "run_powershell"):
+        if name in ("mouse_click", "mouse_move", "mouse_scroll", "mouse_drag", "keyboard_type", "keyboard_press", "keyboard_hotkey"):
 
             mod = _pc_module("pc_automation")
 

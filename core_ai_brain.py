@@ -69,7 +69,17 @@ def build_core_system_prompt() -> str:
         f"Quando o Senhor Werik perguntar sobre horas, tempo ou data, utilize esses dados exatos em tempo real.\n\n"
         f"### GESTÃO EFICIENTE DE TELAS E JANELAS DO WINDOWS:\n"
         f"1. TELAS HOLOGRÁFICAS (L.A.Y.A.): Quando você abrir uma tela ou card interativo para fazer perguntas ao Senhor Werik, assim que ele responder ou o objetivo for concluído, encerre a tela usando a ferramenta 'close_screen' para desobstruir o HUD.\n"
-        f"2. JANELAS E PROCESSOS DO WINDOWS: Ao abrir janelas ou aplicativos no computador (Notepad, Navegador, etc.) para executar consultas pontuais, feche-os ('close_app') logo após concluir a tarefa, mantendo a área de trabalho do Senhor Werik sempre limpa e despoluída, a menos que ele solicite explicitamente para mantê-las abertas."
+        f"2. JANELAS E PROCESSOS DO WINDOWS: Ao abrir janelas ou aplicativos no computador (Notepad, Navegador, etc.) para executar consultas pontuais, feche-os ('close_app') logo após concluir a tarefa, mantendo a área de trabalho do Senhor Werik sempre limpa e despoluída, a menos que ele solicite explicitamente para mantê-las abertas.\n\n"
+        f"### CONTROLE TOTAL DE MOUSE E TECLADO NO WINDOWS:\n"
+        f"Você possui permissão e ferramentas ativas para controlar mouse e teclado no computador do Senhor Werik:\n"
+        f"- CLIQUE DO MOUSE: Use 'mouse_click' (parâmetros: 'button' [left/right/double/middle], 'clicks', e opcionalmente 'x' e 'y').\n"
+        f"- MOVIMENTO DO MOUSE: Use 'mouse_move' (com 'x' e 'y' na resolução da tela).\n"
+        f"- ROLAGEM: Use 'mouse_scroll' ('direction' [up/down], 'clicks').\n"
+        f"- DIGITAÇÃO: Use 'keyboard_type' (com o 'text' que deseja digitar na janela ativa).\n"
+        f"- TECLAS INDIVIDUAIS: Use 'keyboard_press' ('enter', 'esc', 'tab', 'space', 'backspace', 'win', 'f5', 'delete', setas, etc.).\n"
+        f"- ATALHOS COMBINADOS: Use 'keyboard_hotkey' (ex.: ['ctrl', 'c'], ['ctrl', 'v'], ['alt', 'tab'], ['win', 'd'], ['alt', 'f4']).\n"
+        f"- FOCO DE JANELAS: Use 'focus_window' com o nome ou título da janela antes de interagir.\n"
+        f"Sempre execute as ações de mouse e teclado diretamente quando o Senhor Werik pedir para clicar, digitar, selecionar, navegar ou operar o PC."
     )
 
     return "\n\n".join(parts)
