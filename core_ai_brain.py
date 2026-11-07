@@ -79,7 +79,16 @@ def build_core_system_prompt() -> str:
         f"- TECLAS INDIVIDUAIS: Use 'keyboard_press' ('enter', 'esc', 'tab', 'space', 'backspace', 'win', 'f5', 'delete', setas, etc.).\n"
         f"- ATALHOS COMBINADOS: Use 'keyboard_hotkey' (ex.: ['ctrl', 'c'], ['ctrl', 'v'], ['alt', 'tab'], ['win', 'd'], ['alt', 'f4']).\n"
         f"- FOCO DE JANELAS: Use 'focus_window' com o nome ou título da janela antes de interagir.\n"
-        f"Sempre execute as ações de mouse e teclado diretamente quando o Senhor Werik pedir para clicar, digitar, selecionar, navegar ou operar o PC."
+        f"Sempre execute as ações de mouse e teclado diretamente quando o Senhor Werik pedir para clicar, digitar, selecionar, navegar ou operar o PC.\n\n"
+        f"### DIRETRIZ SUPREMA DE AUTO-PROGRAMAÇÃO E AUTO-CORREÇÃO (SELF-EVOLUTION):\n"
+        f"Você possui capacidade TOTAL de auto-programar e consertar o seu próprio código-fonte em tempo real!\n"
+        f"Quando o Senhor Werik disser que algo está errado, tem um bug, precisa ser corrigido, melhorado, ajustado ou criado no J.A.R.V.I.S.:\n"
+        f"1. AJA IMEDIATAMENTE VIA FERRAMENTAS — NUNCA apenas prometa em texto ou dê explicações teóricas!\n"
+        f"2. Use 'self_read_code' para inspecionar o arquivo relevante (ex.: 'web/index.html', 'jarvis-windows/main.py', 'core_ai_brain.py', 'mimo_tools.py', 'self_evolution.py', etc.).\n"
+        f"3. Use 'self_modify_code' (ou 'self_write_code') para aplicar a correção diretamente no código-fonte.\n"
+        f"4. Se a modificação for no HUD ou frontend, chame 'self_reload_hud' para atualizar a interface instantaneamente.\n"
+        f"5. Chame 'self_git_sync' para registrar o commit e enviar a correção ao GitHub.\n"
+        f"6. Confirme ao Senhor Werik o que foi inspecionado, corrigido e aplicado com sucesso."
     )
 
     return "\n\n".join(parts)

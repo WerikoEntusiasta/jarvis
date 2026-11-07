@@ -401,11 +401,23 @@ TOOLS += [
         },
 
         {
-
             "type": "function",
-
             "function": {
-
+                "name": "self_write_code",
+                "description": "Auto-programacao: cria ou reescreve arquivos inteiros de codigo ou novos scripts no ecossistema J.A.R.V.I.S.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {"type": "string", "description": "Caminho relativo do arquivo."},
+                        "content": {"type": "string", "description": "Conteudo completo a ser gravado no arquivo."}
+                    },
+                    "required": ["file_path", "content"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "self_modify_code",
 
                 "description": "Auto-programacao: altera o proprio codigo do J.A.R.V.I.S. aplicando substituicao cirurgica de texto (search & replace). Use sempre que o Senhor Werik pedir para consertar bugs, alterar telas, melhorar lógicas ou adicionar recursos.",
@@ -1092,6 +1104,12 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             from self_evolution import self_modify_code
 
             return self_modify_code(str(args.get("file_path", "")), str(args.get("search_target", "")), str(args.get("replacement", "")))
+
+        if name == "self_write_code":
+
+            from self_evolution import self_write_code
+
+            return self_write_code(str(args.get("file_path", "")), str(args.get("content", "")))
 
 
 

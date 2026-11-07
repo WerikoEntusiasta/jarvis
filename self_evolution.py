@@ -97,14 +97,11 @@ def self_git_status() -> Dict[str, Any]:
         return {"ok": False, "error": str(ex)}
 
 def self_git_sync(commit_message: str = "auto: J.A.R.V.I.S. self-evolution update") -> Dict[str, Any]:
-    """Faz commit das alterações locais e push diretamente para o GitHub oficial."""
+    """Faz commit das alterações locais e push diretamente para o GitHub oficial na branch ativa."""
     try:
-        # 1. git add
         subprocess.run(["git", "add", "-A"], cwd=REPO_ROOT, check=True, timeout=15)
-        # 2. git commit
         commit_res = subprocess.run(["git", "commit", "-m", commit_message], cwd=REPO_ROOT, capture_output=True, text=True, timeout=15)
-        # 3. git push
-        push_res = subprocess.run(["git", "push", "origin", "main"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+        push_res = subprocess.run(["git", "push", "origin", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
         
         ok = push_res.returncode == 0
         return {
@@ -120,7 +117,7 @@ def self_git_sync(commit_message: str = "auto: J.A.R.V.I.S. self-evolution updat
 def self_git_pull() -> Dict[str, Any]:
     """Puxa as últimas atualizações feitas por outras IAs ou por você no GitHub."""
     try:
-        res = subprocess.run(["git", "pull", "origin", "main"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+        res = subprocess.run(["git", "pull", "origin", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
         return {"ok": res.returncode == 0, "output": res.stdout.strip() or res.stderr.strip()}
     except Exception as ex:
         return {"ok": False, "error": str(ex)}
@@ -128,17 +125,17 @@ def self_git_pull() -> Dict[str, Any]:
 def self_reload_hud() -> Dict[str, Any]:
     """Recarrega a interface webview do Windows para aplicar alterações instantaneamente."""
     try:
-        # Despacha evento de recarregamento para o HUD via SSE
-        import requests
-        requests.post("http://127.0.0.1:8085/api/hud/event", json={"type": "reload_view"}, timeout=3)
-        return {"ok": True, "message": "Comando de recarregamento enviado ao HUD."}
-    except Exception:
-        # Fallback via IPC Windows
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1.5)
+        s.connect(("127.0.0.1", 49160))
+        s.sendall(b"RELOAD\n")
+        s.close()
+        return {"ok": True, "message": "HUD recarregado com sucesso via IPC na porta 49160."}
+    except Exception as ex_ipc:
         try:
-            import importlib
-            mod = importlib.import_module("jarvis-windows.main")
-            notify_running_instance = getattr(mod, "notify_running_instance")
-            notify_running_instance("RELOAD_HUD")
-            return {"ok": True, "message": "HUD recarregado via IPC."}
-        except Exception as ex:
-            return {"ok": False, "error": f"Não foi possível recarregar automaticamente: {ex}"}
+            from core.local_server import broadcast_hud_event
+            broadcast_hud_event("command", {"action": "reload"})
+            return {"ok": True, "message": "Comando de recarregamento transmitido via SSE."}
+        except Exception as ex_sse:
+            return {"ok": False, "error": f"Falha ao recarregar HUD: {ex_ipc} / {ex_sse}"}
