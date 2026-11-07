@@ -36,6 +36,7 @@
   </script>
   <script src="/models/face-api/face-api.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';"></script>
   <script src="/jarvis_ui_engine.js"></script>
+  <script src="/jarvis_presentation_engine.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -745,6 +746,45 @@
         <button onclick="document.getElementById('hud-alert-banner').classList.add('hidden')" class="text-rose-300/80 hover:text-white text-xs px-2 py-1">DISMISS</button>
       </div>
 
+            <!-- JARVIS CONTEXTUAL CONTENT PRESENTATION SYSTEM -->
+      <div id="jarvis-presentation-overlay" class="w-full max-w-6xl mx-auto mb-4 spring-trans hidden opacity-0 z-30">
+        <!-- Persistent Presentation Navigation Bar -->
+        <div class="glass-card-stark p-3 rounded-2xl mb-3 flex flex-wrap items-center justify-between gap-2 border border-cyan-400/50 shadow-[0_0_25px_rgba(0,210,255,0.25)]">
+          <!-- Left: Mode Badge & Title -->
+          <div class="flex items-center space-x-2.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span class="text-[10px] font-mono-code font-bold uppercase text-cyan-300 tracking-widest bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40">J.A.R.V.I.S. APRESENTAÇÃO</span>
+            <span id="presentation-header-title" class="text-xs font-bold text-white font-hud tracking-wide truncate max-w-md">APRESENTAÇÃO DINÂMICA</span>
+          </div>
+
+          <!-- Center/Right: Audio Playback & Scene Controls -->
+          <div id="presentation-audio-controls" class="flex items-center space-x-2">
+            <span id="presentation-audio-status" class="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-[9px] font-mono-code font-bold text-cyan-300 flex items-center space-x-1">
+              <span>●</span>
+              <span id="presentation-audio-status-text">CENA 1/1</span>
+            </span>
+            <button id="pres-btn-prev" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.prev()" title="Cena Anterior" class="px-2.5 py-1 rounded-lg bg-sky-950/70 hover:bg-sky-900 border border-cyan-500/40 text-cyan-300 text-xs font-mono-code transition-colors flex items-center space-x-1">
+              <span>◀</span>
+              <span class="hidden sm:inline">ANTERIOR</span>
+            </button>
+            <button id="pres-btn-playpause" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.togglePlayPause()" title="Pausar / Reproduzir" class="px-3 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-400 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.4)] flex items-center space-x-1">
+              <span id="pres-playpause-icon">⏸</span>
+              <span id="pres-playpause-label" class="hidden sm:inline">PAUSAR</span>
+            </button>
+            <button id="pres-btn-next" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.next()" title="Próxima Cena" class="px-2.5 py-1 rounded-lg bg-sky-950/70 hover:bg-sky-900 border border-cyan-500/40 text-cyan-300 text-xs font-mono-code transition-colors flex items-center space-x-1">
+              <span class="hidden sm:inline">PRÓXIMO</span>
+              <span>▶</span>
+            </button>
+            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Voltar ao Núcleo (Esc)" class="px-3 py-1 rounded-lg bg-slate-900/90 hover:bg-rose-950/90 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-xs font-mono-code font-semibold transition-colors flex items-center space-x-1">
+              <span>✕</span>
+              <span>VOLTAR AO NÚCLEO</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Content Mount Area -->
+        <div id="presentation-content-area" class="w-full"></div>
+      </div>
       <!-- JARVIS DYNAMIC VISUAL OS STAGE (Cards, Dashboards, Charts, Weather, Flows, Checklists) -->
       <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
 
@@ -2487,6 +2527,52 @@
         evtSource.addEventListener('close_laya_screen', () => {
           closeLayaScreen();
         });
+
+        evtSource.addEventListener('presentation_start', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.start(data);
+          } catch(err) {
+            console.warn("[Presentation SSE] Erro ao iniciar:", err);
+          }
+        });
+
+        evtSource.addEventListener('presentation_scene', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.renderCurrentScene(data);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('presentation_control', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) {
+              const act = data.action;
+              if (act === 'pause' || act === 'resume') window.JarvisPresentationEngine.togglePlayPause();
+              else if (act === 'next') window.JarvisPresentationEngine.next();
+              else if (act === 'prev') window.JarvisPresentationEngine.prev();
+              else if (act === 'close' || act === 'stop') window.JarvisPresentationEngine.close();
+            }
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('project_screen', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) {
+              window.JarvisPresentationEngine.start({
+                title: data.title || "PROJEÇÃO HOLOGRÁFICA",
+                scenes: [{
+                  title: data.title || "PROJEÇÃO",
+                  component_type: "hologram_card",
+                  content: data.html || data.content || ""
+                }]
+              });
+            }
+          } catch(err) {}
+        });
+
 
         evtSource.addEventListener('toast', (e) => {
           try {
@@ -4646,7 +4732,12 @@
         // JARVIS DYNAMIC VISUAL OS ENGINE RENDERER (Renderização de UI Estruturada)
         const visualStage = document.getElementById('jarvis-visual-stage');
         let renderedVisual = false;
-        if (data.laya_screen || data._screen_data) {
+        if (data.presentation || data.presentation_script) {
+          if (window.JarvisPresentationEngine) {
+            window.JarvisPresentationEngine.start(data.presentation || data.presentation_script);
+            renderedVisual = true;
+          }
+        } else if (data.laya_screen || data._screen_data) {
           renderLayaScreen(data.laya_screen || data._screen_data);
           renderedVisual = true;
         }

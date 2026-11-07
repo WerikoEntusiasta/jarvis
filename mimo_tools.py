@@ -1890,7 +1890,64 @@ TOOLS += [
 
         },
 
-    ]
+            {
+            "type": "function",
+            "function": {
+                "name": "start_dynamic_presentation",
+                "description": "Inicia uma apresentação multimodal cinematográfica no HUD do J.A.R.V.I.S. com sequência de cenas dinâmicas (painéis holográficos, gráficos animados, vídeos, imagens, tabelas cyberpunk, mapas táticos, diagramas de fluxo, comparações visuais e métricas).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Título principal da apresentação."},
+                        "subtitle": {"type": "string", "description": "Subtítulo ou contexto da apresentação."},
+                        "speech_sync": {"type": "boolean", "description": "Se a apresentação deve sincronizar com o avanço da narração."},
+                        "scenes": {
+                            "type": "array",
+                            "description": "Lista de cenas da apresentação. Cada cena possui: title, component_type (hologram_card, chart, video, gallery, table, map, diagram, comparison, metric_grid, conclusion), content, e propriedades específicas do componente.",
+                            "items": {"type": "object"}
+                        }
+                    },
+                    "required": ["title", "scenes"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_presentation_scene",
+                "description": "Atualiza ou injeta uma cena específica na apresentação em andamento no HUD.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "scene": {"type": "object", "description": "Dados da cena a ser exibida ou atualizada."}
+                    },
+                    "required": ["scene"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "control_presentation",
+                "description": "Controla a apresentação ativa no HUD (ações: 'next', 'prev', 'pause', 'resume', 'close', 'stop').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["next", "prev", "pause", "resume", "close", "stop"], "description": "Ação de controle da apresentação."}
+                    },
+                    "required": ["action"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_presentation_status",
+                "description": "Consulta o estado da apresentação multimodal ativa no HUD.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+]
 
 
 
@@ -2933,6 +2990,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             import lg_tv_manager
 
             return lg_tv_manager.get_tv_status()
+
+        if name == "start_dynamic_presentation":
+            import dynamic_presentation_engine as pe
+            res = pe.start_dynamic_presentation(args)
+            if res.get("ok"):
+                res["_presentation_data"] = pe.validate_presentation_script(args)
+            return res
+
+        if name == "update_presentation_scene":
+            import dynamic_presentation_engine as pe
+            sc = args.get("scene") or args
+            return pe.update_presentation_scene(sc)
+
+        if name == "control_presentation":
+            import dynamic_presentation_engine as pe
+            act = str(args.get("action", "next"))
+            return pe.control_presentation(act, args.get("params"))
+
+        if name == "get_presentation_status":
+            import dynamic_presentation_engine as pe
+            return pe.get_presentation_status()
 
 
 

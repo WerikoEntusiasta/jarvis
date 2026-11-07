@@ -459,6 +459,23 @@
         } catch(err) {}
       });
 
+      evtSource.addEventListener('presentation_start', function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          const firstScene = (data.scenes && data.scenes[0]) || {};
+          const title = data.title || "APRESENTAÇÃO";
+          const content = firstScene.content || firstScene.subtitle || "Apresentação multimídia em andamento no HUD principal.";
+          showProjection(title, `<div style="text-align:center;padding:40px;"><h2 style="color:#00f0ff;font-size:36px;margin-bottom:20px;">${title}</h2><p style="color:#e2e8f0;font-size:22px;line-height:1.6;">${content}</p></div>`);
+        } catch(err) {}
+      });
+
+      evtSource.addEventListener('presentation_control', function(e) {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.action === 'close' || data.action === 'stop') closeProjection();
+        } catch(err) {}
+      });
+
       evtSource.addEventListener('close_screen', function(e) {
         closeProjection();
       });

@@ -44,6 +44,8 @@ cmd = [
     "--hidden-import", "session_manager",
     "--hidden-import", "mimo_tools",
     "--hidden-import", "laya_screen_subagent",
+    "--hidden-import", "dynamic_presentation_engine",
+    "--hidden-import", "lg_tv_manager",
     "--hidden-import", "mimo_tts",
     "--hidden-import", "stt_engine",
     "--hidden-import", "services.device_api",
