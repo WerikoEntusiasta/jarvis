@@ -406,9 +406,9 @@ PROVIDERS = {
 
         "provider": "xiaomi_mimo", "model": "mimo-v2.6-flash", "url": _MIMO_URL,
 
-        "key": MIMO_API_KEY, "first_token_timeout": 12, "tools": True,
+        "key": MIMO_API_KEY, "first_token_timeout": 14, "tools": True,
 
-        "extra": {"thinking": {"type": "disabled"}},
+        "extra": {"thinking": {"type": "disabled"}}, "max_tokens": 2500,
 
     },
 
@@ -716,7 +716,7 @@ def _stream_chat(cfg: dict, messages: list, tools: Optional[list]):
 
         "model": cfg["model"], "messages": messages, "stream": True,
 
-        "temperature": 0.6, "max_tokens": cfg.get("max_tokens", 450),
+        "temperature": 0.6, "max_tokens": cfg.get("max_tokens", 2500),
 
     }
 
@@ -1040,45 +1040,55 @@ def stream_direct_ai(user_msg: str, context: str = "", history: list = None, voi
 
 
 
-        # Executa ferramentas e continua a conversa com os resultados
+        # Executa ferramentas e continua a conversa com os resultados de forma resiliente
 
         from mimo_tools import execute_tool, serialize_result
 
+        assistant_tool_calls = []
+        for i, c in enumerate(used_tools):
+            call_id = c.get("id") or f"call_{i}"
+            raw_args = c.get("arguments") or "{}"
+            try:
+                parsed_args = json.loads(raw_args)
+                clean_args_str = json.dumps(parsed_args, ensure_ascii=False)
+            except Exception:
+                clean_args_str = "{}"
+            assistant_tool_calls.append({
+                "id": call_id,
+                "type": "function",
+                "function": {
+                    "name": c.get("name") or "unknown_tool",
+                    "arguments": clean_args_str
+                }
+            })
+
         assistant_msg = {
-
-            "role": "assistant", "content": "".join(round_text) or None,
-
-            "tool_calls": [
-
-                {"id": c["id"] or f"call_{i}", "type": "function",
-
-                 "function": {"name": c["name"], "arguments": c["arguments"] or "{}"}}
-
-                for i, c in enumerate(used_tools)
-
-            ],
-
+            "role": "assistant",
+            "content": "".join(round_text) or None,
+            "tool_calls": assistant_tool_calls,
         }
-
         messages.append(assistant_msg)
 
         pending_image = None
-
         for i, c in enumerate(used_tools):
-
+            call_id = c.get("id") or f"call_{i}"
+            raw_args = c.get("arguments") or "{}"
             try:
-
-                args = json.loads(c["arguments"] or "{}")
-
+                args = json.loads(raw_args)
             except ValueError:
-
-                args = {}
-
-            result = execute_tool(c["name"], args)
-
-            print(f"[CoreBrain] Ferramenta {c['name']}({args}) -> {serialize_result(result)[:120]}")
-
-            messages.append({"role": "tool", "tool_call_id": c["id"] or f"call_{i}", "content": serialize_result(result)})
+                try:
+                    repaired = raw_args.strip()
+                    if repaired.endswith(":"):
+                        repaired += ' ""}'
+                    elif not repaired.endswith("}"):
+                        repaired += "}"
+                    args = json.loads(repaired)
+                except Exception:
+                    args = {}
+            tool_name = c.get("name") or ""
+            result = execute_tool(tool_name, args)
+            print(f"[CoreBrain] Ferramenta {tool_name}({args}) -> {serialize_result(result)[:120]}")
+            messages.append({"role": "tool", "tool_call_id": call_id, "content": serialize_result(result)})
 
             if result.get("_screen_data"):
 

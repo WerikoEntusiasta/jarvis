@@ -992,8 +992,11 @@
       } else if (action === 'save_report') {
         if (window.showJarvisToast) window.showJarvisToast('💾 Relatório da Apresentação Salvo no Histórico.');
       }
-      if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
-        window.sendToOpenClaw(`[AÇÃO APRESENTAÇÃO] ${action}`);
+      if (typeof window !== 'undefined') {
+        const sendFn = window.sendToJarvisCore || window.sendToOpenClaw;
+        if (typeof sendFn === 'function') {
+          sendFn(`[AÇÃO APRESENTAÇÃO] ${action}`);
+        }
       }
     },
 

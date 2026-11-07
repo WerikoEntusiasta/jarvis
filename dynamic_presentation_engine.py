@@ -35,15 +35,35 @@ def _broadcast_to_hud(event_type: str, data: dict) -> bool:
         logger.debug(f"[PresentationEngine] Falha no broadcast SSE: {e}")
         return False
 
-def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
-    """Valida e normaliza o roteiro estruturado de apresentação multimodal."""
-    if not isinstance(script, dict):
-        raise ValueError("O roteiro deve ser um objeto JSON/dicionário.")
+def get_active_presentation() -> Optional[Dict[str, Any]]:
+    """Retorna a apresentação ativa na memória."""
+    global _ACTIVE_PRESENTATION
+    return _ACTIVE_PRESENTATION
 
-    title = str(script.get("title", "Apresentação J.A.R.V.I.S."))
-    scenes = script.get("scenes", [])
+def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
+    """Valida e normaliza o roteiro estruturado de apresentação multimodal de forma resiliente."""
+    if not isinstance(script, dict):
+        script = {}
+
+    title = str(script.get("title") or "Apresentação J.A.R.V.I.S.")
+    subtitle = str(script.get("subtitle") or "Stark Mark VII · Núcleo Soberano")
+    scenes = script.get("scenes")
+
+    # Se não houver cenas ou formato inválido, auto-gera cena inicial de alta tecnologia
     if not isinstance(scenes, list) or len(scenes) == 0:
-        raise ValueError("O roteiro precisa conter pelo menos 1 cena ('scenes').")
+        content_text = script.get("content") or script.get("description") or f"Apresentação executiva e telemetria: {title}."
+        scenes = [{
+            "scene_id": "scene_1",
+            "title": title,
+            "subtitle": subtitle,
+            "component_type": "hologram_card",
+            "content": content_text,
+            "tags": ["J.A.R.V.I.S.", "Stark Mark VII", "Tempo Real"],
+            "metrics": [
+                {"label": "Status", "value": "ONLINE"},
+                {"label": "Núcleo", "value": "Soberano Direct"}
+            ]
+        }]
 
     sanitized_scenes = []
     valid_types = {

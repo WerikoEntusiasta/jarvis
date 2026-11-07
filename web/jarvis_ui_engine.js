@@ -3,7 +3,7 @@
  * Transforma o Jarvis de um chatbot de texto em um Sistema Operacional Visual.
  * 
  * Pipeline:
- * User Request -> OpenClaw / AI -> Visual Intent -> UI Specification -> JarvisUI Renderer -> Interactive Experience
+ * User Request -> J.A.R.V.I.S. Core AI -> Visual Intent -> UI Specification -> JarvisUI Renderer -> Interactive Experience
  * 
  * Design Tokens: HeroUI (glassmorphism/depth) + Radix UI (microinteractions/scales) + Astro (mesh glows/gradients)
  */
@@ -20,7 +20,7 @@
   'use strict';
 
   // =========================================================================
-  // 1. EVENT BUS BI-DIRECIONAL (UI -> OpenClaw / Core)
+  // 1. EVENT BUS BI-DIRECIONAL (UI -> JARVIS Core)
   // =========================================================================
   const eventListeners = new Map();
 
@@ -198,7 +198,7 @@
         results: extraData.results || [
           {
             title: userMsg.toUpperCase(),
-            source: 'OPENCLAW WEB RADAR',
+            source: 'JARVIS STARK RADAR',
             summary: rawReply,
             badge: 'VERIFICADO'
           }
@@ -323,7 +323,7 @@
         steps: [
           { id: 's1', label: 'USUÁRIO', icon: '👤', desc: 'Comando de voz ou texto no HUD' },
           { id: 's2', label: 'JEV & LAYA', icon: '⚡', desc: 'Triagem ultrarrápida Sistema 1' },
-          { id: 's3', label: 'OPENCLAW', icon: '🧠', desc: 'Núcleo cognitivo do agente' },
+          { id: 's3', label: 'STARK CORE', icon: '🧠', desc: 'Núcleo cognitivo soberano J.A.R.V.I.S.' },
           { id: 's4', label: 'MCP / FERRAMENTAS', icon: '🛠️', desc: 'Execução de ações e APIs' },
           { id: 's5', label: 'RESPOSTA VISUAL', icon: '✨', desc: 'Interface adaptativa em tempo real' }
         ],
@@ -359,7 +359,7 @@
         subtitle: 'LINHA DO TEMPO DE EVENTOS E MARCOS',
         events: [
           { year: '2024', title: 'Fundação e Infraestrutura', desc: 'Estruturação do servidor local ZimaOS e automações base.', status: 'completed' },
-          { year: '2025', title: 'Agente Autônomo OpenClaw', desc: 'Integração de LLMs, síntese de voz nativa e visão computacional.', status: 'completed' },
+          { year: '2025', title: 'Agente Autônomo J.A.R.V.I.S.', desc: 'Integração de LLMs, síntese de voz nativa e visão computacional.', status: 'completed' },
           { year: '2026', title: 'Sistema Operacional Visual', desc: 'Lançamento do HUD Stark com geração dinâmica de interfaces e radar 3D.', status: 'current' }
         ]
       };
@@ -1592,7 +1592,7 @@
       formData.forEach((val, key) => { data[key] = val; });
       emit('ui.submit_form', { data });
       if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
-        window.sendToOpenClaw('Configurações enviadas pelo formulário dinâmico: ' + JSON.stringify(data));
+        (window.sendToJarvisCore || window.sendToOpenClaw)('Configurações enviadas pelo formulário dinâmico: ' + JSON.stringify(data));
       }
     },
 
@@ -1619,7 +1619,7 @@
         window.JarvisPresentation.close();
       }
       if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
-        window.sendToOpenClaw('[CONFIRMADO] Ação autorizada pelo usuário: ' + actionId);
+        (window.sendToJarvisCore || window.sendToOpenClaw)('[CONFIRMADO] Ação autorizada pelo usuário: ' + actionId);
       }
     },
 
@@ -1630,7 +1630,7 @@
         window.JarvisPresentation.close();
       }
       if (typeof window !== 'undefined' && typeof window.sendToOpenClaw === 'function') {
-        window.sendToOpenClaw('[CANCELADO] Ação cancelada pelo usuário: ' + actionId);
+        (window.sendToJarvisCore || window.sendToOpenClaw)('[CANCELADO] Ação cancelada pelo usuário: ' + actionId);
       }
     }
   };
@@ -1640,7 +1640,7 @@
     window.addEventListener('jarvis:ui.refresh', (ev) => {
       console.log('[JarvisUI] Ação ui.refresh disparada:', ev.detail);
       if (typeof window.sendToOpenClaw === 'function') {
-        window.sendToOpenClaw('atualizar dados');
+        (window.sendToJarvisCore || window.sendToOpenClaw)('atualizar dados');
       }
     });
 

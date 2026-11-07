@@ -3832,7 +3832,7 @@ TOOLS += [
 
                     },
 
-                    "required": ["title", "scenes"]
+                    "required": ["title"]
 
                 },
 
@@ -5988,7 +5988,7 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
             if res.get("ok"):
 
-                res["_presentation_data"] = pe.validate_presentation_script(args)
+                res["_presentation_data"] = pe.get_active_presentation() or pe.validate_presentation_script(args)
 
             return res
 

@@ -603,38 +603,38 @@
       </div>
     </div>
 
-    <!-- WIDGET 3: OPENCLAW NÚCLEO AUTÔNOMO (Agente J.A.R.V.I.S.) -->
-    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-purple-400/80 transition-all group" onclick="triggerOpenClawInspect()">
+    <!-- WIDGET 3: NÚCLEO COGNITIVO SOBERANO J.A.R.V.I.S. (IA NATIVA DIRETA) -->
+    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-cyan-400/80 transition-all group" onclick="triggerJarvisCoreInspect()">
       <div class="flex items-center justify-between mb-1.5">
         <div class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-purple-500/25 border border-purple-400/50 flex items-center justify-center text-purple-300">
+          <div class="w-6 h-6 rounded-md bg-cyan-500/25 border border-cyan-400/50 flex items-center justify-center text-cyan-300">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           </div>
           <div>
-            <div class="text-[9px] tracking-widest text-purple-400 font-semibold uppercase">AGENTE • COGNITIVO</div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">NÚCLEO • COGNITIVO</div>
             <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
-              <span>OPENCLAW CORE</span>
+              <span>STARK CORE AI</span>
               <span id="openclaw-live-indicator" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             </div>
           </div>
         </div>
-        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-purple-300 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-400/40">ONLINE</span>
+        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/40">SOBERANO</span>
       </div>
 
       <div class="grid grid-cols-2 gap-2 my-1.5 text-[10px] font-mono-code">
-        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-purple-500/25">
-          <div class="text-slate-400 text-[8px] uppercase">MODELO ATIVO</div>
-          <div class="text-purple-300 font-bold text-[11px] truncate">Gemini 3.8 Flash</div>
-        </div>
         <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25">
-          <div class="text-slate-400 text-[8px] uppercase">MCP PROTOCOL</div>
-          <div class="text-cyan-300 font-bold text-[11px] truncate">8 TOOLS ATIVAS</div>
+          <div class="text-slate-400 text-[8px] uppercase">MOTOR DE IA</div>
+          <div class="text-cyan-300 font-bold text-[11px] truncate">Multi-Model Direct</div>
+        </div>
+        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-emerald-500/25">
+          <div class="text-slate-400 text-[8px] uppercase">FERRAMENTAS</div>
+          <div class="text-emerald-300 font-bold text-[11px] truncate">49 TOOLS ATIVAS</div>
         </div>
       </div>
 
-      <div class="pt-1.5 border-t border-purple-900/60 flex items-center justify-between text-[10px] text-slate-400 font-mono-code">
-        <span class="text-slate-400">CONTAINER: <strong id="openclaw-container-display" class="text-emerald-300">openclaw</strong></span>
-        <span class="text-purple-400 group-hover:text-purple-200 transition-colors flex items-center space-x-1">
+      <div class="pt-1.5 border-t border-cyan-900/60 flex items-center justify-between text-[10px] text-slate-400 font-mono-code">
+        <span class="text-slate-400">ARQUITETURA: <strong id="openclaw-container-display" class="text-cyan-300">direto_no_nucleo</strong></span>
+        <span class="text-cyan-400 group-hover:text-cyan-200 transition-colors flex items-center space-x-1">
           <span>INSPECIONAR</span>
           <span>↗</span>
         </span>
@@ -702,7 +702,7 @@
           <span id="vision-presence-badge" class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">AUSENTE</span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-slate-400">OPENCLAW BRIDGE:</span>
+          <span class="text-slate-400">NÚCLEO BRIDGE:</span>
           <span id="vision-openclaw-status" class="text-emerald-400 flex items-center space-x-1">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
             <span>CONECTADO</span>
@@ -2357,6 +2357,12 @@
         }
       }
     }
+
+        // Alias e funções do Núcleo JARVIS Direto (Zero OpenClaw)
+    function triggerJarvisCoreInspect() {
+      sendToOpenClaw("Jarvis, telemetria completa do ecossistema");
+    }
+    const sendToJarvisCore = (text, opts) => sendToOpenClaw(text, opts);
 
     function triggerOpenClawInspect() {
       executeCanvasAction('refresh_openclaw', '');
@@ -4825,7 +4831,7 @@
           if (fromVoice && !input.value.trim()) input.value = val;
           if (fromVoice) setVoiceStatus('error', 'Não consegui confirmar o envio ao núcleo. Tente novamente.');
           else {
-            document.getElementById('live-subtitle').innerText = `"Erro na comunicação com o OpenClaw, Senhor Werik."`;
+            document.getElementById('live-subtitle').innerText = `"Erro na comunicação com o Núcleo JARVIS, Senhor Werik."`;
             document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
           }
         }
