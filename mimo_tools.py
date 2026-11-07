@@ -2,7 +2,19 @@
 
 
 
+
+
+
+
 J.A.R.V.I.S. — Ferramentas nativas (Function Calling) para o cérebro MiMo/Groq.
+
+
+
+
+
+
+
+
 
 
 
@@ -14,7 +26,15 @@ Cada ferramenta tem um schema OpenAI-compatível (TOOLS) e um executor (execute_
 
 
 
+
+
+
+
 - Luzes/dispositivos Tuya: usam nomes e grupos definidos no painel (services.tuya_service).
+
+
+
+
 
 
 
@@ -22,11 +42,23 @@ Cada ferramenta tem um schema OpenAI-compatível (TOOLS) e um executor (execute_
 
 
 
+
+
+
+
 - analyze_screen: captura a tela e devolve a imagem para o modelo com visão (MiMo v2.6).
 
 
 
+
+
+
+
 Ações destrutivas (desligar/reiniciar o PC) NÃO são expostas ao modelo por segurança.
+
+
+
+
 
 
 
@@ -38,7 +70,19 @@ Ações destrutivas (desligar/reiniciar o PC) NÃO são expostas ao modelo por s
 
 
 
+
+
+
+
+
+
+
+
 import base64
+
+
+
+
 
 
 
@@ -46,7 +90,15 @@ import io
 
 
 
+
+
+
+
 import json
+
+
+
+
 
 
 
@@ -54,7 +106,15 @@ import logging
 
 
 
+
+
+
+
 import os
+
+
+
+
 
 
 
@@ -62,11 +122,27 @@ import sys
 
 
 
+
+
+
+
 from pathlib import Path
 
 
 
+
+
+
+
 from typing import Any, Dict, List, Optional
+
+
+
+
+
+
+
+
 
 
 
@@ -82,7 +158,19 @@ logger = logging.getLogger("MimoTools")
 
 
 
+
+
+
+
+
+
+
+
 IS_WINDOWS = os.name == "nt"
+
+
+
+
 
 
 
@@ -98,11 +186,31 @@ _ROOT = Path(__file__).resolve().parent
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 def _tuya():
 
 
 
+
+
+
+
     from services.tuya_service import tuya_service
+
+
+
+
 
 
 
@@ -118,7 +226,23 @@ def _tuya():
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 def _pc_module(name: str):
+
+
+
+
 
 
 
@@ -126,11 +250,23 @@ def _pc_module(name: str):
 
 
 
+
+
+
+
     if not IS_WINDOWS:
 
 
 
+
+
+
+
         return None
+
+
+
+
 
 
 
@@ -138,7 +274,15 @@ def _pc_module(name: str):
 
 
 
+
+
+
+
         if base.exists() and str(base) not in sys.path:
+
+
+
+
 
 
 
@@ -146,7 +290,15 @@ def _pc_module(name: str):
 
 
 
+
+
+
+
     try:
+
+
+
+
 
 
 
@@ -154,9 +306,19 @@ def _pc_module(name: str):
 
 
 
+
+
+
+
         return importlib.import_module(f"system.{name}")
 
+
+
     except Exception as e:  # noqa: BLE001
+
+
+
+
 
 
 
@@ -164,7 +326,23 @@ def _pc_module(name: str):
 
 
 
+
+
+
+
         return None
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -180,7 +358,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
     """Resumo textual de dispositivos/grupos para o modelo resolver nomes ditos por voz."""
+
+
+
+
 
 
 
@@ -188,9 +374,19 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
         reg = _tuya().registry()
 
+
+
     except Exception as e:  # noqa: BLE001
+
+
+
+
 
 
 
@@ -198,7 +394,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
         return ""
+
+
+
+
 
 
 
@@ -206,7 +410,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
         return ""
+
+
+
+
 
 
 
@@ -214,7 +426,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
     lines = ["### DISPOSITIVOS INTELIGENTES (use control_lights com o NOME exato abaixo):"]
+
+
+
+
 
 
 
@@ -222,7 +442,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
         al = f" (apelidos: {', '.join(d['aliases'])})" if d["aliases"] else ""
+
+
+
+
 
 
 
@@ -230,7 +458,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
     for g in reg["groups"]:
+
+
+
+
 
 
 
@@ -238,7 +474,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
         mem = ", ".join(names.get(m, m) for m in g["members"])
+
+
+
+
 
 
 
@@ -246,7 +490,15 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
     lines.append("- Para todas as luzes use target='todas'.")
+
+
+
+
 
 
 
@@ -262,7 +514,23 @@ def device_catalog_prompt() -> str:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 TOOLS: List[Dict[str, Any]] = [
+
+
+
+
 
 
 
@@ -270,11 +538,23 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
         "type": "function",
 
 
 
+
+
+
+
         "function": {
+
+
+
+
 
 
 
@@ -282,7 +562,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
             "description": "Liga, desliga ou alterna lâmpadas/dispositivos inteligentes por nome, apelido ou grupo.",
+
+
+
+
 
 
 
@@ -290,7 +578,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
                 "type": "object",
+
+
+
+
 
 
 
@@ -298,7 +594,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
                     "target": {"type": "string", "description": "Nome do dispositivo, apelido, nome do grupo ou 'todas'."},
+
+
+
+
 
 
 
@@ -306,7 +610,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -314,7 +626,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -322,7 +642,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
     },
+
+
+
+
 
 
 
@@ -330,7 +658,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
         "type": "function",
+
+
+
+
 
 
 
@@ -338,7 +674,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
             "name": "get_lights_status",
+
+
+
+
 
 
 
@@ -346,7 +690,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
             "parameters": {"type": "object", "properties": {}},
+
+
+
+
 
 
 
@@ -354,7 +706,15 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
     },
+
+
+
+
 
 
 
@@ -366,7 +726,19 @@ TOOLS: List[Dict[str, Any]] = [
 
 
 
+
+
+
+
+
+
+
+
 # Ferramentas universais para todas as sessoes (Windows, Esfera, ZimaOS, Web)
+
+
+
+
 
 
 
@@ -374,7 +746,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -382,7 +762,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -390,7 +778,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Ajusta o volume do PC.",
+
+
+
+
 
 
 
@@ -398,11 +794,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -410,7 +818,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         "steps": {"type": "integer", "description": "Passos de 2% (padrão 5)."},
+
+
+
+
 
 
 
@@ -418,7 +834,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "required": ["action"],
+
+
+
+
 
 
 
@@ -426,7 +850,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -434,7 +866,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -442,7 +882,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -450,7 +898,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Controla mídia (Spotify/YouTube etc.) no PC.",
+
+
+
+
 
 
 
@@ -458,7 +914,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
+
+
+
+
 
 
 
@@ -466,7 +930,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "required": ["action"],
+
+
+
+
 
 
 
@@ -474,7 +946,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -482,7 +962,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -490,7 +978,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -498,7 +994,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Abre um aplicativo ou site no PC (ex.: spotify, chrome, calculadora, https://...).",
+
+
+
+
 
 
 
@@ -506,7 +1010,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -514,7 +1026,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -522,7 +1042,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -530,7 +1058,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Fecha um aplicativo em execução no PC.",
+
+
+
+
 
 
 
@@ -538,7 +1074,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -546,7 +1090,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -554,7 +1106,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -562,7 +1122,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Bloqueia a sessão do Windows.",
+
+
+
+
 
 
 
@@ -570,7 +1138,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -578,7 +1154,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -586,7 +1170,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -594,7 +1186,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Captura a tela do PC para você ver. Use quando o Senhor pedir para olhar/analisar a tela.",
+
+
+
+
 
 
 
@@ -602,7 +1202,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
+
+
+
+
 
 
 
@@ -610,7 +1218,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -618,7 +1234,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -626,11 +1250,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -638,7 +1274,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Aciona o subagente de IA L.A.Y.A. para gerar dinamicamente uma tela/painel/interface sob demanda no HUD do monitor do Senhor Werik. Use sempre que o usuário pedir para 'mostrar uma tela', 'montar tela', 'exibir gráficos/status', 'painel de...', etc. A IA desenha gráficos, cards, métricas ou layouts completos com liberdade total sobre o display.",
+
+
+
+
 
 
 
@@ -646,11 +1290,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -658,7 +1314,15 @@ TOOLS += [
 
 
 
+
+
+
+
                             "type": "string",
+
+
+
+
 
 
 
@@ -666,7 +1330,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         },
+
+
+
+
 
 
 
@@ -674,7 +1346,15 @@ TOOLS += [
 
 
 
+
+
+
+
                             "type": "string",
+
+
+
+
 
 
 
@@ -682,7 +1362,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         }
+
+
+
+
 
 
 
@@ -690,7 +1378,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "required": ["prompt"]
+
+
+
+
 
 
 
@@ -698,7 +1394,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -706,7 +1410,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -714,7 +1426,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -722,7 +1442,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Fecha a tela dinamica aberta pela L.A.Y.A. e restaura o nucleo e cards originais do HUD.",
+
+
+
+
 
 
 
@@ -730,7 +1458,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -738,7 +1474,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -746,7 +1490,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -754,7 +1506,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Auto-programacao: le arquivos-fonte do proprio J.A.R.V.I.S. (codigo, HUD, agentes, firmware, etc.) para auto-inspecao e auto-programacao.",
+
+
+
+
 
 
 
@@ -762,11 +1522,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -774,7 +1546,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         "start_line": {"type": "integer", "description": "Linha inicial a ler (padrao 1)."},
+
+
+
+
 
 
 
@@ -782,7 +1562,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -790,7 +1578,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -798,47 +1594,95 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
         {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "self_write_code",
 
+
+
                 "description": "Auto-programacao: cria ou reescreve arquivos inteiros de codigo ou novos scripts no ecossistema J.A.R.V.I.S.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
+
+
 
                     "properties": {
 
+
+
                         "file_path": {"type": "string", "description": "Caminho relativo do arquivo."},
+
+
 
                         "content": {"type": "string", "description": "Conteudo completo a ser gravado no arquivo."}
 
+
+
                     },
+
+
 
                     "required": ["file_path", "content"]
 
+
+
                 },
+
+
 
             },
 
+
+
         },
+
+
 
         {
 
+
+
             "type": "function",
+
+
 
             "function": {
 
+
+
                 "name": "self_modify_code",
+
+
+
+
 
 
 
@@ -846,7 +1690,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "parameters": {
+
+
+
+
 
 
 
@@ -854,7 +1706,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -862,7 +1722,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         "search_target": {"type": "string", "description": "Trecho exato de codigo existente a ser substituido."},
+
+
+
+
 
 
 
@@ -870,7 +1738,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -878,7 +1754,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -886,7 +1770,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -894,11 +1786,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -906,7 +1810,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Auto-programacao: sincroniza, commita e envia (git commit & push) as melhorias que voce fez no seu codigo diretamente para o repositorio central soberano no GitHub (origin/main).",
+
+
+
+
 
 
 
@@ -914,11 +1826,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -926,7 +1850,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -934,7 +1866,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -942,7 +1882,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -950,11 +1898,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -962,7 +1922,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Auto-programacao: puxa as ultimas atualizacoes do repositorio soberano no GitHub (git pull) feitas por voce, por outras IAs ou pelo Senhor Werik.",
+
+
+
+
 
 
 
@@ -970,7 +1938,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -978,7 +1954,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -986,7 +1970,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -994,7 +1986,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Auto-programacao: recarrega a interface do HUD Windows (F5 / Reload) para aplicar instantaneamente na tela qualquer modificacao feita no codigo.",
+
+
+
+
 
 
 
@@ -1002,7 +2002,15 @@ TOOLS += [
 
 
 
+
+
+
+
             },
+
+
+
+
 
 
 
@@ -1010,7 +2018,15 @@ TOOLS += [
 
 
 
+
+
+
+
         {
+
+
+
+
 
 
 
@@ -1018,7 +2034,15 @@ TOOLS += [
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1026,7 +2050,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Abre o Google Search no navegador do PC Windows pesquisando por qualquer termo, pessoa, assunto ou dúvida (ex: 'Manoel Gomes', 'previsão do tempo', 'notícias'), além de buscar informações na web.",
+
+
+
+
 
 
 
@@ -1034,11 +2066,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1046,11 +2090,23 @@ TOOLS += [
 
 
 
+
+
+
+
                         "open_browser": {"type": "boolean", "description": "Se deve abrir a aba de pesquisa no navegador do PC (padrão: true)."}
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1058,7 +2114,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1066,7 +2130,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1074,11 +2146,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1086,7 +2170,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Clica com o mouse no PC Windows (botão esquerdo, direito, meio, ou duplo clique). Se x e y forem fornecidos, move o cursor até a posição antes de clicar.",
+
+
+
+
 
 
 
@@ -1094,11 +2186,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1106,7 +2210,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         "clicks": {"type": "integer", "description": "Número de cliques (padrão: 1)."},
+
+
+
+
 
 
 
@@ -1114,7 +2226,15 @@ TOOLS += [
 
 
 
+
+
+
+
                         "y": {"type": "integer", "description": "Coordenada Y na tela (opcional)."},
+
+
+
+
 
 
 
@@ -1122,7 +2242,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1130,7 +2258,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1138,11 +2274,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1150,7 +2298,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Move o cursor do mouse para as coordenadas (x, y) na tela do PC Windows.",
+
+
+
+
 
 
 
@@ -1158,11 +2314,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1170,11 +2338,23 @@ TOOLS += [
 
 
 
+
+
+
+
                         "y": {"type": "integer", "description": "Coordenada Y (pixels do topo)."},
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1182,7 +2362,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1190,7 +2378,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1198,11 +2394,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1210,7 +2418,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Rola a tela/janela ativa com a roda do mouse para cima ('up') ou para baixo ('down').",
+
+
+
+
 
 
 
@@ -1218,11 +2434,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1230,11 +2458,23 @@ TOOLS += [
 
 
 
+
+
+
+
                         "clicks": {"type": "integer", "description": "Quantidade de passos (padrão 5)."},
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1242,7 +2482,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1250,7 +2498,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1258,11 +2514,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1270,7 +2538,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Digita um texto no teclado na janela ativa do PC Windows.",
+
+
+
+
 
 
 
@@ -1278,11 +2554,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1290,7 +2578,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1298,7 +2594,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1306,7 +2610,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1314,11 +2626,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1326,7 +2650,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Pressiona uma tecla específica do teclado no PC Windows (ex.: 'enter', 'esc', 'tab', 'space', 'backspace', 'win', 'f5', 'delete', 'up', 'down').",
+
+
+
+
 
 
 
@@ -1334,11 +2666,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1346,7 +2690,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1354,7 +2706,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1362,7 +2722,15 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
+
+
 
 
 
@@ -1370,11 +2738,23 @@ TOOLS += [
 
 
 
+
+
+
+
             "type": "function",
 
 
 
+
+
+
+
             "function": {
+
+
+
+
 
 
 
@@ -1382,7 +2762,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 "description": "Executa um atalho de teclado no PC Windows combinando múltiplas teclas simultâneas (ex.: ['ctrl', 'c'], ['ctrl', 'v'], ['alt', 'tab'], ['win', 'd'], ['alt', 'f4'], ['ctrl', 'shift', 'esc']).",
+
+
+
+
 
 
 
@@ -1390,11 +2778,23 @@ TOOLS += [
 
 
 
+
+
+
+
                     "type": "object",
 
 
 
+
+
+
+
                     "properties": {
+
+
+
+
 
 
 
@@ -1402,7 +2802,15 @@ TOOLS += [
 
 
 
+
+
+
+
                             "type": "array",
+
+
+
+
 
 
 
@@ -1410,7 +2818,15 @@ TOOLS += [
 
 
 
+
+
+
+
                             "description": "Lista de teclas do atalho (ex.: ['ctrl', 'v'] ou ['alt', 'tab']).",
+
+
+
+
 
 
 
@@ -1418,7 +2834,15 @@ TOOLS += [
 
 
 
+
+
+
+
                     },
+
+
+
+
 
 
 
@@ -1426,7 +2850,15 @@ TOOLS += [
 
 
 
+
+
+
+
                 },
+
+
+
+
 
 
 
@@ -1434,129 +2866,257 @@ TOOLS += [
 
 
 
+
+
+
+
         },
+
+
 
         {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "list_windows",
 
+
+
                 "description": "Lista todas as janelas abertas e visiveis no Windows (com titulo, processo e HWND).",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "focus_window",
 
+
+
                 "description": "Traz uma janela especifica para o primeiro plano pelo titulo ou nome do aplicativo.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
+
+
 
                     "properties": {"target": {"type": "string", "description": "Titulo da janela ou nome do app (ex: 'chrome', 'whatsapp', 'spotify')."}},
 
+
+
                     "required": ["target"],
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "list_processes",
 
+
+
                 "description": "Lista os processos em execucao no Windows com PID, Nome, uso de CPU % e Memoria MB.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "top_n": {"type": "integer", "description": "Quantidade maxima de processos (padrao 15)."},
 
+
+
                         "sort_by": {"type": "string", "enum": ["cpu", "memory"], "description": "Ordenar por 'cpu' ou 'memory'."},
+
+
 
                     },
 
+
+
                 },
+
+
 
             },
 
+
+
         },
+
+
 
         {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "list_monitors",
 
+
+
                 "description": "Lista os monitores conectados, suas resolucoes, posicoes e monitor principal.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "get_system_info",
 
+
+
                 "description": "Obtem informacoes do sistema operacional Windows, versao, tempo de atividade (uptime), IP da rede e hardware.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "run_powershell",
 
+
+
                 "description": "Executa um comando ou consulta PowerShell no Windows e retorna o output real (stdout/stderr).",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
+
+
 
                     "properties": {"command": {"type": "string", "description": "Comando PowerShell a executar."}},
 
+
+
                     "required": ["command"],
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
@@ -1564,269 +3124,631 @@ TOOLS += [
 
 
 
+
+
+
+
+
+
             {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "spawn_subagent",
 
+
+
                 "description": "Dispara um subagente autônomo em segundo plano para executar uma tarefa paralela assíncrona (pesquisas, automações, etc.) sem travar o diálogo principal.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "prompt": {"type": "string", "description": "Descrição detalhada da tarefa a ser realizada pelo subagente."}
 
+
+
                     },
+
+
 
                     "required": ["prompt"]
 
+
+
                 },
+
+
 
             },
 
+
+
         },
+
+
 
         {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "cancel_subagents",
 
+
+
                 "description": "Interrompe e cancela todos os subagentes e tarefas em segundo plano em execução.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "list_subagents",
 
+
+
                 "description": "Lista todas as tarefas e subagentes ativos rodando em segundo plano.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
 
+
+
         },
+
+
 
             {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_inspect_firmware",
 
+
+
                 "description": "Inspeciona trechos do código-fonte C++ ou cabeçalhos do firmware da Esfera ESP32-S3 (display circular 240x240, LovyanGFX, Codec ES8311).",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "file_path": {"type": "string", "description": "Caminho do arquivo relativo a firmware_jarvis_custom (ex: 'src/main.cpp', 'include/jarvis_sphere_secrets.h')."},
 
+
+
                         "start_line": {"type": "integer", "description": "Linha inicial a ler (padrão 1)."},
+
+
 
                         "end_line": {"type": "integer", "description": "Linha final a ler (padrão 200)."}
 
+
+
                     }
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_modify_firmware",
 
+
+
                 "description": "Modifica o código C++ do firmware da Esfera ESP32-S3 aplicando substituição cirúrgica de texto (search & replace).",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "file_path": {"type": "string", "description": "Caminho do arquivo relativo a firmware_jarvis_custom (ex: 'src/main.cpp')."},
 
+
+
                         "search_target": {"type": "string", "description": "Trecho exato de código a ser substituído."},
+
+
 
                         "replacement": {"type": "string", "description": "Novo trecho de código substituto."}
 
+
+
                     },
+
+
 
                     "required": ["file_path", "search_target", "replacement"]
 
+
+
                 },
+
+
 
             },
 
+
+
         },
+
+
 
         {
 
+
+
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_compile_firmware",
 
+
+
                 "description": "Compila o firmware PlatformIO da Esfera ESP32-S3 gerando o binário oficial firmware.bin e retornando métricas de RAM/Flash e erros de compilação.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "clean": {"type": "boolean", "description": "Se deve limpar a build anterior antes de compilar (padrão: false)."}
 
+
+
                     }
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_upload_usb",
 
+
+
                 "description": "Grava o firmware compilado diretamente na Esfera ESP32-S3 conectada ao PC via cabo USB na porta serial especificada (ex: COM3).",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "port": {"type": "string", "description": "Porta serial COM onde a Esfera está conectada (padrão: 'COM3')."}
 
+
+
                     }
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_ota_deploy",
 
+
+
                 "description": "Envia o binário de firmware compilado para o servidor e dispara a atualização sem fio (OTA) na Esfera ESP32-S3 via Wi-Fi sem necessidade de cabos.",
+
+
 
                 "parameters": {
 
+
+
                     "type": "object",
 
+
+
                     "properties": {
+
+
 
                         "url_firmware": {"type": "string", "description": "URL HTTP opcional do binário de firmware. Se omitido, utiliza o espelho oficial/local."}
 
+
+
                     }
+
+
 
                 },
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "sphere_get_status",
 
+
+
                 "description": "Obtém o status de hardware, compilação, portas COM e conectividade da Esfera ESP32-S3.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "lg_tv_power_on_and_open_app",
 
+
+
                 "description": "Liga a Smart TV LG 55 polegadas via Wake-on-LAN (WoL) e abre automaticamente o aplicativo J.A.R.V.I.S. TV em tela cheia.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "lg_tv_launch_app",
 
+
+
                 "description": "Abre o aplicativo J.A.R.V.I.S. TV em tela cheia na Smart TV LG conectada na rede local.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
+
+
 
         },
 
+
+
         {
+
+
 
             "type": "function",
 
+
+
             "function": {
+
+
 
                 "name": "lg_tv_close_app",
 
+
+
                 "description": "Fecha o aplicativo J.A.R.V.I.S. TV na Smart TV LG.",
+
+
 
                 "parameters": {"type": "object", "properties": {}},
 
+
+
             },
 
+
+
         },
+
+
+
+        {
+
+
+
+            "type": "function",
+
+
+
+            "function": {
+
+
+
+                "name": "lg_tv_project_screen",
+
+
+
+                "description": "Projeta um card holográfico ou tela completa em tempo real na Smart TV LG.",
+
+
+
+                "parameters": {
+
+
+
+                    "type": "object",
+
+
+
+                    "properties": {
+
+
+
+                        "title": {"type": "string", "description": "Título da tela ou card projetado."},
+
+
+
+                        "html": {"type": "string", "description": "Conteúdo HTML ou texto formatado para exibição holográfica."}
+
+
+
+                    },
+
+
+
+                    "required": ["title", "html"]
+
+
+
+                },
+
+
+
+            },
+
+
+
+        },
+
+
+
+        {
+
+
+
+            "type": "function",
+
+
+
+            "function": {
+
+
+
+                "name": "lg_tv_close_screen",
+
+
+
+                "description": "Fecha a projeção em tela cheia na Smart TV LG, retornando ao núcleo do Arc Reactor.",
+
+
+
+                "parameters": {"type": "object", "properties": {}},
+
+
+
+            },
+
+
+
+        },
+
+
 
         {
 
@@ -1834,9 +3756,9 @@ TOOLS += [
 
             "function": {
 
-                "name": "lg_tv_project_screen",
+                "name": "lg_tv_speak",
 
-                "description": "Projeta um card holográfico ou tela completa em tempo real na Smart TV LG.",
+                "description": "Fala verbalmente através dos alto-falantes da Smart TV LG exibindo a legenda em tempo real no visor.",
 
                 "parameters": {
 
@@ -1844,31 +3766,15 @@ TOOLS += [
 
                     "properties": {
 
-                        "title": {"type": "string", "description": "Título da tela ou card projetado."},
+                        "speech_text": {"type": "string", "description": "Texto a ser falado na Smart TV."},
 
-                        "html": {"type": "string", "description": "Conteúdo HTML ou texto formatado para exibição holográfica."}
+                        "audio_url": {"type": "string", "description": "URL do arquivo de áudio sintetizado (opcional)."}
 
                     },
 
-                    "required": ["title", "html"]
+                    "required": ["speech_text"]
 
                 },
-
-            },
-
-        },
-
-        {
-
-            "type": "function",
-
-            "function": {
-
-                "name": "lg_tv_close_screen",
-
-                "description": "Fecha a projeção em tela cheia na Smart TV LG, retornando ao núcleo do Arc Reactor.",
-
-                "parameters": {"type": "object", "properties": {}},
 
             },
 
@@ -1890,64 +3796,131 @@ TOOLS += [
 
         },
 
+
+
             {
+
             "type": "function",
+
             "function": {
+
                 "name": "start_dynamic_presentation",
+
                 "description": "Inicia uma apresentação multimodal cinematográfica no HUD do J.A.R.V.I.S. com sequência de cenas dinâmicas (painéis holográficos, gráficos animados, vídeos, imagens, tabelas cyberpunk, mapas táticos, diagramas de fluxo, comparações visuais e métricas).",
+
                 "parameters": {
+
                     "type": "object",
+
                     "properties": {
+
                         "title": {"type": "string", "description": "Título principal da apresentação."},
+
                         "subtitle": {"type": "string", "description": "Subtítulo ou contexto da apresentação."},
+
                         "speech_sync": {"type": "boolean", "description": "Se a apresentação deve sincronizar com o avanço da narração."},
+
                         "scenes": {
+
                             "type": "array",
+
                             "description": "Lista de cenas da apresentação. Cada cena possui: title, component_type (hologram_card, chart, video, gallery, table, map, diagram, comparison, metric_grid, conclusion), content, e propriedades específicas do componente.",
+
                             "items": {"type": "object"}
+
                         }
+
                     },
+
                     "required": ["title", "scenes"]
+
                 },
+
             },
+
         },
+
         {
+
             "type": "function",
+
             "function": {
+
                 "name": "update_presentation_scene",
+
                 "description": "Atualiza ou injeta uma cena específica na apresentação em andamento no HUD.",
+
                 "parameters": {
+
                     "type": "object",
+
                     "properties": {
+
                         "scene": {"type": "object", "description": "Dados da cena a ser exibida ou atualizada."}
+
                     },
+
                     "required": ["scene"]
+
                 },
+
             },
+
         },
+
         {
+
             "type": "function",
+
             "function": {
+
                 "name": "control_presentation",
+
                 "description": "Controla a apresentação ativa no HUD (ações: 'next', 'prev', 'pause', 'resume', 'close', 'stop').",
+
                 "parameters": {
+
                     "type": "object",
+
                     "properties": {
+
                         "action": {"type": "string", "enum": ["next", "prev", "pause", "resume", "close", "stop"], "description": "Ação de controle da apresentação."}
+
                     },
+
                     "required": ["action"]
+
                 },
+
             },
+
         },
+
         {
+
             "type": "function",
+
             "function": {
+
                 "name": "get_presentation_status",
+
                 "description": "Consulta o estado da apresentação multimodal ativa no HUD.",
+
                 "parameters": {"type": "object", "properties": {}},
+
             },
+
         },
+
 ]
+
+
+
+
+
+
+
+
 
 
 
@@ -1967,7 +3940,23 @@ TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]:
+
+
+
+
 
 
 
@@ -1975,7 +3964,15 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
 
 
+
+
+
+
     try:
+
+
+
+
 
 
 
@@ -1983,7 +3980,15 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
 
 
+
+
+
+
         img = ImageGrab.grab(all_screens=False).convert("RGB")
+
+
+
+
 
 
 
@@ -1991,11 +3996,23 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
 
 
+
+
+
+
         buf = io.BytesIO()
 
 
 
+
+
+
+
         img.save(buf, "JPEG", quality=quality)
+
+
+
+
 
 
 
@@ -2005,11 +4022,25 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
 
 
+
+
+
+
+
+
     except Exception as e:  # noqa: BLE001
 
 
 
+
+
+
+
         logger.error("Falha ao capturar a tela: %s", e)
+
+
+
+
 
 
 
@@ -2025,7 +4056,23 @@ def capture_screen_b64(max_side: int = 1280, quality: int = 70) -> Optional[str]
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
+
+
+
+
 
 
 
@@ -2033,7 +4080,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
     try:
+
+
+
+
 
 
 
@@ -2041,7 +4096,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         for mod_name in ("jarvis_screen_router", "__main__"):
+
+
+
+
 
 
 
@@ -2049,7 +4112,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
             if mod and hasattr(mod, "active_sessions"):
+
+
+
+
 
 
 
@@ -2057,7 +4128,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                 if win_ws and not win_ws.closed:
+
+
+
+
 
 
 
@@ -2065,7 +4144,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                     msg = json.dumps({"type": "windows_command", "action": action, "params": params})
+
+
+
+
 
 
 
@@ -2073,7 +4160,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                         loop = asyncio.get_event_loop()
+
+
+
+
 
 
 
@@ -2081,7 +4176,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                             asyncio.create_task(win_ws.send_str(msg))
+
+
+
+
 
 
 
@@ -2089,7 +4192,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                             loop.run_until_complete(win_ws.send_str(msg))
+
+
+
+
 
 
 
@@ -2097,7 +4208,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
                     except Exception as loop_err:
+
+
+
+
 
 
 
@@ -2105,7 +4224,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
     except Exception as e:
+
+
+
+
 
 
 
@@ -2117,7 +4244,19 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
+
+
+
+
     # Fallback HTTP caso o Windows tenha porta mapeada
+
+
+
+
 
 
 
@@ -2125,7 +4264,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         import urllib.request
+
+
+
+
 
 
 
@@ -2133,7 +4280,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         req = urllib.request.Request(
+
+
+
+
 
 
 
@@ -2141,7 +4296,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
             data=json.dumps({"action": action, "params": params}).encode("utf-8"),
+
+
+
+
 
 
 
@@ -2149,7 +4312,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         )
+
+
+
+
 
 
 
@@ -2157,7 +4328,15 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         return json.loads(resp.read().decode("utf-8"))
+
+
+
+
 
 
 
@@ -2165,7 +4344,19 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
         pass
+
+
+
+
+
+
+
+
 
 
 
@@ -2181,7 +4372,19 @@ def _dispatch_to_windows_pc(action: str, params: dict) -> dict:
 
 
 
+
+
+
+
+
+
+
+
 def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+
+
+
+
 
 
 
@@ -2189,7 +4392,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
     try:
+
+
+
+
 
 
 
@@ -2197,7 +4408,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             action = str(args.get("action", "toggle")).lower()
+
+
+
+
 
 
 
@@ -2205,7 +4424,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             svc = _tuya()
+
+
+
+
 
 
 
@@ -2213,7 +4440,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             res = fn(target)
+
+
+
+
 
 
 
@@ -2221,7 +4456,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return {"ok": True, "alvo": res.get("label", target), "ligado": res.get("is_on")}
+
+
+
+
 
 
 
@@ -2233,11 +4476,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "get_lights_status":
 
 
 
+
+
+
+
             data = _tuya().list_devices(with_status=True)
+
+
+
+
 
 
 
@@ -2249,7 +4508,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         # Se estivermos rodando no ZimaOS/Docker (Esfera), despacha acoes do PC Windows via bridge
+
+
+
+
 
 
 
@@ -2257,7 +4528,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             "pc_volume", "pc_media", "open_app", "close_app", "lock_pc",
+
+
+
+
 
 
 
@@ -2265,7 +4544,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             "google_search", "mouse_click", "mouse_move", "mouse_scroll",
+
+
+
+
 
 
 
@@ -2273,7 +4560,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         ):
+
+
+
+
 
 
 
@@ -2285,11 +4580,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "pc_volume":
 
 
 
+
+
+
+
             mod = _pc_module("win_controls")
+
+
+
+
 
 
 
@@ -2297,11 +4608,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         if name == "pc_media":
 
 
 
+
+
+
+
             mod = _pc_module("win_controls")
+
+
+
+
 
 
 
@@ -2309,11 +4632,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         if name == "open_app":
 
 
 
+
+
+
+
             mod = _pc_module("win_controls")
+
+
+
+
 
 
 
@@ -2321,11 +4656,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         if name == "close_app":
 
 
 
+
+
+
+
             mod = _pc_module("win_controls")
+
+
+
+
 
 
 
@@ -2333,7 +4680,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         if name == "lock_pc":
+
+
+
+
 
 
 
@@ -2341,7 +4696,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             return mod.lock_workstation() if mod else {"ok": False, "erro": "módulo indisponível"}
+
+
+
+
 
 
 
@@ -2349,7 +4712,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             b64 = capture_screen_b64()
+
+
+
+
 
 
 
@@ -2357,7 +4728,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return {"ok": False, "erro": "não foi possível capturar a tela"}
+
+
+
+
 
 
 
@@ -2365,7 +4744,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         if name == "generate_and_show_screen":
+
+
+
+
 
 
 
@@ -2373,7 +4760,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 import sys
+
+
+
+
 
 
 
@@ -2381,7 +4776,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 root = Path(__file__).resolve().parent
+
+
+
+
 
 
 
@@ -2389,7 +4792,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                     sys.path.insert(0, str(root))
+
+
+
+
 
 
 
@@ -2397,7 +4808,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 laya = get_laya_agent()
+
+
+
+
 
 
 
@@ -2405,7 +4824,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 hint = str(args.get("context_hint", ""))
+
+
+
+
 
 
 
@@ -2413,7 +4840,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 screen_res = laya.generate_screen(full_prompt)
+
+
+
+
 
 
 
@@ -2421,7 +4856,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                     laya.broadcast_to_hud(screen_res["screen"])
+
+
+
+
 
 
 
@@ -2429,7 +4872,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                         "ok": True,
+
+
+
+
 
 
 
@@ -2437,7 +4888,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                         "title": screen_res["screen"].get("title"),
+
+
+
+
 
 
 
@@ -2445,7 +4904,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                         "_screen_data": screen_res["screen"],
+
+
+
+
 
 
 
@@ -2453,11 +4920,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return {"ok": False, "erro": screen_res.get("error", "Falha na geração de tela pela L.A.Y.A.")}
 
 
 
+
+
+
+
             except Exception as ex:
+
+
+
+
 
 
 
@@ -2465,7 +4944,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return {"ok": False, "erro": str(ex)}
+
+
+
+
 
 
 
@@ -2473,7 +4960,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             try:
+
+
+
+
 
 
 
@@ -2481,7 +4976,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 from pathlib import Path
+
+
+
+
 
 
 
@@ -2489,7 +4992,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 if str(root) not in sys.path:
+
+
+
+
 
 
 
@@ -2497,7 +5008,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 from laya_screen_subagent import get_laya_agent
+
+
+
+
 
 
 
@@ -2505,7 +5024,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 laya.close_screen()
+
+
+
+
 
 
 
@@ -2513,11 +5040,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             except Exception as ex:
 
 
 
+
+
+
+
                 return {"ok": False, "erro": str(ex)}
+
+
+
+
+
+
+
+
 
 
 
@@ -2529,7 +5072,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             from self_evolution import self_read_code
+
+
+
+
 
 
 
@@ -2541,7 +5092,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "self_modify_code":
+
+
+
+
 
 
 
@@ -2549,7 +5112,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             return self_modify_code(str(args.get("file_path", "")), str(args.get("search_target", "")), str(args.get("replacement", "")))
+
+
+
+
 
 
 
@@ -2557,7 +5128,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             from self_evolution import self_write_code
+
+
+
+
 
 
 
@@ -2569,11 +5148,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "self_git_sync":
 
 
 
+
+
+
+
             from self_evolution import self_git_sync
+
+
+
+
 
 
 
@@ -2585,11 +5180,27 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "self_git_pull":
 
 
 
+
+
+
+
             from self_evolution import self_git_pull
+
+
+
+
 
 
 
@@ -2601,7 +5212,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "self_reload_hud":
+
+
+
+
 
 
 
@@ -2609,11 +5232,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return _dispatch_to_windows_pc("self_reload_hud", {})
 
 
 
+
+
+
+
             from self_evolution import self_reload_hud
+
+
+
+
 
 
 
@@ -2625,7 +5260,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
         if name == "google_search":
+
+
+
+
 
 
 
@@ -2633,7 +5280,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             summary_info = ""
+
+
+
+
 
 
 
@@ -2641,7 +5296,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 import urllib.parse, urllib.request, json
+
+
+
+
 
 
 
@@ -2649,7 +5312,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 api_url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+
+
+
+
 
 
 
@@ -2657,7 +5328,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 with urllib.request.urlopen(req, timeout=3) as resp:
+
+
+
+
 
 
 
@@ -2665,11 +5344,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                     summary_info = ddg.get("AbstractText") or ddg.get("Definition") or ""
 
 
 
+
+
+
+
             except Exception:
+
+
+
+
 
 
 
@@ -2681,7 +5372,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
             if not IS_WINDOWS:
+
+
+
+
 
 
 
@@ -2689,11 +5392,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 if summary_info:
 
 
 
+
+
+
+
                     res["resumo_web"] = summary_info
+
+
+
+
 
 
 
@@ -2705,7 +5420,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
             mod = _pc_module("win_controls")
+
+
+
+
 
 
 
@@ -2713,7 +5440,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if summary_info:
+
+
+
+
 
 
 
@@ -2721,7 +5456,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             return res
+
+
+
+
+
+
+
+
 
 
 
@@ -2733,7 +5480,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             mod = _pc_module("pc_automation")
+
+
+
+
 
 
 
@@ -2741,7 +5496,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return {"ok": False, "erro": "módulo pc_automation indisponível"}
+
+
+
+
 
 
 
@@ -2749,7 +5512,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return mod.mouse_click(
+
+
+
+
 
 
 
@@ -2757,7 +5528,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                     clicks=int(args.get("clicks", 1)),
+
+
+
+
 
 
 
@@ -2765,7 +5544,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                     y=args.get("y")
+
+
+
+
 
 
 
@@ -2773,7 +5560,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if name == "mouse_move":
+
+
+
+
 
 
 
@@ -2781,7 +5576,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if name == "mouse_scroll":
+
+
+
+
 
 
 
@@ -2789,7 +5592,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if name == "keyboard_type":
+
+
+
+
 
 
 
@@ -2797,7 +5608,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if name == "keyboard_press":
+
+
+
+
 
 
 
@@ -2805,7 +5624,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
             if name == "keyboard_hotkey":
+
+
+
+
 
 
 
@@ -2813,7 +5640,15 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 if isinstance(keys, str):
+
+
+
+
 
 
 
@@ -2821,196 +5656,381 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
                 return mod.keyboard_hotkey(*keys)
+
+
+
+
 
 
 
         if name == "list_windows":
 
+
+
             mod = _pc_module("win_controls")
+
+
 
             return mod.list_windows() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
 
+
+
         if name == "focus_window":
 
+
+
             mod = _pc_module("win_controls")
+
+
 
             target = str(args.get("target", args.get("nome", args.get("janela", ""))))
 
+
+
             return mod.focus_window(target) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
+
+
 
         if name == "list_processes":
 
+
+
             mod = _pc_module("win_controls")
+
+
 
             top_n = int(args.get("top_n", 15))
 
+
+
             sort_by = str(args.get("sort_by", "cpu"))
+
+
 
             return mod.list_processes(top_n=top_n, sort_by=sort_by) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
 
+
+
         if name == "list_monitors":
 
+
+
             mod = _pc_module("win_controls")
+
+
 
             return mod.list_monitors() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
 
+
+
         if name == "get_system_info":
 
+
+
             mod = _pc_module("win_controls")
+
+
 
             return mod.get_system_info() if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
 
+
+
         if name == "run_powershell":
+
+
 
             mod = _pc_module("win_controls")
 
+
+
             cmd = str(args.get("command", args.get("comando", "")))
+
+
 
             return mod.run_powershell(cmd) if mod else {"ok": False, "erro": "modulo win_controls indisponivel"}
 
+
+
         if name == "spawn_subagent":
 
+
+
             from subagent_manager import get_subagent_manager
+
+
 
             prompt = str(args.get("prompt", args.get("task", args.get("command", ""))))
 
+
+
             if not prompt:
+
+
 
                 return {"ok": False, "erro": "Prompt ou tarefa não especificada para o subagente."}
 
+
+
             task = get_subagent_manager().spawn_task(prompt)
+
+
 
             return {"ok": True, "task_id": task.task_id, "status": "running", "info": f"Subagente {task.task_id} iniciado em segundo plano com sucesso para: '{prompt}'."}
 
+
+
         if name == "cancel_subagents":
 
+
+
             from subagent_manager import get_subagent_manager
+
+
 
             count = get_subagent_manager().cancel_all()
 
+
+
             return {"ok": True, "count": count, "info": f"{count} subagente(s) cancelados imediatamente."}
+
+
 
         if name == "list_subagents":
 
+
+
             from subagent_manager import get_subagent_manager
+
+
 
             tasks = get_subagent_manager().get_active_tasks()
 
+
+
             return {"ok": True, "tasks": tasks, "count": len(tasks)}
+
+
 
         if name == "sphere_inspect_firmware":
 
+
+
             from sphere_evolution import sphere_inspect_firmware
+
+
 
             return sphere_inspect_firmware(
 
+
+
                 file_path=str(args.get("file_path", "src/main.cpp")),
+
+
 
                 start_line=int(args.get("start_line", 1)),
 
+
+
                 end_line=int(args.get("end_line", 200))
 
+
+
             )
+
+
 
         if name == "sphere_modify_firmware":
 
+
+
             from sphere_evolution import sphere_modify_firmware
+
+
 
             return sphere_modify_firmware(
 
+
+
                 file_path=str(args.get("file_path", "")),
+
+
 
                 search_target=str(args.get("search_target", "")),
 
+
+
                 replacement=str(args.get("replacement", ""))
+
+
 
             )
 
+
+
         if name == "sphere_compile_firmware":
+
+
 
             from sphere_evolution import sphere_compile_firmware
 
+
+
             return sphere_compile_firmware(clean=bool(args.get("clean", False)))
+
+
 
         if name == "sphere_upload_usb":
 
+
+
             from sphere_evolution import sphere_upload_usb
+
+
 
             return sphere_upload_usb(port=str(args.get("port", "COM3")))
 
+
+
         if name == "sphere_ota_deploy":
+
+
 
             from sphere_evolution import sphere_ota_deploy
 
+
+
             return sphere_ota_deploy(url_firmware=args.get("url_firmware"))
+
+
 
         if name == "sphere_get_status":
 
+
+
             from sphere_evolution import sphere_get_status
+
+
 
             return sphere_get_status()
 
+
+
         if name == "lg_tv_power_on_and_open_app":
 
+
+
             import lg_tv_manager
+
+
 
             return lg_tv_manager.power_on_and_open_app()
 
+
+
         if name == "lg_tv_launch_app":
 
+
+
             import lg_tv_manager
+
+
 
             return lg_tv_manager.launch_tv_app()
 
+
+
         if name == "lg_tv_close_app":
 
+
+
             import lg_tv_manager
+
+
 
             return lg_tv_manager.close_tv_app()
 
         if name == "lg_tv_project_screen":
-
             import lg_tv_manager
-
             title = str(args.get("title", "J.A.R.V.I.S."))
-
             html = str(args.get("html", ""))
-
-            return lg_tv_manager.project_screen_to_tv(title=title, html=html)
+            speech_text = str(args.get("speech_text", ""))
+            audio_url = str(args.get("audio_url", ""))
+            return lg_tv_manager.project_screen_to_tv(title=title, html=html, speech_text=speech_text, audio_url=audio_url)
 
         if name == "lg_tv_close_screen":
-
             import lg_tv_manager
-
             return lg_tv_manager.close_projected_screen()
 
-        if name == "lg_tv_get_status":
-
+        if name == "lg_tv_speak":
             import lg_tv_manager
+            speech_text = str(args.get("speech_text", args.get("text", "")))
+            audio_url = str(args.get("audio_url", ""))
+            return lg_tv_manager.speak_on_tv(speech_text=speech_text, audio_url=audio_url)
 
+        if name == "lg_tv_get_status":
+            import lg_tv_manager
             return lg_tv_manager.get_tv_status()
 
+
+
+
+
         if name == "start_dynamic_presentation":
+
             import dynamic_presentation_engine as pe
+
             res = pe.start_dynamic_presentation(args)
+
             if res.get("ok"):
+
                 res["_presentation_data"] = pe.validate_presentation_script(args)
+
             return res
 
+
+
         if name == "update_presentation_scene":
+
             import dynamic_presentation_engine as pe
+
             sc = args.get("scene") or args
+
             return pe.update_presentation_scene(sc)
 
+
+
         if name == "control_presentation":
+
             import dynamic_presentation_engine as pe
+
             act = str(args.get("action", "next"))
+
             return pe.control_presentation(act, args.get("params"))
 
+
+
         if name == "get_presentation_status":
+
             import dynamic_presentation_engine as pe
+
             return pe.get_presentation_status()
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -3026,11 +6046,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
         logger.exception("Falha na ferramenta %s", name)
 
 
 
+
+
+
+
         return {"ok": False, "erro": str(e)}
+
+
+
+
 
 
 
@@ -3046,7 +6078,23 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
 def serialize_result(res: Dict[str, Any]) -> str:
+
+
+
+
 
 
 
@@ -3054,7 +6102,15 @@ def serialize_result(res: Dict[str, Any]) -> str:
 
 
 
+
+
+
+
     return json.dumps({k: v for k, v in res.items() if not k.startswith("_")}, ensure_ascii=False)
+
+
+
+
 
 
 
