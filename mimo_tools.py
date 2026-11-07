@@ -3859,7 +3859,118 @@ TOOLS += [
 
         },
 
+        {
+            "type": "function",
+            "function": {
+                "name": "take_screenshot",
+                "description": "Captura a tela atual do monitor principal do PC Windows para auto-verificação visual e análise multimodal da IA. SEMPRE use quando realizar ações no PC (cliques, digitação, abertura de janelas ou programas) para conferir se o resultado foi alcançado ou se é necessário se auto-corrigir.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "reason": {
+                            "type": "string",
+                            "description": "O motivo da captura e o que deve ser verificado na tela (ex: 'conferir se o app abriu', 'verificar se o texto foi digitado no campo correto')."
+                        }
+                    },
+                    "required": ["reason"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "obsidian_search_notes",
+                "description": "Pesquisa notas, documentos, instruções e memórias no cofre oficial do Obsidian (Terceiro Cérebro do Senhor Werik).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Termo ou frase a ser pesquisada nas notas markdown."
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Número máximo de notas retornadas (padrão: 5)."
+                        }
+                    },
+                    "required": ["query"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "obsidian_read_note",
+                "description": "Lê o conteúdo completo de uma nota específica no cofre do Obsidian (ex: '05_MEMORIA_AGENTES/JARVIS_APRENDIZADO.md' ou '05_MEMORIA_AGENTES/SHARED_CONTEXT.md').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "relative_path": {
+                            "type": "string",
+                            "description": "Caminho relativo da nota dentro do cofre (com ou sem .md)."
+                        }
+                    },
+                    "required": ["relative_path"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "obsidian_append_learning",
+                "description": "Registra uma nova lição aprendida com um erro operacional ou ajuste de automação no arquivo '05_MEMORIA_AGENTES/JARVIS_APRENDIZADO.md' no Obsidian. Use SEMPRE que descobrir que uma abordagem falhou e encontrar o método correto, para que o J.A.R.V.I.S. nunca mais cometa o mesmo erro.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {
+                            "type": "string",
+                            "description": "Tópico da falha (ex: 'Digitação no Notepad', 'Localização de botão', 'Foco de janela')."
+                        },
+                        "error_encountered": {
+                            "type": "string",
+                            "description": "Descrição exata do que falhou ou deu errado."
+                        },
+                        "solution_applied": {
+                            "type": "string",
+                            "description": "Ação ou ajuste que funcionou efetivamente para resolver."
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": "O que o Senhor Werik havia solicitado ou o objetivo da tarefa."
+                        }
+                    },
+                    "required": ["topic", "error_encountered", "solution_applied"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "obsidian_write_note",
+                "description": "Cria ou anexa conteúdo a qualquer nota do cofre Obsidian do Senhor Werik (ex: anotações rápidas em '00_INBOX/', documentações em '01_PROJETOS/').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "relative_path": {
+                            "type": "string",
+                            "description": "Caminho relativo da nota dentro do cofre (ex: '00_INBOX/ideia.md')."
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Conteúdo markdown a ser gravado."
+                        },
+                        "mode": {
+                            "type": "string",
+                            "enum": ["append", "overwrite"],
+                            "description": "'append' para adicionar ao final (padrão) ou 'overwrite' para sobrescrever."
+                        }
+                    },
+                    "required": ["relative_path", "content"]
+                },
+            },
+        },
 ]
+
 
 
 
@@ -5608,6 +5719,82 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
                 return mod.keyboard_hotkey(*keys)
+
+        if name in ("take_screenshot", "screen_capture", "screenshot"):
+            reason = str(args.get("reason", "Verificação visual do estado atual da tela do PC"))
+            mod = _pc_module("pc_automation")
+            if not mod:
+                return {"ok": False, "erro": "Módulo pc_automation indisponível para captura"}
+            res = mod.take_screenshot(return_base64=True)
+            if not res.get("success"):
+                return {"ok": False, "erro": res.get("error", "Falha na captura")}
+            b64 = res.get("base64", "")
+            return {
+                "ok": True,
+                "action": "take_screenshot",
+                "reason": reason,
+                "path": res.get("path"),
+                "width": res.get("width"),
+                "height": res.get("height"),
+                "_image_b64": b64,
+                "_question": f"Captura realizada para auto-verificação visual: '{reason}'. Examine atentamente a imagem da tela, identifique se a ação anterior teve êxito (janelas abertas, campos preenchidos, botões clicados) ou se ocorreu alguma falha que exige correção imediata."
+            }
+
+        if name == "obsidian_search_notes":
+            try:
+                import obsidian_manager
+            except ImportError:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(_ROOT))
+                import obsidian_manager
+            query = str(args.get("query", ""))
+            max_results = int(args.get("max_results", 5))
+            return obsidian_manager.obsidian_search_notes(query=query, max_results=max_results)
+
+        if name == "obsidian_read_note":
+            try:
+                import obsidian_manager
+            except ImportError:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(_ROOT))
+                import obsidian_manager
+            rel_path = str(args.get("relative_path", args.get("path", "")))
+            return obsidian_manager.obsidian_read_note(relative_path=rel_path)
+
+        if name == "obsidian_append_learning":
+            try:
+                import obsidian_manager
+            except ImportError:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(_ROOT))
+                import obsidian_manager
+            topic = str(args.get("topic", ""))
+            error_enc = str(args.get("error_encountered", args.get("erro", "")))
+            solution = str(args.get("solution_applied", args.get("solucao", "")))
+            context = str(args.get("context", ""))
+            return obsidian_manager.obsidian_append_learning(
+                topic=topic,
+                error_encountered=error_enc,
+                solution_applied=solution,
+                context=context
+            )
+
+        if name == "obsidian_write_note":
+            try:
+                import obsidian_manager
+            except ImportError:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(_ROOT))
+                import obsidian_manager
+            rel_path = str(args.get("relative_path", args.get("path", "")))
+            content = str(args.get("content", ""))
+            mode = str(args.get("mode", "append"))
+            return obsidian_manager.obsidian_write_note(relative_path=rel_path, content=content, mode=mode)
+
 
 
 
