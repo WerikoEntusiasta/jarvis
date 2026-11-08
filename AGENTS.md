@@ -172,6 +172,7 @@ O Spatial Intelligence Workspace substitui qualquer abordagem estática por uma 
 6. **Autonomia do Windows:** A interface HUD local do Windows deve funcionar de forma independente de falhas ou quedas no servidor ZimaOS.
 7. **Sessão Interativa no Windows:** Automações com PyWinAuto, capturas de tela ou cliques de mouse devem sempre invocar `switch_to_user_desktop()` para se anexar à window station interativa `WinSta0\Default`.
 8. **Validação Efetiva Obrigatória:** Nunca assuma que uma alteração funciona apenas porque compilou. Execute testes reais (status HTTP, checagem de logs, inspeção de tela e runtime).
+9. **Atualização Contínua do AGENTS.md a Cada Modificação:** A cada modificação, commit ou refatoração no ecossistema, é OBRIGATÓRIO registrar o histórico na Seção 7 deste documento com data, hora e resumo conciso do que foi modificado, mantendo a documentação viva e auditável.
 
 ---
 
@@ -186,3 +187,36 @@ Ao concluir qualquer tarefa ou alteração no ecossistema J.A.R.V.I.S., o agente
 - **Testes executados:** Comandos reais executados e seus respectivos outputs comprobatórios.
 - **Segurança e estabilidade:** Validações de risco, credenciais, resiliência e integridade de memória.
 - **Pendências:** Limitações conhecidas ou próximos passos recomendados.
+
+---
+
+## 7. Histórico Cronológico de Modificações (Changelog)
+
+### 📅 08 de Novembro de 2026
+- **03:10:00** — `docs(agents)`: Inclusão da regra compulsória de atualização do `AGENTS.md` a cada alteração com registro do histórico cronológico.
+- **03:06:11** — `docs(agents)`: Atualização exaustiva do `AGENTS.md` cobrindo as 3 camadas, rotas REST/SSE, Spatial Workspace e ferramentas.
+- **02:52:31** — `feat(spatial-intelligence)`: Implementação do Spatial Intelligence Workspace com Apache ECharts 5.5.0 e Three.js r128 locais, componentes atômicos vivos e rotas no backend.
+- **02:26:27** — `feat(spatial-canvas)`: Transformação do layout de apresentação em canvas espacial contínuo e orgânico.
+- **02:19:33** — `fix(hud)`: Remoção de duplicidade em script do `web/index.html` corrigindo quebra no runtime JS.
+- **02:11:31** — `feat(spatial-intelligence)`: Registro e integração das ferramentas PyWinAuto e Playwright no catálogo `mimo_tools.py`.
+- **01:59:28** — `chore(cleanup)`: Expurgo completo de resíduos legados do OpenClaw, binários e scripts temporários.
+- **01:08:52** — `build`: Otimização do instalador/build PyInstaller e atalhos do Windows.
+
+### 📅 07 de Novembro de 2026
+- **23:02:58** — `feat(hud)`: Card de telemetria de tarefas ativas em tempo real no HUD.
+- **16:34:19** — `feat(automation)`: Aprimoramento de digitação, mouse PyWinAuto, loop de inspeção de tela e Obsidian.
+- **15:33:41** — `fix(voice)`: Fluxo sequencial de voz e eliminação de subagentes desnecessários em interrupções.
+- **15:14:50** — `fix(core)`: Limpeza de resíduos OpenClaw no frontend e correção de corte de tokens HTTP 400.
+- **14:49:05** — `feat(tv)`: Desacoplamento do app de TV para o núcleo ZimaOS com canal de fala dedicado.
+- **14:28:23** — `feat(presentation)`: Versão inicial do Dynamic Presentation Engine com morphing de HUD.
+- **14:06:57** — `feat(tv)`: Integração com LG webOS Smart TV, Wake-on-LAN e pareamento automático.
+- **13:48:26** — `fix(hud)`: Centralização geométrica do vórtice visual do HUD no desktop.
+- **11:49:51** — `feat(sphere)`: Engenharia autônoma da Esfera ESP32-S3 com build PlatformIO e deploy OTA.
+- **11:40:13** — `feat(voice)`: Interrupção instantânea por voz (*barge-in*) e cancelamento em tempo real.
+- **11:23:28** — `feat(self-evolution)`: Ativação de autoedição de código e reload a quente do HUD via socket IPC.
+- **11:19:29** — `feat(automation)`: Ferramentas nativas completas de mouse e teclado no Windows.
+- **11:14:46** — `fix(interaction)`: Binding de contexto da tela ativa nos prompts de IA.
+- **03:46:17** — `fix(desktop)`: Prevenção de flicker de janela e instância única por PID.
+- **03:19:18** — `build`: Empacotamento unificado do JARVIS.exe com PyInstaller.
+- **03:02:37** — `feat(windows)`: Estabilização de Mojo Crashes e liberdade visual LAYA.
+- **01:46:37** — `fix(window)`: Elevação DWM com `SW_RESTORE` no IPC SHOW.
