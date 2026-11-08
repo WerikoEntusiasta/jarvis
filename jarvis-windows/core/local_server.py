@@ -490,6 +490,10 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                     if curr_pres:
                         pres_json = json.dumps(curr_pres)
                         self.wfile.write(f"event: presentation_start\ndata: {pres_json}\n\n".encode("utf-8"))
+                    curr_ws = pe.get_spatial_workspace()
+                    if curr_ws:
+                        ws_json = json.dumps(curr_ws)
+                        self.wfile.write(f"event: spatial_workspace_created\ndata: {ws_json}\n\n".encode("utf-8"))
                 except Exception:
                     pass
 
@@ -1672,6 +1676,61 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 event_name = data.get("event") or data.get("event_name", "")
                 payload = data.get("payload") or data.get("data", {})
                 res = pe.handle_speech_event(event_name, payload)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/spatial/workspace":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                import dynamic_presentation_engine as pe
+                action = data.get("action", "create")
+                if action == "clear":
+                    res = pe.clear_spatial_workspace()
+                else:
+                    res = pe.create_spatial_workspace(
+                        title=data.get("title", "Spatial Workspace"),
+                        subtitle=data.get("subtitle", ""),
+                        layout=data.get("layout", "fluid_grid"),
+                        options=data.get("options")
+                    )
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/spatial/component":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                import dynamic_presentation_engine as pe
+                action = data.get("action", "add")
+                cid = data.get("id") or data.get("component_id")
+                if action == "add":
+                    res = pe.add_spatial_component(cid, data.get("type", "hero_card"), data.get("position"), data.get("props"))
+                elif action == "update":
+                    res = pe.update_spatial_component(cid, data.get("updates", {}), data.get("animate", True))
+                elif action == "remove":
+                    res = pe.remove_spatial_component(cid)
+                elif action == "highlight":
+                    res = pe.highlight_spatial_component(cid, float(data.get("duration", 3.0)))
+                else:
+                    res = {"ok": False, "error": f"Ação spatial desconhecida: {action}"}
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/spatial/compose":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                import dynamic_presentation_engine as pe
+                res = pe.compose_spatial_scene(
+                    title=data.get("title", "Cena Espacial"),
+                    subtitle=data.get("subtitle", ""),
+                    components=data.get("components", []),
+                    layout=data.get("layout", "fluid_grid")
+                )
                 self._send_json(res)
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, status=500)

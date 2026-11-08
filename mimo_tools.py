@@ -3860,6 +3860,37 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "spatial_workspace_action",
+                "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espaços visuais contínuos onde múltiplos componentes independentes coexistem e se transformam em tempo real (gráficos interativos Apache ECharts, diagramas estruturados, painéis de inteligência, métricas e visualizações 3D sem depender de slides ou caixas estáticas).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["compose", "create", "add_component", "update_component", "highlight_component", "remove_component", "clear"],
+                            "description": "Ação espacial a executar."
+                        },
+                        "title": {"type": "string", "description": "Título principal da composição espacial."},
+                        "subtitle": {"type": "string", "description": "Subtítulo ou contexto da explicação."},
+                        "layout": {"type": "string", "enum": ["fluid_grid", "split", "triptych", "hero_focus"], "description": "Layout do espaço de trabalho."},
+                        "components": {
+                            "type": "array",
+                            "description": "Lista de componentes para compor no espaço (usado na ação compose).",
+                            "items": {"type": "object"}
+                        },
+                        "component_id": {"type": "string", "description": "ID do componente para ações específicas."},
+                        "component_type": {"type": "string", "description": "Tipo do componente: echarts, hero_card, smart_canvas, data_table, metric_dock."},
+                        "position": {"type": "object", "description": "Posicionamento no grid: col_span (1 a 12), row_span, etc."},
+                        "props": {"type": "object", "description": "Propriedades ricas do componente."},
+                        "updates": {"type": "object", "description": "Atualizações pontuais para update_component."}
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "win_automation_pywinauto",
                 "description": "Controle nativo avançado do Windows via PyWinAuto e árvore de acessibilidade UIA/Win32. Permite listar janelas, inspecionar controles/botões, clicar, digitar texto diretamente em campos de janelas, abrir aplicações e fechá-las com feedback garantido.",
                 "parameters": {
@@ -6176,6 +6207,46 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             import dynamic_presentation_engine as pe
 
             return pe.get_presentation_status()
+
+        if name == "spatial_workspace_action":
+            import dynamic_presentation_engine as pe
+            act = args.get("action", "compose")
+            if act == "compose":
+                return pe.compose_spatial_scene(
+                    title=args.get("title", "Spatial Hub"),
+                    subtitle=args.get("subtitle", ""),
+                    components=args.get("components", []),
+                    layout=args.get("layout", "fluid_grid")
+                )
+            elif act == "create":
+                return pe.create_spatial_workspace(
+                    title=args.get("title", "Spatial Workspace"),
+                    subtitle=args.get("subtitle", ""),
+                    layout=args.get("layout", "fluid_grid")
+                )
+            elif act == "add_component":
+                return pe.add_spatial_component(
+                    component_id=args.get("component_id"),
+                    component_type=args.get("component_type", "hero_card"),
+                    position=args.get("position", {"col_span": 6}),
+                    props=args.get("props", {})
+                )
+            elif act == "update_component":
+                return pe.update_spatial_component(
+                    component_id=args.get("component_id"),
+                    updates=args.get("updates", {}),
+                    animate=bool(args.get("animate", True))
+                )
+            elif act == "highlight_component":
+                return pe.highlight_spatial_component(
+                    component_id=args.get("component_id"),
+                    duration_sec=float(args.get("duration", 3.0))
+                )
+            elif act == "remove_component":
+                return pe.remove_spatial_component(args.get("component_id"))
+            elif act == "clear":
+                return pe.clear_spatial_workspace()
+            return {"ok": False, "error": f"Ação desconhecida: {act}"}
 
         if name == "win_automation_pywinauto":
             import sys

@@ -36,6 +36,8 @@
   </script>
   <script src="/models/face-api/face-api.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';"></script>
   <script src="/jarvis_ui_engine.js"></script>
+  <script src="/echarts.min.js"></script>
+  <script src="/three.min.js"></script>
   <script src="/jarvis_presentation_engine.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -819,42 +821,41 @@
         <button onclick="document.getElementById('hud-alert-banner').classList.add('hidden')" class="text-rose-300/80 hover:text-white text-xs px-2 py-1">DISMISS</button>
       </div>
 
-            <!-- SPATIAL INTELLIGENCE & FREE-FORM INTERACTIVE CANVAS SYSTEM -->
-      <div id="jarvis-presentation-overlay" class="fixed inset-x-6 top-14 bottom-24 z-50 rounded-2xl bg-slate-950/95 backdrop-blur-3xl border border-cyan-500/30 shadow-[0_0_70px_rgba(0,210,255,0.3)] flex flex-col overflow-hidden spring-trans hidden opacity-0">
-        <!-- Floating Minimalist HUD Controls Header -->
-        <div class="px-5 py-2.5 bg-slate-900/90 border-b border-cyan-500/20 flex items-center justify-between gap-3 shrink-0 select-none">
-          <!-- Title & Scene Breadcrumbs -->
+            <!-- ENTERPRISE KEYNOTE & EXECUTIVE SPATIAL SYSTEM -->
+      <div id="jarvis-presentation-overlay" class="fixed left-80 right-8 top-16 bottom-24 z-50 rounded-3xl bg-slate-950/95 backdrop-blur-3xl border border-cyan-500/25 shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden spring-trans hidden opacity-0">
+        <!-- Floating Minimalist Header -->
+        <div class="px-8 py-3.5 bg-slate-900/70 border-b border-slate-800/80 flex items-center justify-between gap-4 shrink-0 select-none">
+          <!-- Title & Breadcrumbs -->
           <div class="flex items-center space-x-3">
             <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-            <span id="presentation-header-title" class="text-sm font-bold text-white font-hud tracking-wider truncate max-w-xl">SPATIAL CANVAS INTERATIVO</span>
+            <span id="presentation-header-title" class="text-xs font-bold text-white font-hud tracking-widest uppercase truncate max-w-2xl">APRESENTAÇÃO EXECUTIVA</span>
           </div>
 
-          <!-- Controls, Timeline Dots & Actions -->
-          <div id="presentation-audio-controls" class="flex items-center space-x-2">
-            <span id="presentation-audio-status" class="px-2.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-[10px] font-mono-code font-bold text-cyan-300 flex items-center space-x-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span id="presentation-audio-status-text">CENA 1/1</span>
-            </span>
+          <!-- Timeline Indicators & Controls -->
+          <div id="presentation-audio-controls" class="flex items-center space-x-3">
             <div id="presentation-timeline-dots" class="flex items-center space-x-1.5 mr-2"></div>
-            <button id="pres-btn-prev" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.prev()" title="Cena Anterior" class="px-3 py-1 rounded-lg bg-sky-950/80 hover:bg-sky-900 border border-cyan-500/30 text-cyan-200 text-xs font-mono-code transition-colors flex items-center space-x-1">
+            <span id="presentation-audio-status" class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[10px] font-mono-code font-bold text-cyan-300 flex items-center space-x-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+              <span id="presentation-audio-status-text">ATO 1/1</span>
+            </span>
+            <button id="pres-btn-prev" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.prev()" title="Ato Anterior" class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-mono-code transition-colors flex items-center space-x-1">
               <span>◀</span>
             </button>
-            <button id="pres-btn-playpause" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.togglePlayPause()" title="Pausar / Reproduzir" class="px-3 py-1 rounded-lg bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-400 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_12px_rgba(0,240,255,0.3)] flex items-center space-x-1">
-              <span id="pres-playpause-icon">⏸</span>
+            <button id="pres-btn-playpause" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.togglePlayPause()" title="Pausar / Reproduzir" class="px-4 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-400/60 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] flex items-center space-x-1">
               <span id="pres-playpause-label">PAUSAR</span>
             </button>
-            <button id="pres-btn-next" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.next()" title="Próxima Cena" class="px-3 py-1 rounded-lg bg-sky-950/80 hover:bg-sky-900 border border-cyan-500/30 text-cyan-200 text-xs font-mono-code transition-colors flex items-center space-x-1">
+            <button id="pres-btn-next" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.next()" title="Próximo Ato" class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-mono-code transition-colors flex items-center space-x-1">
               <span>▶</span>
             </button>
-            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Recolher Canvas (Esc)" class="px-3 py-1 rounded-lg bg-slate-900/90 hover:bg-rose-950/90 border border-slate-700 hover:border-rose-500/60 text-slate-300 hover:text-rose-200 text-xs font-mono-code font-semibold transition-colors flex items-center space-x-1.5 ml-2">
+            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Fechar Apresentação (Esc)" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-rose-950 border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-200 text-xs font-mono-code font-semibold transition-colors flex items-center space-x-1.5 ml-2">
               <span>✕</span>
               <span>FECHAR</span>
             </button>
           </div>
         </div>
 
-        <!-- Dynamic Full-Height Canvas Stage -->
-        <div id="presentation-content-area" class="flex-1 w-full h-full relative overflow-hidden flex items-center justify-center p-2"></div>
+        <!-- Dynamic Executive Stage Mount Area -->
+        <div id="presentation-content-area" class="flex-1 w-full h-full p-8 overflow-y-auto flex items-center justify-center"></div>
       </div>
       <!-- JARVIS DYNAMIC VISUAL OS STAGE (Cards, Dashboards, Charts, Weather, Flows, Checklists) -->
       <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
@@ -2639,7 +2640,52 @@
               else if (act === 'next') window.JarvisPresentationEngine.next();
               else if (act === 'prev') window.JarvisPresentationEngine.prev();
               else if (act === 'close' || act === 'stop') window.JarvisPresentationEngine.close();
+              else if (act === 'jump' && data.params && data.params.index !== undefined) {
+                window.JarvisPresentationEngine.jumpTo(parseInt(data.params.index));
+              }
             }
+          } catch(err) {}
+        });
+
+        // SPATIAL WORKSPACE LIVE SSE LISTENERS
+        evtSource.addEventListener('spatial_workspace_created', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.initSpatialWorkspace(data);
+          } catch(err) { console.warn('[Spatial SSE] Erro ao criar workspace:', err); }
+        });
+
+        evtSource.addEventListener('spatial_component_added', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.addSpatialComponent(data);
+          } catch(err) { console.warn('[Spatial SSE] Erro ao adicionar componente:', err); }
+        });
+
+        evtSource.addEventListener('spatial_component_updated', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.updateSpatialComponent(data.component_id, data.updates, data.animate);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_component_highlighted', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.highlightSpatialComponent(data.component_id, data.duration);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_component_removed', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.removeSpatialComponent(data.component_id);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_workspace_cleared', () => {
+          try {
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.clearSpatialWorkspace();
           } catch(err) {}
         });
 
