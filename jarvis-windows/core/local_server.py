@@ -415,6 +415,14 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             return
 
+        if path == "/api/voice/status":
+            try:
+                from voice.voice_engine import get_voice_status
+                self._send_json({"ok": True, "status": get_voice_status()})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
 
 
         # 1. Server-Sent Events (SSE) para o HUD
@@ -1239,6 +1247,21 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+
+        if path == "/api/voice/config":
+            try:
+                data = json.loads(body.decode("utf-8", errors="ignore") or "{}") if body else {}
+                from voice.voice_engine import get_voice_engine, get_voice_status
+                eng = get_voice_engine()
+                if eng:
+                    if "wake_threshold" in data:
+                        eng.wake_threshold = float(data["wake_threshold"])
+                    self._send_json({"ok": True, "status": get_voice_status()})
+                else:
+                    self._send_json({"ok": False, "error": "VoiceEngine não ativo"}, status=400)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
 
         if path == "/api/task/event":
             try:

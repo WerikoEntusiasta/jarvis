@@ -50,6 +50,33 @@ SILENCE_BLOCKS = int(os.environ.get("JARVIS_SILENCE_BLOCKS", "9"))  # 9 x 80 ms 
 TTS_ENGINE = os.environ.get("JARVIS_TTS_MODE", "elevenlabs").lower()
 NATIVE_AUDIO = os.environ.get("JARVIS_NATIVE_AUDIO", "0") == "1"
 BARGE_IN_VOICE = os.environ.get("JARVIS_BARGE_IN_VOICE", "0") == "1"  # exige fones (evita eco do alto-falante)
+WAKE_WORD_THRESHOLD = float(os.environ.get("JARVIS_WAKE_WORD_THRESHOLD", "0.30"))
+WAKE_WORD_MODEL_NAME = os.environ.get("JARVIS_WAKE_WORD_MODEL", "hey_jarvis_v0.1.onnx")
+
+_CURRENT_VOICE_ENGINE: Optional["JarvisVoiceEngine"] = None
+
+def get_voice_engine() -> Optional["JarvisVoiceEngine"]:
+    return _CURRENT_VOICE_ENGINE
+
+def get_voice_status() -> dict:
+    eng = _CURRENT_VOICE_ENGINE
+    if not eng:
+        return {
+            "active": False,
+            "wake_word_loaded": False,
+            "wake_threshold": WAKE_WORD_THRESHOLD,
+            "wake_model": WAKE_WORD_MODEL_NAME,
+            "tts_engine": TTS_ENGINE
+        }
+    return {
+        "active": eng.is_alive(),
+        "state": eng.state,
+        "wake_word_loaded": eng.wake_model is not None,
+        "wake_model_name": getattr(eng, "wake_model_name", WAKE_WORD_MODEL_NAME),
+        "wake_threshold": getattr(eng, "wake_threshold", WAKE_WORD_THRESHOLD),
+        "tts_engine": TTS_ENGINE,
+        "sample_rate": eng.sample_rate
+    }
 
 _STOP_PHRASES = {
     "para", "pare", "cancela", "cancelar", "chega", "silencio", "silêncio", "esquece", "deixa pra lá", "deixa pra la",
@@ -224,6 +251,11 @@ class JarvisVoiceEngine(threading.Thread):
         self.history = deque(maxlen=8)
         self._turn_lock = threading.Lock()
 
+        global _CURRENT_VOICE_ENGINE
+        _CURRENT_VOICE_ENGINE = self
+
+        self.wake_threshold = WAKE_WORD_THRESHOLD
+        self.wake_model_name = WAKE_WORD_MODEL_NAME
         self.wake_model = None
         self._init_wake_model()
 
@@ -327,8 +359,10 @@ class JarvisVoiceEngine(threading.Thread):
                     try:
                         scores = self.wake_model.predict(pcm16)
                         for k, score in scores.items():
-                            if score >= 0.30:
-                                print(f"[VoiceEngine] ⚡ Wake Word '{k}' detectado ({score:.2f})!")
+                            if score >= self.wake_threshold:
+                                log_msg = f"[VoiceEngine] ⚡ Wake Word '{k}' detectado ({score:.2f} >= {self.wake_threshold:.2f})!"
+                                print(log_msg)
+                                logger.info(log_msg)
                                 if hasattr(self.wake_model, "reset"):
                                     self.wake_model.reset()
                                 self.trigger_manual_listen()

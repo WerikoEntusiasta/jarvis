@@ -41,7 +41,7 @@
   }
 
   function injectStyles() {
-    if (document.getElementById('jarvis-spatial-cinema-style')) return;
+    const existing = document.getElementById('jarvis-spatial-cinema-style'); if (existing) existing.remove();
     const tag = document.createElement('style');
     tag.id = 'jarvis-spatial-cinema-style';
     tag.textContent = `
@@ -59,8 +59,8 @@
         height: 100%;
         min-height: 580px;
         overflow: hidden;
-        color: #e2e8f0;
-        background: radial-gradient(circle at 50% 30%, rgba(0, 100, 200, 0.12) 0%, rgba(2, 6, 18, 0.98) 70%, #000000 100%);
+        color: #f4f4f5;
+        background: #000000;
         padding: 16px;
       }
       .spatial-workspace::before {
@@ -68,11 +68,9 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
-        opacity: 0.08;
-        background-image: linear-gradient(rgba(0, 240, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px);
-        background-size: 50px 50px;
-        mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
-        -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+        opacity: 0.03;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        background-size: 40px 40px;
       }
       .spatial-el {
         position: absolute;
@@ -86,16 +84,16 @@
       }
       .spatial-el.entering {
         opacity: 0;
-        transform: translateY(24px) scale(0.96);
+        transform: translateY(20px) scale(0.97);
       }
       .spatial-surface {
         position: relative;
         width: 100%;
         height: 100%;
-        border-radius: 20px;
-        background: linear-gradient(135deg, rgba(7, 16, 34, 0.88) 0%, rgba(2, 7, 18, 0.94) 100%);
-        border: 1px solid rgba(0, 240, 255, 0.22);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 30px rgba(0, 180, 255, 0.06);
+        border-radius: 18px;
+        background: #09090b;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.98), inset 0 1px 0 rgba(255, 255, 255, 0.04);
         backdrop-filter: blur(24px);
         padding: 20px 24px;
         display: flex;
@@ -104,24 +102,23 @@
         transition: border-color 0.3s ease, box-shadow 0.3s ease;
       }
       .spatial-surface:hover {
-        border-color: rgba(0, 240, 255, 0.45);
-        box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 45px rgba(0, 220, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 30px 70px rgba(0, 0, 0, 1), inset 0 1px 0 rgba(255, 255, 255, 0.08);
       }
       .spatial-surface::before {
         content: '';
         position: absolute;
-        top: 0; left: 15%; right: 15%; height: 2px;
-        background: linear-gradient(90deg, transparent, #00f0ff, transparent);
-        opacity: 0.85;
-        box-shadow: 0 0 12px #00f0ff;
+        top: 0; left: 15%; right: 15%; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+        opacity: 0.9;
       }
-      /* Hero Card Typography */
+      /* Hero Card Typography - Kuro Black Style */
       .hero-kicker {
         font-family: 'JetBrains Mono', monospace;
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 2.5px;
-        color: #00f0ff;
+        color: #71717a;
         text-transform: uppercase;
       }
       .hero-title {
@@ -135,7 +132,7 @@
       }
       .hero-copy {
         font-size: 12px;
-        color: #94a3b8;
+        color: #a1a1aa;
         line-height: 1.6;
         margin-bottom: 14px;
       }
@@ -143,12 +140,12 @@
         display: inline-block;
         padding: 3px 10px;
         border-radius: 9999px;
-        background: rgba(0, 240, 255, 0.10);
-        border: 1px solid rgba(0, 240, 255, 0.30);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.10);
         font-family: 'JetBrains Mono', monospace;
         font-size: 9px;
         font-weight: 700;
-        color: #38bdf8;
+        color: #e4e4e7;
         margin-right: 6px;
         margin-bottom: 6px;
       }
@@ -157,15 +154,15 @@
         align-items: flex-start;
         gap: 8px;
         font-size: 11px;
-        color: #cbd5e1;
+        color: #d4d4d8;
         margin-bottom: 6px;
         line-height: 1.45;
       }
       .hero-bullet-dot {
-        color: #00f0ff;
+        color: #71717a;
         font-weight: bold;
       }
-      /* Metrics */
+      /* Metrics - Kuro Black Style */
       .metrics-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -175,9 +172,9 @@
       }
       .metric-box {
         padding: 12px 14px;
-        border-radius: 14px;
-        background: rgba(4, 12, 28, 0.70);
-        border: 1px solid rgba(0, 240, 255, 0.18);
+        border-radius: 12px;
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -186,7 +183,7 @@
         font-family: 'JetBrains Mono', monospace;
         font-size: 9px;
         font-weight: 700;
-        color: #94a3b8;
+        color: #71717a;
         letter-spacing: 1.5px;
         text-transform: uppercase;
       }
@@ -194,14 +191,13 @@
         font-family: 'JetBrains Mono', monospace;
         font-size: clamp(22px, 2.2vw, 32px);
         font-weight: 800;
-        color: #00f0ff;
-        text-shadow: 0 0 20px rgba(0, 240, 255, 0.45);
+        color: #ffffff;
         margin: 4px 0;
       }
       .metric-trend {
         font-family: 'JetBrains Mono', monospace;
         font-size: 10px;
-        color: #34d399;
+        color: #a1a1aa;
         font-weight: 600;
       }
       /* Chart Header */
@@ -225,9 +221,9 @@
         font-size: 9px;
         padding: 2px 8px;
         border-radius: 6px;
-        background: rgba(16, 185, 129, 0.15);
-        border: 1px solid rgba(16, 185, 129, 0.40);
-        color: #34d399;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #a1a1aa;
         font-weight: 700;
       }
       /* Topology Graph */
@@ -241,10 +237,10 @@
         position: absolute;
         padding: 8px 14px;
         border-radius: 12px;
-        background: rgba(6, 18, 38, 0.90);
-        border: 1px solid rgba(0, 240, 255, 0.40);
-        box-shadow: 0 0 20px rgba(0, 240, 255, 0.20);
-        color: #fff;
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+        color: #ffffff;
         text-align: center;
         font-family: 'JetBrains Mono', monospace;
         font-size: 10px;
@@ -253,9 +249,9 @@
         backdrop-filter: blur(10px);
       }
       .topo-node.core {
-        background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(3, 10, 26, 0.95) 80%);
-        border-color: #00f0ff;
-        box-shadow: 0 0 30px rgba(0, 240, 255, 0.50);
+        background: #18181b;
+        border-color: rgba(255, 255, 255, 0.35);
+        box-shadow: 0 0 25px rgba(255, 255, 255, 0.08);
         font-size: 11px;
         font-weight: 800;
         padding: 12px 18px;
@@ -338,11 +334,11 @@
           itemStyle: { borderRadius: 6, borderColor: '#020612', borderWidth: 2 },
           label: { show: false },
           data: [
-            { value: 40, name: 'Cérebro & MiMo (40%)', itemStyle: { color: '#00f0ff' } },
-            { value: 25, name: 'Spatial Workspace (25%)', itemStyle: { color: '#38bdf8' } },
-            { value: 15, name: 'ZimaOS Cloud (15%)', itemStyle: { color: '#10b981' } },
-            { value: 12, name: 'Automação Windows (12%)', itemStyle: { color: '#818cf8' } },
-            { value: 8, name: 'Esfera & Smart TV (8%)', itemStyle: { color: '#f59e0b' } }
+            { value: 40, name: 'Cérebro & MiMo (40%)', itemStyle: { color: '#ffffff' } },
+            { value: 25, name: 'Spatial Workspace (25%)', itemStyle: { color: '#a1a1aa' } },
+            { value: 15, name: 'ZimaOS Cloud (15%)', itemStyle: { color: '#71717a' } },
+            { value: 12, name: 'Automação Windows (12%)', itemStyle: { color: '#52525b' } },
+            { value: 8, name: 'Esfera & Smart TV (8%)', itemStyle: { color: '#3f3f46' } }
           ]
         }],
         legend: {
@@ -373,9 +369,9 @@
           grid: { left: 24, right: 14, top: 18, bottom: 24, containLabel: true },
           tooltip: {
             trigger: 'item',
-            backgroundColor: 'rgba(2, 6, 18, 0.95)',
-            borderColor: 'rgba(0, 240, 255, 0.45)',
-            textStyle: { color: '#e2e8f0', fontFamily: 'JetBrains Mono', fontSize: 11 }
+            backgroundColor: '#09090b',
+            borderColor: 'rgba(255, 255, 255, 0.12)',
+            textStyle: { color: '#f4f4f5', fontFamily: 'JetBrains Mono', fontSize: 11 }
           }
         };
 
@@ -413,7 +409,7 @@
     const nodesHtml = nodes.map(n => `
       <div class="topo-node ${n.isCore ? 'core' : ''}" style="left:${n.x}%;top:${n.y}%">
         <div>${esc(n.label)}</div>
-        <div style="font-size:8px;color:#38bdf8;font-weight:normal;margin-top:2px">${esc(n.badge)}</div>
+        <div style="font-size:8px;color:#a1a1aa;font-weight:normal;margin-top:2px">${esc(n.badge)}</div>
       </div>
     `).join('');
 
@@ -427,11 +423,11 @@
           <div class="topo-container">
             <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
               <!-- Conexões do Core para os Nós -->
-              <line x1="50%" y1="50%" x2="18%" y2="24%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="82%" y2="24%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="18%" y2="76%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="82%" y2="76%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <circle cx="50%" cy="50%" r="48" fill="none" stroke="rgba(0,240,255,0.15)" stroke-width="1" />
+              <line x1="50%" y1="50%" x2="18%" y2="24%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="82%" y2="24%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="18%" y2="76%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="82%" y2="76%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <circle cx="50%" cy="50%" r="48" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
             </svg>
             ${nodesHtml}
           </div>
@@ -468,22 +464,22 @@
         host.appendChild(renderer.domElement);
 
         const group = new THREE.Group();
-        // Núcleo Icosaedro holográfico
+        // Núcleo Icosaedro holográfico monocromático titânio
         const coreGeo = new THREE.IcosahedronGeometry(1.2, 2);
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.85 });
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.80 });
         const coreMesh = new THREE.Mesh(coreGeo, coreMat);
         group.add(coreMesh);
 
-        // Anel orbital de plasma
+        // Anel orbital de titânio acetinado
         const ringGeo = new THREE.TorusGeometry(1.7, 0.02, 16, 100);
-        const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 });
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xa1a1aa, transparent: true, opacity: 0.65 });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         ringMesh.rotation.x = Math.PI * 0.45;
         group.add(ringMesh);
 
-        // Anel dourado externo
+        // Anel grafite escuro
         const ring2Geo = new THREE.TorusGeometry(2.0, 0.015, 16, 100);
-        const ring2Mat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.65 });
+        const ring2Mat = new THREE.MeshBasicMaterial({ color: 0x52525b, transparent: true, opacity: 0.55 });
         const ring2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
         ring2Mesh.rotation.y = Math.PI * 0.35;
         group.add(ring2Mesh);
