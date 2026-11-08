@@ -47,7 +47,7 @@ FOLLOWUP_SECONDS = float(os.environ.get("JARVIS_FOLLOWUP_SECONDS", "7"))
 SILENCE_BLOCKS = int(os.environ.get("JARVIS_SILENCE_BLOCKS", "9"))  # 9 x 80 ms = 0,72 s
 # Voz: "local" (SAPI pt-BR, instantânea, pronúncia correta) | "design" | "clone" | "preset" (MiMo TTS, opt-in:
 # a pronúncia em português ainda é fraca e a latência é de 3-5 s por frase).
-TTS_ENGINE = os.environ.get("JARVIS_TTS_MODE", "elevenlabs").lower()
+TTS_ENGINE = os.environ.get("JARVIS_TTS_MODE", "edge").lower()
 NATIVE_AUDIO = os.environ.get("JARVIS_NATIVE_AUDIO", "0") == "1"
 BARGE_IN_VOICE = os.environ.get("JARVIS_BARGE_IN_VOICE", "0") == "1"  # exige fones (evita eco do alto-falante)
 WAKE_WORD_THRESHOLD = float(os.environ.get("JARVIS_WAKE_WORD_THRESHOLD", "0.30"))
