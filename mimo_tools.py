@@ -3856,7 +3856,80 @@ TOOLS += [
                 "parameters": {"type": "object", "properties": {}},
 
             },
-
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "win_automation_pywinauto",
+                "description": "Controle nativo avançado do Windows via PyWinAuto e árvore de acessibilidade UIA/Win32. Permite listar janelas, inspecionar controles/botões, clicar, digitar texto diretamente em campos de janelas, abrir aplicações e fechá-las com feedback garantido.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["list_windows", "inspect_controls", "type_text", "click_control", "launch_app", "close_window"],
+                            "description": "Ação a executar no Windows."
+                        },
+                        "window_title": {
+                            "type": "string",
+                            "description": "Título ou parte do título da janela alvo."
+                        },
+                        "control_title": {
+                            "type": "string",
+                            "description": "Nome, texto ou ID do controle/botão alvo."
+                        },
+                        "text_to_type": {
+                            "type": "string",
+                            "description": "Texto a ser digitado na janela ou campo."
+                        },
+                        "command": {
+                            "type": "string",
+                            "description": "Comando ou caminho do executável para launch_app."
+                        },
+                        "backend": {
+                            "type": "string",
+                            "enum": ["uia", "win32"],
+                            "description": "Backend do PyWinAuto (uia padrão, win32 para apps legados)."
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_automation_playwright",
+                "description": "Automação Web de alta precisão via Playwright (Chromium headless). Permite navegar em sites, extrair textos estruturados por seletores, tirar prints de páginas e interagir com formulários e botões.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["browse", "screenshot", "interact"],
+                            "description": "Ação web a executar."
+                        },
+                        "url": {
+                            "type": "string",
+                            "description": "URL completa do site alvo."
+                        },
+                        "selector": {
+                            "type": "string",
+                            "description": "Seletor CSS para extrair conteúdo ou interagir."
+                        },
+                        "output_path": {
+                            "type": "string",
+                            "description": "Caminho do arquivo de saída para screenshots."
+                        },
+                        "actions": {
+                            "type": "array",
+                            "description": "Sequência de passos interativos para a ação interact.",
+                            "items": {"type": "object"}
+                        }
+                    },
+                    "required": ["action", "url"]
+                }
+            }
         },
 
         {
@@ -6103,6 +6176,53 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             import dynamic_presentation_engine as pe
 
             return pe.get_presentation_status()
+
+        if name == "win_automation_pywinauto":
+            import sys
+            import os
+            jw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis-windows")
+            if jw_path not in sys.path:
+                sys.path.insert(0, jw_path)
+            from system import win_automation_pywinauto as wpa
+
+            act = args.get("action")
+            w_title = args.get("window_title", "")
+            backend = args.get("backend", "uia")
+
+            if act == "list_windows":
+                wins = wpa.list_windows()
+                return {"ok": True, "total": len(wins), "windows": wins[:30]}
+            elif act == "inspect_controls":
+                return wpa.inspect_controls(w_title, backend=backend)
+            elif act == "type_text":
+                return wpa.type_into_window(w_title, args.get("text_to_type", ""), args.get("control_title"), backend=backend)
+            elif act == "click_control":
+                return wpa.click_control_in_window(w_title, args.get("control_title", ""), backend=backend)
+            elif act == "launch_app":
+                return wpa.launch_app_and_focus(args.get("command", "notepad"), w_title or args.get("command", "notepad"))
+            elif act == "close_window":
+                return wpa.close_window(w_title, backend=backend)
+            return {"ok": False, "error": f"Ação desconhecida: {act}"}
+
+        if name == "web_automation_playwright":
+            import sys
+            import os
+            import tempfile
+            jw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis-windows")
+            if jw_path not in sys.path:
+                sys.path.insert(0, jw_path)
+            from core import web_automation_playwright as wap
+
+            act = args.get("action")
+            url = args.get("url")
+            if act == "browse":
+                return wap.browse_and_extract(url, selector=args.get("selector"))
+            elif act == "screenshot":
+                out = args.get("output_path", os.path.join(tempfile.gettempdir(), "jarvis_web.png"))
+                return wap.capture_web_screenshot(url, out)
+            elif act == "interact":
+                return wap.execute_web_actions(url, args.get("actions", []))
+            return {"ok": False, "error": f"Ação web desconhecida: {act}"}
 
 
 

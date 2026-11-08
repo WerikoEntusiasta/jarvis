@@ -1665,6 +1665,18 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             return
 
+        if path == "/api/presentation/speech_event":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                import dynamic_presentation_engine as pe
+                event_name = data.get("event") or data.get("event_name", "")
+                payload = data.get("payload") or data.get("data", {})
+                res = pe.handle_speech_event(event_name, payload)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
 
 
         # 3b. Nomes, grupos e controle por alvo (Device API compartilhada com o painel ZimaOS)

@@ -68,7 +68,8 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
     sanitized_scenes = []
     valid_types = {
         "hologram_card", "video", "gallery", "chart", "table", 
-        "map", "diagram", "comparison", "metric_grid", "conclusion"
+        "map", "diagram", "comparison", "metric_grid", "conclusion",
+        "smart_canvas", "canvas"
     }
 
     for idx, sc in enumerate(scenes):
@@ -100,7 +101,11 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
             "markers": sc.get("markers", []),
             "conclusion": sc.get("conclusion", ""),
             "summary_points": sc.get("summary_points", []),
-            "actions": sc.get("actions", [])
+            "actions": sc.get("actions", []),
+            "canvas_elements": sc.get("canvas_elements") or sc.get("elements", []),
+            "canvas_connections": sc.get("canvas_connections") or sc.get("connections", []),
+            "canvas_width": int(sc.get("canvas_width") or 800),
+            "canvas_height": int(sc.get("canvas_height") or 480)
         }
         sanitized_scenes.append(scene_obj)
 
@@ -172,3 +177,34 @@ def get_presentation_status() -> Dict[str, Any]:
         "is_active": _ACTIVE_PRESENTATION is not None,
         "presentation": _ACTIVE_PRESENTATION
     }
+
+def handle_speech_event(event_name: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Sincroniza a apresentacao com o motor de voz (Piper TTS / Whisper).
+    Eventos suportados:
+      - speech.started: Inicia ou foca apresentacao
+      - speech.segment.started: Sincroniza trecho falado
+      - speech.segment.completed: Avanca cena se speech_sync=True
+      - speech.interrupted: Pausa/cancela visual anterior imediatamente
+      - speech.completed: Finaliza ciclo de apresentacao
+    """
+    global _ACTIVE_PRESENTATION
+    event = str(event_name).strip().lower()
+    data = payload or {}
+
+    logger.info(f"[PresentationEngine] Evento de voz recebido: {event}")
+
+    if event == "speech.interrupted":
+        _broadcast_to_hud("presentation_control", {"action": "pause", "reason": "speech_interrupted"})
+        return {"ok": True, "action": "paused", "event": event}
+
+    elif event in {"speech.segment.completed", "speech.next_topic"}:
+        if _ACTIVE_PRESENTATION and _ACTIVE_PRESENTATION.get("speech_sync", True):
+            _broadcast_to_hud("presentation_control", {"action": "next"})
+            return {"ok": True, "action": "next_scene", "event": event}
+
+    elif event == "speech.completed":
+        logger.info("[PresentationEngine] Fala completada.")
+        return {"ok": True, "action": "completed", "event": event}
+
+    return {"ok": True, "event": event}
