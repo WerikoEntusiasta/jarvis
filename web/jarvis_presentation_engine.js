@@ -678,123 +678,135 @@
      * CANVAS INTELIGENTE // SPATIAL ARCHITECTURE & FREE-FORM EXPLANATION
      * Permite à IA combinar formas, circuitos, nós, chips, barramentos, textos e setas de fluxo dinâmicas.
      */
+    /**
+     * SPATIAL INTELLIGENCE & INTERACTIVE INFINITE CANVAS
+     * Espaço visual livre de alta resolução (1600x900) para modelagem conceitual,
+     * fluxos de dados em tempo real, freios e contrapesos e inteligência espacial.
+     */
     smart_canvas(scene) {
-      const w = scene.canvas_width || 840;
-      const h = scene.canvas_height || 480;
+      const w = scene.canvas_width || 1600;
+      const h = scene.canvas_height || 900;
       const elements = scene.canvas_elements || scene.elements || [];
       const connections = scene.canvas_connections || scene.connections || [];
 
-      // Mapeamento de elementos estruturados por ID para conexões
-      const elemMap = {};
+      // Mapeamento de nós por id para conexões curvas orgânicas
+      const nodeMap = {};
       elements.forEach(el => {
-        if (el.id) elemMap[el.id] = el;
+        if (el.id) nodeMap[el.id] = el;
       });
 
-      // Renderiza as conexões (linhas de barramento e setas com fluxo de dados animado)
+      // Renderiza as Conexões Curvas com Partículas Dinâmicas Animadas
       const connSvg = connections.map((conn, cIdx) => {
-        let x1 = conn.x1, y1 = conn.y1, x2 = conn.x2, y2 = conn.y2;
-        
-        if (conn.from && elemMap[conn.from]) {
-          const src = elemMap[conn.from];
-          x1 = src.x + (src.width || 140) / 2;
-          y1 = src.y + (src.height || 70) / 2;
+        let x1 = conn.x1 || 100, y1 = conn.y1 || 100, x2 = conn.x2 || 400, y2 = conn.y2 || 400;
+
+        if (conn.from && nodeMap[conn.from]) {
+          const src = nodeMap[conn.from];
+          x1 = (src.x || 100) + (src.width || 220) / 2;
+          y1 = (src.y || 100) + (src.height || 110) / 2;
         }
-        if (conn.to && elemMap[conn.to]) {
-          const dst = elemMap[conn.to];
-          x2 = dst.x + (dst.width || 140) / 2;
-          y2 = dst.y + (dst.height || 70) / 2;
+        if (conn.to && nodeMap[conn.to]) {
+          const dst = nodeMap[conn.to];
+          x2 = (dst.x || 400) + (dst.width || 220) / 2;
+          y2 = (dst.y || 400) + (dst.height || 110) / 2;
         }
 
         const color = conn.color || '#00f0ff';
         const label = conn.label || '';
+        const speed = conn.speed || '2s';
         const isCurved = conn.curved !== false;
-        
-        // Ponto de controle Bézier para curva elegante
+
+        // Ponto de curvatura orgânica suave
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const cx1 = x1 + dx * 0.4;
+        const cy1 = y1 - 40;
+        const cx2 = x1 + dx * 0.6;
+        const cy2 = y2 + 40;
+
+        const pathD = isCurved ? `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}` : `M ${x1} ${y1} L ${x2} ${y2}`;
         const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2 - (isCurved ? 25 : 0);
-        const pathD = isCurved ? `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}` : `M ${x1} ${y1} L ${x2} ${y2}`;
+        const midY = (y1 + y2) / 2;
 
         return `
-          <g class="canvas-connection" id="conn-${conn.id || cIdx}">
-            <!-- Linha Base Guia -->
-            <path d="${pathD}" fill="none" stroke="${color}" stroke-opacity="0.3" stroke-width="2.5" />
-            <!-- Fluxo de Pulso Animado Stark -->
-            <path d="${pathD}" fill="none" stroke="${color}" stroke-width="3" stroke-dasharray="8 6" class="filter drop-shadow-[0_0_8px_${color}]">
-              <animate attributeName="stroke-dashoffset" from="140" to="0" dur="${conn.speed || '2s'}" repeatCount="indefinite" />
+          <g class="spatial-connection transition-opacity duration-300 hover:opacity-100" id="conn-${conn.id || cIdx}">
+            <!-- Trilha Base Translúcida -->
+            <path d="${pathD}" fill="none" stroke="${color}" stroke-opacity="0.25" stroke-width="3" />
+            <!-- Partículas de Fluxo em Movimento Contínuo -->
+            <path d="${pathD}" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="12 10" class="filter drop-shadow-[0_0_10px_${color}]">
+              <animate attributeName="stroke-dashoffset" from="180" to="0" dur="${speed}" repeatCount="indefinite" />
             </path>
-            <!-- Marcador de Seta -->
-            <circle cx="${x2}" cy="${y2}" r="4" fill="${color}" class="filter drop-shadow-[0_0_6px_${color}]" />
+            <!-- Marcadores de Extremidade com Halo -->
+            <circle cx="${x1}" cy="${y1}" r="4" fill="${color}" opacity="0.8" />
+            <circle cx="${x2}" cy="${y2}" r="5" fill="${color}" class="filter drop-shadow-[0_0_8px_${color}]" />
             ${label ? `
-              <rect x="${midX - (label.length * 4)}" y="${midY - 14}" width="${label.length * 8 + 8}" height="16" rx="4" fill="#020617" stroke="${color}" stroke-opacity="0.5" stroke-width="1" />
-              <text x="${midX + 4}" y="${midY - 2}" text-anchor="middle" fill="${color}" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="bold">${label}</text>
+              <g transform="translate(${midX}, ${midY})">
+                <rect x="-${label.length * 4.5 + 8}" y="-13" width="${label.length * 9 + 16}" height="22" rx="6" fill="#020617" stroke="${color}" stroke-opacity="0.6" stroke-width="1.2" class="filter drop-shadow-[0_0_12px_rgba(0,0,0,0.8)]" />
+                <text y="2" text-anchor="middle" fill="#ffffff" font-size="11" font-family="'JetBrains Mono', monospace" font-weight="bold" letter-spacing="0.5">${label}</text>
+              </g>
             ` : ''}
           </g>
         `;
       }).join('');
 
-      // Renderiza nós e formas estruturadas
+      // Renderiza os Nós Espaciais Interativos
       const elemSvg = elements.map(el => {
-        const x = el.x || 50;
-        const y = el.y || 50;
-        const width = el.width || 140;
-        const height = el.height || 70;
-        const shape = el.shape || el.type || 'box';
-        const title = el.title || el.label || 'MÓDULO';
+        const x = el.x || 100;
+        const y = el.y || 100;
+        const width = el.width || 230;
+        const height = el.height || 110;
+        const shape = el.shape || 'box';
+        const title = el.title || 'MÓDULO';
         const desc = el.desc || el.description || '';
         const color = el.color || '#00f0ff';
         const icon = el.icon || '⚡';
-        const highlight = el.highlight ? `stroke="${color}" stroke-width="2.5" filter="url(#glowFilter)"` : `stroke="rgba(0,240,255,0.4)" stroke-width="1.5"`;
+        const metric = el.metric || el.status || '';
 
-        if (shape === 'chip' || shape === 'cpu') {
-          // Microprocessador com pinos metálicos
-          return `
-            <g class="canvas-element cursor-pointer group" id="elem-${el.id}" transform="translate(${x}, ${y})">
-              <!-- Pinos do Chip -->
-              <line x1="-8" y1="${height/2 - 10}" x2="0" y2="${height/2 - 10}" stroke="#38bdf8" stroke-width="2" />
-              <line x1="-8" y1="${height/2 + 10}" x2="0" y2="${height/2 + 10}" stroke="#38bdf8" stroke-width="2" />
-              <line x1="${width}" y1="${height/2 - 10}" x2="${width + 8}" y2="${height/2 - 10}" stroke="#38bdf8" stroke-width="2" />
-              <line x1="${width}" y1="${height/2 + 10}" x2="${width + 8}" y2="${height/2 + 10}" stroke="#38bdf8" stroke-width="2" />
-              <!-- Corpo do Processador -->
-              <rect width="${width}" height="${height}" rx="8" fill="#090d16" ${highlight} />
-              <rect x="4" y="4" width="${width - 8}" height="${height - 8}" rx="6" fill="#0f172a" stroke="rgba(0,240,255,0.2)" />
-              <text x="${width/2}" y="24" text-anchor="middle" fill="#ffffff" font-size="11" font-family="'Orbitron', sans-serif" font-weight="bold">${icon} ${title}</text>
-              <text x="${width/2}" y="42" text-anchor="middle" fill="#38bdf8" font-size="9" font-family="'JetBrains Mono', monospace">${desc}</text>
-              ${el.status ? `<text x="${width/2}" y="${height - 8}" text-anchor="middle" fill="#34d399" font-size="8" font-family="'JetBrains Mono', monospace">● ${el.status}</text>` : ''}
-            </g>
-          `;
-        } else if (shape === 'circle' || shape === 'reactor') {
-          // Nó Circular / Reator
+        if (shape === 'reactor' || shape === 'circle') {
+          // Nó Circular de Núcleo Soberano / Tribunal
           const r = Math.min(width, height) / 2;
           return `
-            <g class="canvas-element cursor-pointer group" id="elem-${el.id}" transform="translate(${x + r}, ${y + r})">
-              <circle r="${r}" fill="#090d16" stroke="${color}" stroke-width="2" class="filter drop-shadow-[0_0_12px_${color}]" />
-              <circle r="${r - 8}" fill="none" stroke="${color}" stroke-opacity="0.4" stroke-dasharray="4 4" />
-              <text x="0" y="-8" text-anchor="middle" fill="#ffffff" font-size="16">${icon}</text>
-              <text x="0" y="8" text-anchor="middle" fill="#ffffff" font-size="10" font-family="'Orbitron', sans-serif" font-weight="bold">${title}</text>
-              <text x="0" y="22" text-anchor="middle" fill="#94a3b8" font-size="8" font-family="'JetBrains Mono', monospace">${desc}</text>
+            <g class="spatial-node cursor-pointer group" id="node-${el.id}" transform="translate(${x + r}, ${y + r})" onclick="JarvisPresentationEngine.focusCanvasNode('${el.id}')">
+              <!-- Halo Radial Pulsante -->
+              <circle r="${r + 14}" fill="none" stroke="${color}" stroke-opacity="0.2" stroke-dasharray="6 6" class="animate-spin" style="animation-duration: 20s;" />
+              <circle r="${r}" fill="#050b14" stroke="${color}" stroke-width="2.5" class="filter drop-shadow-[0_0_20px_${color}] group-hover:scale-105 transition-transform" />
+              <circle r="${r - 10}" fill="none" stroke="${color}" stroke-opacity="0.3" stroke-width="1.5" />
+              <!-- Conteúdo Central -->
+              <text y="-14" text-anchor="middle" font-size="24">${icon}</text>
+              <text y="10" text-anchor="middle" fill="#ffffff" font-size="12" font-family="'Orbitron', sans-serif" font-weight="bold" letter-spacing="0.5">${title}</text>
+              <text y="26" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="'JetBrains Mono', monospace">${desc}</text>
+              ${metric ? `<text y="${r - 8}" text-anchor="middle" fill="${color}" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="bold">● ${metric}</text>` : ''}
             </g>
           `;
-        } else if (shape === 'bus') {
-          // Barramento Largo de Dados
+        } else if (shape === 'chip') {
+          // Nó Institucional Executivo com Pinos de Transmissão
           return `
-            <g class="canvas-element" id="elem-${el.id}" transform="translate(${x}, ${y})">
-              <rect width="${width}" height="${height}" rx="4" fill="#020617" stroke="${color}" stroke-width="1.5" stroke-opacity="0.8" />
-              <line x1="10" y1="${height/2}" x2="${width - 10}" y2="${height/2}" stroke="${color}" stroke-width="3" stroke-dasharray="6 4">
-                <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />
-              </line>
-              <text x="${width/2}" y="${height - 6}" text-anchor="middle" fill="${color}" font-size="8" font-family="'JetBrains Mono', monospace" font-weight="bold">${title.toUpperCase()}</text>
+            <g class="spatial-node cursor-pointer group" id="node-${el.id}" transform="translate(${x}, ${y})" onclick="JarvisPresentationEngine.focusCanvasNode('${el.id}')">
+              <!-- Pinos Eletrônicos Laterais -->
+              <line x1="-12" y1="${height * 0.3}" x2="0" y2="${height * 0.3}" stroke="${color}" stroke-width="2.5" />
+              <line x1="-12" y1="${height * 0.7}" x2="0" y2="${height * 0.7}" stroke="${color}" stroke-width="2.5" />
+              <line x1="${width}" y1="${height * 0.3}" x2="${width + 12}" y2="${height * 0.3}" stroke="${color}" stroke-width="2.5" />
+              <line x1="${width}" y1="${height * 0.7}" x2="${width + 12}" y2="${height * 0.7}" stroke="${color}" stroke-width="2.5" />
+              <!-- Corpo Central do Módulo -->
+              <rect width="${width}" height="${height}" rx="12" fill="#070e1b" stroke="${color}" stroke-width="2.2" class="filter drop-shadow-[0_0_22px_${color}] group-hover:stroke-white transition-all" />
+              <rect x="6" y="6" width="${width - 12}" height="28" rx="8" fill="rgba(0,240,255,0.12)" />
+              <text x="14" y="25" fill="${color}" font-size="12" font-family="'Orbitron', sans-serif" font-weight="bold">${icon} ${title}</text>
+              <text x="14" y="56" fill="#e2e8f0" font-size="11" font-family="'JetBrains Mono', monospace">${desc}</text>
+              ${metric ? `
+                <rect x="14" y="${height - 28}" width="${width - 28}" height="18" rx="5" fill="#020617" stroke="${color}" stroke-opacity="0.4" />
+                <text x="${width/2}" y="${height - 15}" text-anchor="middle" fill="#38bdf8" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="bold">STATUS: ${metric}</text>
+              ` : ''}
             </g>
           `;
         } else {
-          // Bloco / Cartão Retangular Estruturado (Padrão)
+          // Nó Espacial Livre com Visual Minimalista Futurista
           return `
-            <g class="canvas-element cursor-pointer group" id="elem-${el.id}" transform="translate(${x}, ${y})">
-              <rect width="${width}" height="${height}" rx="8" fill="#090d16" ${highlight} />
-              <rect x="0" y="0" width="${width}" height="22" rx="8" fill="rgba(0,240,255,0.15)" />
-              <text x="10" y="15" fill="${color}" font-size="10" font-family="'Orbitron', sans-serif" font-weight="bold">${icon} ${title}</text>
-              <text x="10" y="38" fill="#cbd5e1" font-size="9" font-family="'JetBrains Mono', monospace">${desc}</text>
-              ${el.metric ? `
-                <text x="${width - 10}" y="56" text-anchor="end" fill="#38bdf8" font-size="9" font-family="'JetBrains Mono', monospace" font-weight="bold">${el.metric}</text>
+            <g class="spatial-node cursor-pointer group" id="node-${el.id}" transform="translate(${x}, ${y})" onclick="JarvisPresentationEngine.focusCanvasNode('${el.id}')">
+              <rect width="${width}" height="${height}" rx="12" fill="#060c18" stroke="${color}" stroke-width="2" class="filter drop-shadow-[0_0_18px_${color}] group-hover:scale-[1.02] transition-transform" />
+              <rect x="0" y="0" width="${width}" height="30" rx="12" fill="rgba(255,255,255,0.06)" />
+              <text x="14" y="21" fill="#ffffff" font-size="12" font-family="'Orbitron', sans-serif" font-weight="bold">${icon} ${title}</text>
+              <text x="14" y="55" fill="#cbd5e1" font-size="11" font-family="'JetBrains Mono', monospace">${desc}</text>
+              ${metric ? `
+                <text x="${width - 14}" y="${height - 14}" text-anchor="end" fill="${color}" font-size="10" font-family="'JetBrains Mono', monospace" font-weight="bold">${metric}</text>
               ` : ''}
             </g>
           `;
@@ -802,58 +814,55 @@
       }).join('');
 
       return `
-        <div class="glass-card-stark p-5 rounded-2xl w-full max-w-5xl mx-auto shadow-[0_0_45px_rgba(0,210,255,0.25)] border border-cyan-400/50 font-mono-code animate-slide-up">
-          <div class="flex items-center justify-between pb-3 mb-3 border-b border-cyan-500/20">
-            <div class="flex items-center space-x-2">
-              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-              <span class="text-xs font-bold text-white font-hud uppercase">${scene.title || 'CANVAS INTELIGENTE // ARQUITETURA LIVRE'}</span>
+        <div class="w-full h-full relative overflow-hidden flex flex-col items-center justify-center select-none font-mono-code animate-fade-in">
+          <!-- Palco SVG Interativo Pan/Zoom em Alta Resolução -->
+          <svg id="interactive-spatial-canvas" viewBox="0 0 ${w} ${h}" class="w-full h-full max-h-[820px] transition-transform duration-300">
+            <defs>
+              <pattern id="spatialGrid" width="50" height="50" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="1.2" fill="rgba(0,240,255,0.2)" />
+                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(0,240,255,0.04)" stroke-width="1" />
+              </pattern>
+            </defs>
+
+            <!-- Fundo Cósmico de Coordenadas Livres -->
+            <rect width="${w}" height="${h}" fill="url(#spatialGrid)" />
+
+            <!-- Camada de Conexões e Fluxo de Poder -->
+            <g id="canvas-connections-layer">${connSvg}</g>
+
+            <!-- Camada de Nós e Entidades Institucionais -->
+            <g id="canvas-elements-layer">${elemSvg}</g>
+          </svg>
+
+          <!-- Barra de Explicação Conceitual Flutuante no Rodapé -->
+          <div class="absolute bottom-3 left-6 right-6 p-3 rounded-xl bg-slate-950/80 backdrop-blur-md border border-cyan-500/20 flex items-center justify-between pointer-events-auto">
+            <div class="flex items-center space-x-3 text-xs text-slate-200">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+              <span class="font-bold text-white font-hud">${scene.title || 'ESPACE CONCEITUAL'}</span>
+              <span class="text-slate-400">|</span>
+              <span class="text-cyan-200/90 text-[11px]">${scene.content || 'Visualização dinâmica de equilíbrio institucional e fluxos operacionais.'}</span>
             </div>
-            <div class="flex items-center space-x-2">
-              <span class="text-[9px] text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40">${elements.length} ELEMENTOS // ${connections.length} FLUXOS</span>
+            <div class="text-[10px] text-cyan-400/80 font-mono-code">
+              MODO SPATIAL ACTIVO // CLIQUE NOS NÓS PARA DESTACAR
             </div>
           </div>
-
-          ${scene.subtitle ? `<p class="text-xs text-slate-300 font-sans mb-3">${scene.subtitle}</p>` : ''}
-
-          <!-- Palco SVG Interativo do Canvas -->
-          <div class="w-full overflow-hidden rounded-xl bg-slate-950/90 border border-cyan-500/30 relative flex items-center justify-center p-2">
-            <svg viewBox="0 0 ${w} ${h}" class="w-full h-auto max-h-[520px]">
-              <defs>
-                <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
-                  <feGaussianBlur stdDeviation="4" result="blur" />
-                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                </filter>
-                <pattern id="canvasGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-                  <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(0,240,255,0.08)" stroke-width="1" />
-                </pattern>
-              </defs>
-
-              <!-- Grade Matricial Cibernética Stark -->
-              <rect width="${w}" height="${h}" fill="url(#canvasGrid)" />
-
-              <!-- Camada de Conexões e Fluxo de Dados -->
-              <g id="canvas-connections-layer">
-                ${connSvg}
-              </g>
-
-              <!-- Camada de Elementos e Componentes -->
-              <g id="canvas-elements-layer">
-                ${elemSvg}
-              </g>
-            </svg>
-          </div>
-
-          ${scene.content ? `
-            <div class="mt-3.5 p-3 rounded-xl bg-slate-950/60 border border-cyan-500/20 text-xs text-slate-200 font-sans leading-relaxed">
-              ${scene.content}
-            </div>
-          ` : ''}
         </div>
       `;
     },
 
     canvas(scene) {
       return this.smart_canvas(scene);
+    },
+
+    focusCanvasNode(nodeId) {
+      console.log('[PresentationEngine] Focando no nó:', nodeId);
+      const el = document.getElementById(`node-${nodeId}`);
+      if (el) {
+        el.style.transform += ' scale(1.08)';
+        setTimeout(() => {
+          el.style.transform = el.style.transform.replace(' scale(1.08)', '');
+        }, 500);
+      }
     },
 
     conclusion(scene) {
