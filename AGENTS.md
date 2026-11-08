@@ -47,9 +47,18 @@ graph TD
         OTAClient["Atualizador Remoto OTA (/api/jarvis/ota/trigger)"]
     end
 
+    subgraph SmartTV["4. Smart TV LG webOS (Painel de Demonstrações - 1920x1080)"]
+        TvApp["jarvis-tv-app (com.jarvis.tv webOS App)"]
+        TvWoL["Wake-on-LAN Remoto (MAC 78:dd:12:38:4f:8e)"]
+        TvAudio["Áudio Neural TTS nos alto-falantes da TV"]
+        TvWsClient["Cliente WebSocket ZimaOS (:8095/ws)"]
+    end
+
     WindowsPC <-->|HTTP / SSE :8085 / IPC :49160| LocalServer
     LocalServer <-->|SSH Porta 28222 / HTTP :8095| ScreenRouter
     SphereHW <-->|WebSocket :8095 / UDP :8888| ScreenRouter
+    SmartTV <-->|WebSocket :8095 / UDP WoL :9| ScreenRouter
+    LocalServer -.->|WoL Magic Packet / ares-launch| SmartTV
 ```
 
 ---
@@ -138,6 +147,27 @@ graph TD
 
 ---
 
+### 3.4. Smart TV LG webOS (`jarvis-tv-app/` e `lg_tv_manager.py`)
+- **Papel no Ecossistema:** Painel de projeção visual de grande formato e saída de voz independente conectada diretamente ao ecossistema multi-nó. Permite demonstrações executivas, projeções cinematográficas e telemetria para a sala de estar.
+- **Identificação de Rede:**
+  - IP Local Padrão: `192.168.3.9`
+  - MAC Address Físico: `78:dd:12:38:4f:8e`
+  - Porta webOS Developer Mode: `9922`
+- **Aplicativo Nativo webOS (`com.jarvis.tv`):**
+  - Diretório de Código-Fonte: `c:\JARVIS\jarvis-tv-app\`
+  - Pacote Instalável: `com.jarvis.tv_1.0.0_all.ipk`
+  - Resolução Nativa: 1920 x 1080 pixels (Full HD widescreen sem distorção).
+  - Identidade Visual: Tema Stark Dark com Scanlines, Arc Reactor Canvas central e glass panels ciano/azul profundo.
+- **Mecanismos de Ativação e Controle:**
+  - **Wake-on-LAN (WoL/WoWLAN):** O método `send_wake_on_lan()` em `lg_tv_manager.py` gera e transmite o Magic Packet UDP na sub-rede `192.168.3.255:9`, ligando a TV remotamente mesmo em modo standby ("Mobile TV On").
+  - **Inicialização Automática (`power_on_and_open_app`):** Detecta se a TV está online via socket na porta 9922; caso contrário, dispara o WoL, monitora a subida de rede e abre o aplicativo em tela cheia via `ares-launch com.jarvis.tv`.
+- **Comunicação e Roteamento de Mensagens:**
+  - **WebSocket Primário com Núcleo ZimaOS:** A TV conecta ativamente em `ws://192.168.3.6:8095/ws?device_id=smart_tv_lg` (com fallback WAN para `ws://45.167.187.80:8095/ws`).
+  - **Despacho Multi-Nó (`_dispatch_to_zimaos_tv`):** Qualquer nó do ecossistema (a Esfera ESP32 por voz, o Desktop Windows por script, ou o ZimaOS) pode acionar a TV disparando um payload para `http://45.167.187.80:8095/api/jarvis/tv/project`.
+  - **Projeção de Telas e Fala (`project_screen_to_tv`):** Recebe títulos, HTML/cards holográficos e strings de narração, renderizando os dados na TV enquanto aciona o Piper TTS com áudio direcionado aos alto-falantes da Smart TV.
+
+---
+
 ## 4. Diretrizes Arquiteturais do Spatial Intelligence Workspace
 
 O Spatial Intelligence Workspace substitui qualquer abordagem estática por uma experiência visual de alta fidelidade:
@@ -193,6 +223,7 @@ Ao concluir qualquer tarefa ou alteração no ecossistema J.A.R.V.I.S., o agente
 ## 7. Histórico Cronológico de Modificações (Changelog)
 
 ### 📅 08 de Novembro de 2026
+- **03:11:00** — `docs(agents)`: Integração da documentação arquitetural da Smart TV LG webOS (WoL, IPK, ZimaOS dispatch e áudio TTS) e atualização da regra contínua de changelog.
 - **03:10:00** — `docs(agents)`: Inclusão da regra compulsória de atualização do `AGENTS.md` a cada alteração com registro do histórico cronológico.
 - **03:06:11** — `docs(agents)`: Atualização exaustiva do `AGENTS.md` cobrindo as 3 camadas, rotas REST/SSE, Spatial Workspace e ferramentas.
 - **02:52:31** — `feat(spatial-intelligence)`: Implementação do Spatial Intelligence Workspace com Apache ECharts 5.5.0 e Three.js r128 locais, componentes atômicos vivos e rotas no backend.
