@@ -1,599 +1,656 @@
 /**
- * J.A.R.V.I.S. SPATIAL INTELLIGENCE & PRESENTATION ENGINE
- * ============================================================================
- * Ambiente Espacial de Apresentação e Visualização Contínua em Tempo Real.
- * Suporta:
- *  - Spatial Mode (Padrão): Workspace persistente com componentes independentes
- *    (Apache ECharts, Diagramas, Hero Cards, Indicadores, Canvas Inteligente).
- *  - Slide Mode (Opcional): Apresentação convencional sequencial para compatibilidade.
- * ============================================================================
+ * J.A.R.V.I.S. Mark VII - Spatial Intelligence Workspace & Cinematic Presentation Engine
+ * High-End Futuristic Glassmorphism, Apache ECharts 5.5, Three.js Holograms & Dynamic Topologies.
  */
-
 (function (root, factory) {
-  if (typeof define === 'function' && define.amd) {
-    define([], factory);
-  } else if (typeof module === 'object' && module.exports) {
-    module.exports = factory();
-  } else {
-    root.JarvisPresentationEngine = factory();
-  }
+  if (typeof define === 'function' && define.amd) define([], factory);
+  else if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.JarvisPresentationEngine = factory();
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // =========================================================================
-  // 1. ESTADO GLOBAL DO SPATIAL WORKSPACE E APRESENTAÇÃO
-  // =========================================================================
-  const spatialState = {
-    workspace: null,               // Dados do workspace ativo
-    activeMode: 'spatial',         // 'spatial' ou 'slide'
-    components: new Map(),         // Map<component_id, { data, dom, chartInstance }>
-    slideSession: null,            // Sessão do modo slide (se ativo)
+  const state = {
+    workspace: null,
+    activeMode: 'spatial',
+    components: new Map(),
+    slideSession: null,
     slideIndex: 0,
-    isPlaying: false,
-    timer: null,
-    trackedMedia: new Set(),
-    trackedTimers: new Set()
+    isPlaying: false
   };
 
-  // =========================================================================
-  // 2. UTILITÁRIOS E CONTADORES ANIMADOS (ODÔMETRO)
-  // =========================================================================
-  function _animateCounter(el, targetVal, duration = 1000, unit = '') {
-    if (!el) return;
-    const cleanStr = String(targetVal).replace(/[^0-9.-]/g, '');
-    const isNum = !isNaN(parseFloat(cleanStr)) && cleanStr !== '';
-    if (!isNum) {
-      el.innerText = targetVal + (unit ? ' ' + unit : '');
-      return;
-    }
-    const target = parseFloat(cleanStr);
-    const start = 0;
-    const startTime = performance.now();
-    const isFloat = String(targetVal).includes('.');
+  const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  })[c]);
 
-    function update(now) {
-      const elapsed = now - startTime;
-      const progress = Math.min(1, elapsed / duration);
-      const ease = 1 - Math.pow(1 - progress, 3);
-      const current = start + (target - start) * ease;
-      el.innerText = (isFloat ? current.toFixed(1) : Math.round(current)) + (unit ? ' ' + unit : '');
-      if (progress < 1) {
-        requestAnimationFrame(update);
-      } else {
-        el.innerText = target + (unit ? ' ' + unit : '');
-      }
-    }
-    requestAnimationFrame(update);
+  const clamp = (value, min, max) => {
+    value = Number(value);
+    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min;
+  };
+
+  function geometry(component, index) {
+    const input = component.position || {};
+    const width = clamp(input.width == null ? 48 : input.width, 10, 98);
+    const height = clamp(input.height == null ? 46 : input.height, 10, 92);
+    return {
+      x: clamp(input.x == null ? (index % 2 === 0 ? 2 : 51) : input.x, 0, 100 - width),
+      y: clamp(input.y == null ? (index < 2 ? 2 : 50) : input.y, 0, 100 - height),
+      width, height,
+      depth: clamp(input.depth == null ? 1 : input.depth, 0, 10),
+      zIndex: Number(input.zIndex == null ? 5 : input.zIndex)
+    };
   }
 
-  // =========================================================================
-  // 3. RENDERIZADORES INDEPENDENTES DE COMPONENTES ESPACIAIS
-  // =========================================================================
-  const ComponentBuilders = {
+  function injectStyles() {
+    if (document.getElementById('jarvis-spatial-cinema-style')) return;
+    const tag = document.createElement('style');
+    tag.id = 'jarvis-spatial-cinema-style';
+    tag.textContent = `
+      #presentation-content-area.spatial-stage {
+        padding: 0;
+        overflow: hidden;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .spatial-workspace {
+        position: relative;
+        isolation: isolate;
+        width: 100%;
+        height: 100%;
+        min-height: 580px;
+        overflow: hidden;
+        color: #e2e8f0;
+        background: radial-gradient(circle at 50% 30%, rgba(0, 100, 200, 0.12) 0%, rgba(2, 6, 18, 0.98) 70%, #000000 100%);
+        padding: 16px;
+      }
+      .spatial-workspace::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.20;
+        background-image: linear-gradient(rgba(0, 240, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px);
+        background-size: 50px 50px;
+        mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+        -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
+      }
+      .spatial-el {
+        position: absolute;
+        box-sizing: border-box;
+        transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    top 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    width 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    height 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    opacity 0.4s ease,
+                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .spatial-el.entering {
+        opacity: 0;
+        transform: translateY(24px) scale(0.96);
+      }
+      .spatial-surface {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(7, 16, 34, 0.88) 0%, rgba(2, 7, 18, 0.94) 100%);
+        border: 1px solid rgba(0, 240, 255, 0.22);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 30px rgba(0, 180, 255, 0.06);
+        backdrop-filter: blur(24px);
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+      .spatial-surface:hover {
+        border-color: rgba(0, 240, 255, 0.45);
+        box-shadow: 0 25px 65px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 45px rgba(0, 220, 255, 0.15);
+      }
+      .spatial-surface::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 15%; right: 15%; height: 2px;
+        background: linear-gradient(90deg, transparent, #00f0ff, transparent);
+        opacity: 0.85;
+        box-shadow: 0 0 12px #00f0ff;
+      }
+      /* Hero Card Typography */
+      .hero-kicker {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
+        color: #00f0ff;
+        text-transform: uppercase;
+      }
+      .hero-title {
+        font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+        font-size: clamp(20px, 1.8vw, 26px);
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 0.5px;
+        margin: 6px 0 10px;
+        line-height: 1.15;
+      }
+      .hero-copy {
+        font-size: 12px;
+        color: #94a3b8;
+        line-height: 1.6;
+        margin-bottom: 14px;
+      }
+      .hero-tag {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 9999px;
+        background: rgba(0, 240, 255, 0.10);
+        border: 1px solid rgba(0, 240, 255, 0.30);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        color: #38bdf8;
+        margin-right: 6px;
+        margin-bottom: 6px;
+      }
+      .hero-bullet {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 11px;
+        color: #cbd5e1;
+        margin-bottom: 6px;
+        line-height: 1.45;
+      }
+      .hero-bullet-dot {
+        color: #00f0ff;
+        font-weight: bold;
+      }
+      /* Metrics */
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        height: 100%;
+        align-items: center;
+      }
+      .metric-box {
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: rgba(4, 12, 28, 0.70);
+        border: 1px solid rgba(0, 240, 255, 0.18);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .metric-kicker {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        color: #94a3b8;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+      }
+      .metric-big {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(22px, 2.2vw, 32px);
+        font-weight: 800;
+        color: #00f0ff;
+        text-shadow: 0 0 20px rgba(0, 240, 255, 0.45);
+        margin: 4px 0;
+      }
+      .metric-trend {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        color: #34d399;
+        font-weight: 600;
+      }
+      /* Chart Header */
+      .chart-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        flex-shrink: 0;
+      }
+      .chart-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 800;
+        color: #ffffff;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+      }
+      .chart-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.40);
+        color: #34d399;
+        font-weight: 700;
+      }
+      /* Topology Graph */
+      .topo-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .topo-node {
+        position: absolute;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: rgba(6, 18, 38, 0.90);
+        border: 1px solid rgba(0, 240, 255, 0.40);
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.20);
+        color: #fff;
+        text-align: center;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 700;
+        transform: translate(-50%, -50%);
+        backdrop-filter: blur(10px);
+      }
+      .topo-node.core {
+        background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(3, 10, 26, 0.95) 80%);
+        border-color: #00f0ff;
+        box-shadow: 0 0 30px rgba(0, 240, 255, 0.50);
+        font-size: 11px;
+        font-weight: 800;
+        padding: 12px 18px;
+      }
+    `;
+    document.head.appendChild(tag);
+  }
 
-    /**
-     * COMPONENTE 1: APACHE ECHARTS (GRÁFICO PROFISSIONAL INTERATIVO)
-     */
-    echarts(comp) {
-      const p = comp.props || {};
-      const chartId = `echart-${comp.id}`;
-      const title = p.title || 'Análise de Dados';
-      const subtitle = p.subtitle || '';
-      const height = p.height || 360;
+  // BUILDER 1: HERO CARD
+  function buildHeroCard(c) {
+    const p = c.props || {};
+    const kicker = p.kicker || p.badge || 'STARK INTELLIGENCE // SPATIAL OS';
+    const title = p.title || 'Arquitetura Soberana';
+    const summary = p.summary || p.subtitle || '';
+    const tags = (p.tags || []).map(t => `<span class="hero-tag">${esc(t)}</span>`).join('');
+    const bullets = (p.bullets || []).map(b => `
+      <div class="hero-bullet">
+        <span class="hero-bullet-dot">▸</span>
+        <span>${esc(b)}</span>
+      </div>
+    `).join('');
 
-      const html = `
-        <div class="w-full h-full p-5 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col shadow-2xl relative overflow-hidden group">
-          <div class="flex items-center justify-between pb-3 mb-2 border-b border-slate-800/70">
-            <div>
-              <div class="flex items-center space-x-2">
-                <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-                <span class="text-xs font-bold text-white font-hud uppercase tracking-wider">${title}</span>
-              </div>
-              ${subtitle ? `<p class="text-[11px] text-slate-400 mt-0.5">${subtitle}</p>` : ''}
-            </div>
-            <span class="text-[9px] font-mono-code text-cyan-400 bg-cyan-950/80 px-2.5 py-0.5 rounded-full border border-cyan-500/30">ECHARTS // INTERATIVO</span>
+    return {
+      html: `
+        <div class="spatial-surface">
+          <div>
+            <div class="hero-kicker">${esc(kicker)}</div>
+            <h2 class="hero-title">${esc(title)}</h2>
+            ${summary ? `<p class="hero-copy">${esc(summary)}</p>` : ''}
+            ${tags ? `<div style="margin-bottom:12px">${tags}</div>` : ''}
           </div>
-          <div id="${chartId}" class="w-full flex-1" style="min-height: ${height}px;"></div>
+          ${bullets ? `<div style="margin-top:auto">${bullets}</div>` : ''}
         </div>
-      `;
+      `
+    };
+  }
 
-      return {
-        html,
-        mount(container) {
-          const dom = container.querySelector(`#${chartId}`);
-          if (!dom || typeof window.echarts === 'undefined') return null;
+  // BUILDER 2: METRIC DOCK
+  function buildMetricDock(c) {
+    const p = c.props || {};
+    const title = p.title || 'TELEMETRIA DE PERFORMANCE COGNITIVA';
+    const metrics = (p.metrics || []).slice(0, 4);
 
-          const chart = window.echarts.init(dom, 'dark', { renderer: 'canvas' });
+    const boxes = metrics.map(m => `
+      <div class="metric-box">
+        <span class="metric-kicker">${esc(m.label || 'MÉTRICA')}</span>
+        <span class="metric-big">${esc(m.value || '--')}</span>
+        <span class="metric-trend">${esc(m.trend || '● Nominal')}</span>
+      </div>
+    `).join('');
 
-          // Paleta Cyberpunk Stark de Alto Padrão
-          const defaultOptions = {
-            backgroundColor: 'transparent',
-            textStyle: { fontFamily: "'Plus Jakarta Sans', sans-serif" },
-            tooltip: {
-              trigger: 'axis',
-              backgroundColor: 'rgba(2, 6, 23, 0.95)',
-              borderColor: 'rgba(0, 240, 255, 0.3)',
-              textStyle: { color: '#e2e8f0', fontSize: 11 },
-              extraCssText: 'box-shadow: 0 10px 25px rgba(0,0,0,0.5); border-radius: 12px;'
-            },
-            grid: { top: 35, right: 25, bottom: 30, left: 45, containLabel: true }
-          };
-
-          const mergedOptions = Object.assign({}, defaultOptions, p.options || {});
-          chart.setOption(mergedOptions);
-
-          const resizeHandler = () => chart.resize();
-          window.addEventListener('resize', resizeHandler);
-
-          return {
-            instance: chart,
-            cleanup() {
-              window.removeEventListener('resize', resizeHandler);
-              chart.dispose();
-            }
-          };
-        }
-      };
-    },
-
-    /**
-     * COMPONENTE 2: HERO EDITORIAL (ANÁLISE ESTRATÉGICA & CONTEXTO)
-     */
-    hero_card(comp) {
-      const p = comp.props || {};
-      const title = p.title || 'Visão Institucional';
-      const subtitle = p.subtitle || '';
-      const content = p.content || '';
-      const tag = p.tag || 'DIRETRIZ DE INTELIGÊNCIA';
-      const bullets = (p.bullets || []).map(b => `
-        <div class="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/40 border border-slate-800/80">
-          <div class="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0 shadow-[0_0_8px_#00f0ff]"></div>
-          <div class="text-xs text-slate-200 leading-relaxed font-sans">${b}</div>
-        </div>
-      `).join('');
-
-      const html = `
-        <div class="w-full h-full p-6 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between shadow-2xl relative overflow-hidden">
-          <div class="space-y-4">
-            <div class="flex items-center space-x-2">
-              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-              <span class="text-[10px] font-mono-code font-bold uppercase tracking-widest text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-500/30">${tag}</span>
-            </div>
-            <h2 class="text-xl lg:text-3xl font-extrabold text-white font-hud tracking-tight leading-snug">${title}</h2>
-            ${subtitle ? `<p class="text-xs font-medium text-cyan-200/80 leading-relaxed">${subtitle}</p>` : ''}
-            ${content ? `<div class="p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80 text-xs text-slate-300 leading-relaxed">${content}</div>` : ''}
-            ${bullets ? `<div class="space-y-2 pt-1">${bullets}</div>` : ''}
+    return {
+      html: `
+        <div class="spatial-surface">
+          <div class="chart-header">
+            <span class="chart-title">${esc(title)}</span>
+            <span class="chart-badge">● STARK SENSORS</span>
           </div>
-          ${p.footer ? `<div class="pt-4 mt-4 border-t border-slate-800 text-[10px] font-mono-code text-slate-500">${p.footer}</div>` : ''}
-        </div>
-      `;
-
-      return { html, mount: () => null };
-    },
-
-    /**
-     * COMPONENTE 3: METRIC DOCK (KPIS & INDICADORES NUMÉRICOS GIGANTES)
-     */
-    metric_dock(comp) {
-      const p = comp.props || {};
-      const metrics = p.metrics || [];
-
-      const html = `
-        <div class="w-full h-full p-6 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between shadow-2xl">
-          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800/80">
-            <span class="text-xs font-bold font-hud uppercase tracking-wider text-white">${p.title || 'INDICADORES PRINCIPAIS'}</span>
-            <span class="text-[9px] font-mono-code text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30">TELEMETRIA VIVA</span>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-${Math.min(metrics.length, 3)} gap-4 flex-1 items-center">
-            ${metrics.map(m => `
-              <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-950/90 border border-slate-800 hover:border-cyan-500/40 transition-all relative overflow-hidden group text-center">
-                <div class="text-[10px] font-mono-code uppercase tracking-widest text-slate-400 mb-1.5">${m.label}</div>
-                <div class="text-3xl lg:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-100 to-cyan-400 font-hud odometer-val" data-val="${m.value}" data-unit="${m.unit || ''}">
-                  ${m.value}${m.unit || ''}
-                </div>
-                ${m.sub ? `<div class="text-[11px] text-cyan-300/80 font-sans mt-2">${m.sub}</div>` : ''}
-              </div>
-            `).join('')}
+          <div class="metrics-grid">
+            ${boxes}
           </div>
         </div>
-      `;
+      `
+    };
+  }
 
-      return {
-        html,
-        mount(container) {
-          container.querySelectorAll('.odometer-val').forEach(el => {
-            _animateCounter(el, el.getAttribute('data-val'), 900, el.getAttribute('data-unit') || '');
-          });
-          return null;
-        }
-      };
-    },
+  // BUILDER 3: APACHE ECHARTS
+  function buildECharts(c) {
+    const p = c.props || {};
+    const title = p.title || 'ANÁLISE DE PERFORMANCE';
+    const source = p.source || 'TELEMETRIA OFICIAL STARK';
+    const chartOpts = p.options || p.option || {};
 
-    /**
-     * COMPONENTE 4: DIAGRAMA ESTRUTURADO NOBRE (TRÊS PODERES / ARQUITETURA)
-     */
-    power_triptych(comp) {
-      const p = comp.props || {};
-      const pillars = p.pillars || [
-        { title: 'PODER EXECUTIVO', subtitle: 'Palácio do Planalto', desc: 'Coordenação e gestão das políticas públicas', icon: '🏛️', color: 'cyan', badge: 'Medidas Provisórias' },
-        { title: 'PODER LEGISLATIVO', subtitle: 'Congresso Nacional', desc: '513 Deputados e 81 Senadores com protagonismo orçamentário', icon: '⚖️', color: 'amber', badge: 'Orçamento Impositivo' },
-        { title: 'PODER JUDICIÁRIO', subtitle: 'Supremo Tribunal Federal', desc: '11 Ministros como guardiões da Carta Magna de 1988', icon: '🛡️', color: 'purple', badge: 'Controle Constitucional' }
-      ];
-
-      const html = `
-        <div class="w-full h-full p-6 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between shadow-2xl">
-          <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
-            <div>
-              <span class="text-[10px] font-mono-code font-bold uppercase tracking-widest text-cyan-400">ARQUITETURA INSTITUCIONAL // FREIOS & CONTRAPESOS</span>
-              <h3 class="text-xl font-bold text-white font-hud mt-0.5">${p.title || 'Equilíbrio dos Três Poderes da República'}</h3>
-            </div>
-            <span class="text-[9px] font-mono-code text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30">INTERATIVO</span>
+    return {
+      html: `
+        <div class="spatial-surface">
+          <div class="chart-header">
+            <span class="chart-title">${esc(title)}</span>
+            <span class="chart-badge">${esc(source)}</span>
           </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-5 flex-1 items-stretch">
-            ${pillars.map(pil => {
-              const theme = pil.color === 'amber' ? { border: 'border-amber-500/40', text: 'text-amber-400', glow: 'from-amber-950/30' }
-                          : pil.color === 'purple' ? { border: 'border-purple-500/40', text: 'text-purple-400', glow: 'from-purple-950/30' }
-                          : { border: 'border-cyan-500/40', text: 'text-cyan-400', glow: 'from-cyan-950/30' };
-
-              return `
-                <div class="p-5 rounded-2xl bg-gradient-to-b ${theme.glow} via-slate-950/90 to-slate-950/90 border ${theme.border} hover:border-white/50 transition-all flex flex-col justify-between shadow-lg group">
-                  <div>
-                    <div class="text-2xl mb-3">${pil.icon}</div>
-                    <div class="text-[10px] font-mono-code font-bold uppercase tracking-wider ${theme.text}">${pil.title}</div>
-                    <h4 class="text-base font-bold text-white font-hud mt-0.5 mb-2">${pil.subtitle}</h4>
-                    <p class="text-xs text-slate-300 leading-relaxed font-sans">${pil.desc}</p>
-                  </div>
-                  <div class="pt-3 mt-4 border-t border-slate-800/80">
-                    <span class="px-2 py-1 rounded bg-slate-900 text-[10px] font-mono-code font-semibold ${theme.text} border border-slate-700/60">${pil.badge}</span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-
-          ${p.footer ? `
-            <div class="mt-4 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 font-sans">
-              ${p.footer}
-            </div>
-          ` : ''}
+          <div data-echart-target style="flex:1;width:100%;min-height:160px"></div>
         </div>
-      `;
+      `,
+      mount(box) {
+        const target = box.querySelector('[data-echart-target]');
+        if (!target || !window.echarts) return null;
+        const instance = window.echarts.init(target, null, { renderer: 'canvas' });
+        
+        const defaultStyle = {
+          backgroundColor: 'transparent',
+          textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 },
+          grid: { left: 24, right: 14, top: 18, bottom: 24, containLabel: true },
+          tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(2, 6, 18, 0.95)',
+            borderColor: 'rgba(0, 240, 255, 0.45)',
+            textStyle: { color: '#e2e8f0', fontFamily: 'JetBrains Mono', fontSize: 11 }
+          }
+        };
 
-      return { html, mount: () => null };
-    },
+        instance.setOption(Object.assign(defaultStyle, chartOpts));
+        const resize = () => instance.resize();
+        window.addEventListener('resize', resize);
+        setTimeout(resize, 60);
+        setTimeout(resize, 250);
 
-    /**
-     * COMPONENTE 5: TABELA MATRICIAL DE ALTO PADRÃO (PAUTAS & RISCOS)
-     */
-    data_table(comp) {
-      const p = comp.props || {};
-      const headers = p.headers || ['Item', 'Origem', 'Impacto', 'Status'];
-      const rows = p.rows || [];
+        return {
+          instance,
+          cleanup: () => {
+            window.removeEventListener('resize', resize);
+            instance.dispose();
+          }
+        };
+      }
+    };
+  }
 
-      const html = `
-        <div class="w-full h-full p-6 rounded-3xl bg-slate-950/85 backdrop-blur-xl border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between shadow-2xl">
-          <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
-            <div>
-              <span class="text-[10px] font-mono-code font-bold uppercase tracking-widest text-cyan-400">MATRIZ ESTRATÉGICA</span>
-              <h3 class="text-xl font-bold text-white font-hud mt-0.5">${p.title || 'Pautas e Indicadores em Foco'}</h3>
-            </div>
-            <span class="text-[9px] font-mono-code text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30">${rows.length} ITENS</span>
+  // BUILDER 4: RELATIONSHIP MAP / TOPOLOGY
+  function buildRelationshipMap(c) {
+    const p = c.props || {};
+    const title = p.title || 'TOPOLOGIA DO ECOSSISTEMA DISTRIBUÍDO';
+    
+    // 5 nós em formato de diamante equilibrado (nunca sobrepostos)
+    const nodes = [
+      { id: 'core', label: 'CÉREBRO SOBERANO', badge: 'LOCAL AI', x: 50, y: 50, isCore: true },
+      { id: 'windows', label: 'HUD WINDOWS 11', badge: 'QHD 2560x1440', x: 18, y: 24 },
+      { id: 'zima', label: 'ZIMAOS DOCKER', badge: '45.167.187.80', x: 82, y: 24 },
+      { id: 'tv', label: 'SMART TV LG', badge: 'webOS 1080p', x: 18, y: 76 },
+      { id: 'sphere', label: 'ESFERA ESP32-S3', badge: 'DevKitC-1 LCD', x: 82, y: 76 }
+    ];
+
+    const nodesHtml = nodes.map(n => `
+      <div class="topo-node ${n.isCore ? 'core' : ''}" style="left:${n.x}%;top:${n.y}%">
+        <div>${esc(n.label)}</div>
+        <div style="font-size:8px;color:#38bdf8;font-weight:normal;margin-top:2px">${esc(n.badge)}</div>
+      </div>
+    `).join('');
+
+    return {
+      html: `
+        <div class="spatial-surface">
+          <div class="chart-header">
+            <span class="chart-title">${esc(title)}</span>
+            <span class="chart-badge">● 5 NÓS ATIVOS</span>
           </div>
-
-          <div class="overflow-x-auto rounded-2xl border border-slate-800 flex-1">
-            <table class="w-full text-left text-xs text-slate-200">
-              <thead class="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-mono-code text-[10px] uppercase tracking-wider">
-                <tr>
-                  ${headers.map(h => `<th class="py-3 px-5">${h}</th>`).join('')}
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-800/60 font-sans">
-                ${rows.map(r => `
-                  <tr class="hover:bg-slate-900/40 transition-colors">
-                    ${r.map((col, idx) => {
-                      let colStr = String(col);
-                      let badge = '';
-                      if (colStr.toLowerCase() === 'ativo' || colStr.toLowerCase() === 'online') {
-                        badge = `<span class="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono-code font-bold">● ${colStr}</span>`;
-                      } else if (colStr.toLowerCase() === 'alerta' || colStr.toLowerCase() === 'aviso') {
-                        badge = `<span class="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono-code font-bold">▲ ${colStr}</span>`;
-                      }
-                      return `<td class="py-3 px-5 ${idx === 0 ? 'font-bold text-white font-hud' : 'text-slate-300'}">${badge || colStr}</td>`;
-                    }).join('')}
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
+          <div class="topo-container">
+            <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
+              <!-- Conexões do Core para os Nós -->
+              <line x1="50%" y1="50%" x2="18%" y2="24%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="82%" y2="24%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="18%" y2="76%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <line x1="50%" y1="50%" x2="82%" y2="76%" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" stroke-dasharray="4 4" />
+              <circle cx="50%" cy="50%" r="48" fill="none" stroke="rgba(0,240,255,0.15)" stroke-width="1" />
+            </svg>
+            ${nodesHtml}
           </div>
         </div>
-      `;
+      `
+    };
+  }
 
-      return { html, mount: () => null };
-    }
+  // BUILDER 5: THREE.JS 3D HOLOGRAPHIC CORE
+  function buildThreeView(c) {
+    const p = c.props || {};
+    const title = p.title || 'MODELO ESPACIAL HOLOGRÁFICO 3D';
+
+    return {
+      html: `
+        <div class="spatial-surface">
+          <div class="chart-header">
+            <span class="chart-title">${esc(title)}</span>
+            <span class="chart-badge">WebGL THREE.JS</span>
+          </div>
+          <div data-three-host style="flex:1;width:100%;min-height:180px;position:relative"></div>
+        </div>
+      `,
+      mount(box) {
+        const host = box.querySelector('[data-three-host]');
+        if (!host || !window.THREE) return null;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+        camera.position.set(0, 0, 5.2);
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        host.appendChild(renderer.domElement);
+
+        const group = new THREE.Group();
+        // Núcleo Icosaedro holográfico
+        const coreGeo = new THREE.IcosahedronGeometry(1.2, 2);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.85 });
+        const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+        group.add(coreMesh);
+
+        // Anel orbital de plasma
+        const ringGeo = new THREE.TorusGeometry(1.7, 0.02, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = Math.PI * 0.45;
+        group.add(ringMesh);
+
+        // Anel dourado externo
+        const ring2Geo = new THREE.TorusGeometry(2.0, 0.015, 16, 100);
+        const ring2Mat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.65 });
+        const ring2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
+        ring2Mesh.rotation.y = Math.PI * 0.35;
+        group.add(ring2Mesh);
+
+        scene.add(group);
+
+        let isRunning = true;
+        let reqId;
+
+        const resize = () => {
+          const w = host.clientWidth || 300;
+          const h = host.clientHeight || 200;
+          renderer.setSize(w, h, false);
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+        };
+
+        const animate = () => {
+          if (!isRunning) return;
+          group.rotation.y += 0.005;
+          coreMesh.rotation.x += 0.003;
+          ringMesh.rotation.z += 0.004;
+          ring2Mesh.rotation.x += 0.002;
+          renderer.render(scene, camera);
+          reqId = requestAnimationFrame(animate);
+        };
+
+        resize();
+        animate();
+
+        window.addEventListener('resize', resize);
+        setTimeout(resize, 80);
+
+        return {
+          cleanup: () => {
+            isRunning = false;
+            cancelAnimationFrame(reqId);
+            window.removeEventListener('resize', resize);
+            renderer.dispose();
+            if (renderer.domElement) renderer.domElement.remove();
+          }
+        };
+      }
+    };
+  }
+
+  const COMPONENT_REGISTRY = {
+    'hero_card': buildHeroCard,
+    'narrative': buildHeroCard,
+    'metric_dock': buildMetricDock,
+    'echarts': buildECharts,
+    'relationship_map': buildRelationshipMap,
+    'power_triptych': buildRelationshipMap,
+    'three_view': buildThreeView
   };
 
-  // =========================================================================
-  // 4. MOTOR DO SPATIAL INTELLIGENCE WORKSPACE
-  // =========================================================================
-  const JarvisPresentationEngine = {
+  const engine = {
+    initSpatialWorkspace(payload) {
+      injectStyles();
+      state.workspace = payload || {};
+      state.components.clear();
 
-    /**
-     * Inicializa ou atualiza o Spatial Workspace
-     */
-    initSpatialWorkspace(wsData) {
-      spatialState.activeMode = 'spatial';
-      spatialState.workspace = wsData || { title: 'Spatial Hub', components: {} };
-
-      const overlay = document.getElementById('jarvis-presentation-overlay');
+      window.isPresentationActive = true;
+      const stageContainer = document.getElementById('presentation-stage');
       const mount = document.getElementById('presentation-content-area');
-      const headerTitle = document.getElementById('presentation-header-title');
-      const audioStatusText = document.getElementById('presentation-audio-status-text');
+      const titleEl = document.getElementById('presentation-header-title');
 
-      if (overlay) {
-        overlay.classList.remove('hidden');
-        setTimeout(() => {
-          overlay.classList.remove('opacity-0');
-          overlay.classList.add('opacity-100');
-        }, 30);
-      }
-
-      if (headerTitle) {
-        headerTitle.innerText = wsData.title || 'SPATIAL INTELLIGENCE WORKSPACE';
-      }
-      if (audioStatusText) {
-        audioStatusText.innerText = 'WORKSPACE ATIVO';
+      if (titleEl && payload.title) {
+        titleEl.textContent = payload.title.toUpperCase();
       }
 
       if (mount) {
-        mount.innerHTML = `
-          <div id="spatial-workspace-grid" class="w-full h-full grid grid-cols-12 gap-6 p-2 overflow-y-auto"></div>
-        `;
+        mount.innerHTML = '';
+        mount.className = 'spatial-stage';
+        const stage = document.createElement('div');
+        stage.className = 'spatial-workspace';
+        mount.appendChild(stage);
       }
 
-      // Se houver componentes iniciais, monta-os
-      spatialState.components.clear();
-      const comps = wsData.components || {};
-      Object.keys(comps).forEach(k => {
-        this.addSpatialComponent(comps[k]);
+      if (stageContainer) {
+        stageContainer.classList.remove('opacity-0', 'pointer-events-none');
+        stageContainer.classList.add('opacity-100', 'pointer-events-auto');
+      }
+
+      const rawComps = payload.components;
+      const comps = Array.isArray(rawComps) ? rawComps : (rawComps && typeof rawComps === 'object' ? Object.values(rawComps) : []);
+      comps.forEach((c, idx) => {
+        this.addSpatialComponent(c.id || ('comp_' + idx), c.type || 'hero_card', c.position, c.props || c, idx);
       });
 
       return true;
     },
 
-    /**
-     * Adiciona um componente individual ao Spatial Workspace
-     */
-    addSpatialComponent(compData) {
-      if (!compData || !compData.id) return false;
-      const grid = document.getElementById('spatial-workspace-grid');
-      if (!grid) {
-        this.initSpatialWorkspace({ title: 'Spatial Hub', components: {} });
+    createWorkspace(title = 'Spatial Workspace') {
+      return this.initSpatialWorkspace({ title, components: [] });
+    },
+
+    compose(payload) {
+      return this.initSpatialWorkspace(payload);
+    },
+
+    addSpatialComponent(arg1, arg2, arg3, arg4, arg5 = 0) {
+      let id, type, position, props, index;
+      if (typeof arg1 === 'object' && arg1 !== null) {
+        id = arg1.id || arg1.component_id || ('comp_' + state.components.size);
+        type = arg1.type || 'hero_card';
+        position = arg1.position || {};
+        props = arg1.props || arg1;
+        index = arg2 || state.components.size;
+      } else {
+        id = arg1 || ('comp_' + state.components.size);
+        type = arg2 || 'hero_card';
+        position = arg3 || {};
+        props = arg4 || {};
+        index = arg5 || state.components.size;
       }
 
-      const gridEl = document.getElementById('spatial-workspace-grid');
-      if (!gridEl) return false;
+      const stage = document.querySelector('.spatial-workspace');
+      if (!stage) return false;
 
-      // Determina span de colunas no grid de 12 colunas
-      const colSpan = (compData.position && compData.position.col_span) ? compData.position.col_span : 6;
-      const builder = ComponentBuilders[compData.type] || ComponentBuilders.hero_card;
-      const { html, mount } = builder(compData);
+      const compData = { id, type, position: position || {}, props: props || {} };
+      const geom = geometry(compData, index);
 
-      // Cria nó wrapper
-      const compWrap = document.createElement('div');
-      compWrap.id = `spatial-comp-${compData.id}`;
-      compWrap.className = `col-span-12 lg:col-span-${colSpan} transition-all duration-500 transform animate-fade-in`;
-      compWrap.innerHTML = html;
+      const el = document.createElement('div');
+      el.className = 'spatial-el entering';
+      el.id = `spatial-comp-${id}`;
+      el.style.left = `${geom.x}%`;
+      el.style.top = `${geom.y}%`;
+      el.style.width = `${geom.width}%`;
+      el.style.height = `${geom.height}%`;
+      el.style.zIndex = geom.zIndex;
 
-      gridEl.appendChild(compWrap);
+      const builder = COMPONENT_REGISTRY[type] || buildHeroCard;
+      const built = builder(compData);
+      el.innerHTML = built.html;
 
-      // Executa mount (ex: inicialização do Apache ECharts)
+      stage.appendChild(el);
+
       let mountResult = null;
-      if (typeof mount === 'function') {
-        mountResult = mount(compWrap);
+      if (typeof built.mount === 'function') {
+        mountResult = built.mount(el);
       }
 
-      spatialState.components.set(compData.id, {
-        data: compData,
-        dom: compWrap,
-        mountResult
+      state.components.set(id, { dom: el, data: compData, mountResult });
+
+      requestAnimationFrame(() => {
+        el.classList.remove('entering');
       });
 
       return true;
     },
 
-    /**
-     * Atualiza um componente específico sem reconstruir o Workspace
-     */
-    updateSpatialComponent(compId, updates, animate = true) {
-      const comp = spatialState.components.get(compId);
-      if (!comp) return false;
-
-      // Se for ECharts e updates tiver opções, atualiza com setOption suave
-      if (comp.data.type === 'echarts' && comp.mountResult && comp.mountResult.instance) {
-        if (updates.props && updates.props.options) {
-          comp.mountResult.instance.setOption(updates.props.options, { notMerge: false, lazyUpdate: true });
-        }
-      }
-
-      // Se for metric_dock, atualiza contadores
-      if (comp.data.type === 'metric_dock' && updates.props && updates.props.metrics) {
-        const wrap = comp.dom;
-        updates.props.metrics.forEach(m => {
-          const el = wrap.querySelector(`[data-val="${m.value}"]`);
-          if (el) _animateCounter(el, m.value, 800, m.unit || '');
-        });
-      }
-
-      return true;
-    },
-
-    /**
-     * Aplica aura luminosa temporária a um componente para sincronização de narração
-     */
-    highlightSpatialComponent(compId, duration = 3.0) {
-      const comp = spatialState.components.get(compId);
-      if (!comp || !comp.dom) return false;
-
-      comp.dom.classList.add('ring-2', 'ring-cyan-400', 'shadow-[0_0_40px_rgba(0,240,255,0.4)]', 'scale-[1.01]');
-      setTimeout(() => {
-        comp.dom.classList.remove('ring-2', 'ring-cyan-400', 'shadow-[0_0_40px_rgba(0,240,255,0.4)]', 'scale-[1.01]');
-      }, duration * 1000);
-      return true;
-    },
-
-    /**
-     * Remove um componente individual mantendo os demais intactos
-     */
-    removeSpatialComponent(compId) {
-      const comp = spatialState.components.get(compId);
-      if (!comp) return false;
-
-      if (comp.mountResult && typeof comp.mountResult.cleanup === 'function') {
-        comp.mountResult.cleanup();
-      }
-
-      if (comp.dom && comp.dom.parentNode) {
-        comp.dom.style.opacity = '0';
-        comp.dom.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-          if (comp.dom.parentNode) comp.dom.parentNode.removeChild(comp.dom);
-        }, 300);
-      }
-
-      spatialState.components.delete(compId);
-      return true;
-    },
-
-    /**
-     * Limpa o Workspace inteiro
-     */
     clearSpatialWorkspace() {
-      spatialState.components.forEach(comp => {
-        if (comp.mountResult && typeof comp.mountResult.cleanup === 'function') {
-          comp.mountResult.cleanup();
+      state.components.forEach(record => {
+        if (record.mountResult && typeof record.mountResult.cleanup === 'function') {
+          record.mountResult.cleanup();
         }
+        if (record.dom) record.dom.remove();
       });
-      spatialState.components.clear();
+      state.components.clear();
 
-      const overlay = document.getElementById('jarvis-presentation-overlay');
-      if (overlay) {
-        overlay.classList.remove('opacity-100');
-        overlay.classList.add('opacity-0');
-        setTimeout(() => overlay.classList.add('hidden'), 250);
+      window.isPresentationActive = false;
+      const stageContainer = document.getElementById('presentation-stage');
+      if (stageContainer) {
+        stageContainer.classList.remove('opacity-100', 'pointer-events-auto');
+        stageContainer.classList.add('opacity-0', 'pointer-events-none');
       }
-    },
-
-    // =========================================================================
-    // 5. MODO SLIDE CONVENCIONAL (COMPATIBILIDADE QUANDO SOLICITADO)
-    // =========================================================================
-    start(script) {
-      // Se for script estruturado para Spatial Workspace, direciona para o modo espacial
-      if (script.mode === 'spatial' || script.spatial) {
-        return this.initSpatialWorkspace(script);
-      }
-
-      // Caso contrário, executa modo Slide convencional de compatibilidade
-      spatialState.activeMode = 'slide';
-      spatialState.slideSession = script;
-      spatialState.slideIndex = 0;
-      spatialState.isPlaying = true;
-
-      const overlay = document.getElementById('jarvis-presentation-overlay');
-      if (overlay) {
-        overlay.classList.remove('hidden');
-        setTimeout(() => {
-          overlay.classList.remove('opacity-0');
-          overlay.classList.add('opacity-100');
-        }, 30);
-      }
-
-      this.renderSlideScene();
-      return true;
-    },
-
-    renderSlideScene() {
-      if (!spatialState.slideSession) return;
-      const scenes = spatialState.slideSession.scenes || [];
-      const idx = spatialState.slideIndex;
-      const scene = scenes[idx];
-      if (!scene) return;
-
-      const mount = document.getElementById('presentation-content-area');
-      const headerTitle = document.getElementById('presentation-header-title');
-      const audioStatusText = document.getElementById('presentation-audio-status-text');
-
-      if (headerTitle) headerTitle.innerText = `${spatialState.slideSession.title} — ${scene.title || 'SLIDE ' + (idx + 1)}`;
-      if (audioStatusText) audioStatusText.innerText = `SLIDE ${idx + 1}/${scenes.length}`;
-
-      const builder = ComponentBuilders[scene.component_type] || ComponentBuilders.hero_card;
-      const { html, mount: fnMount } = builder({ id: scene.scene_id || idx, props: scene });
-
-      if (mount) {
-        mount.innerHTML = `<div class="w-full h-full p-2 flex items-center justify-center">${html}</div>`;
-        if (typeof fnMount === 'function') fnMount(mount);
-      }
-    },
-
-    next() {
-      if (spatialState.activeMode === 'slide' && spatialState.slideSession) {
-        if (spatialState.slideIndex < spatialState.slideSession.scenes.length - 1) {
-          spatialState.slideIndex++;
-          this.renderSlideScene();
-        }
-      }
-    },
-
-    prev() {
-      if (spatialState.activeMode === 'slide' && spatialState.slideSession) {
-        if (spatialState.slideIndex > 0) {
-          spatialState.slideIndex--;
-          this.renderSlideScene();
-        }
-      }
-    },
-
-    jumpTo(index) {
-      if (spatialState.activeMode === 'slide' && spatialState.slideSession) {
-        if (index >= 0 && index < spatialState.slideSession.scenes.length) {
-          spatialState.slideIndex = index;
-          this.renderSlideScene();
-        }
-      }
-    },
-
-    togglePlayPause() {
-      spatialState.isPlaying = !spatialState.isPlaying;
-      const label = document.getElementById('pres-playpause-label');
-      if (label) label.innerText = spatialState.isPlaying ? 'PAUSAR' : 'CONTINUAR';
     },
 
     close() {
       this.clearSpatialWorkspace();
     },
 
-    triggerAction(action) {
-      if (action === 'close_presentation') this.close();
-      else if (action === 'save_report' && window.showJarvisToast) {
-        window.showJarvisToast('💾 Relatório Espacial Salvo.');
-      }
+    start(script) {
+      return this.initSpatialWorkspace(script);
     },
 
     isOpen() {
-      const el = document.getElementById('jarvis-presentation-overlay');
-      return el && !el.classList.contains('hidden');
+      return Boolean(window.isPresentationActive);
     }
   };
 
   if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', (e) => {
-      if (!JarvisPresentationEngine.isOpen()) return;
-      if (e.key === 'Escape') JarvisPresentationEngine.close();
-      else if (e.key === 'ArrowRight') JarvisPresentationEngine.next();
-      else if (e.key === 'ArrowLeft') JarvisPresentationEngine.prev();
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && engine.isOpen()) {
+        engine.close();
+      }
     });
-    window.JarvisPresentationEngine = JarvisPresentationEngine;
+    window.JarvisPresentationEngine = engine;
   }
 
-  return JarvisPresentationEngine;
+  return engine;
 }));

@@ -1251,38 +1251,7 @@
         <button onclick="document.getElementById('hud-alert-banner').classList.add('hidden')" class="text-rose-300/80 hover:text-white text-xs px-2 py-1">DISMISS</button>
       </div>
 
-      <!-- ENTERPRISE KEYNOTE & EXECUTIVE SPATIAL SYSTEM -->
-      <div id="jarvis-presentation-overlay" class="fixed left-20 lg:left-24 right-6 lg:right-8 top-12 bottom-20 z-50 rounded-3xl bg-slate-950/95 backdrop-blur-3xl border border-cyan-500/25 shadow-[0_25px_80px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden spring-trans hidden opacity-0">
-        <div class="px-8 py-3.5 bg-slate-900/70 border-b border-slate-800/80 flex items-center justify-between gap-4 shrink-0 select-none">
-          <div class="flex items-center space-x-3">
-            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-            <span id="presentation-header-title" class="text-xs font-bold text-white font-hud tracking-widest uppercase truncate max-w-2xl">APRESENTAÇÃO EXECUTIVA</span>
-          </div>
-
-          <div id="presentation-audio-controls" class="flex items-center space-x-3">
-            <div id="presentation-timeline-dots" class="flex items-center space-x-1.5 mr-2"></div>
-            <span id="presentation-audio-status" class="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-[10px] font-mono-code font-bold text-cyan-300 flex items-center space-x-1.5">
-              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-              <span id="presentation-audio-status-text">ATO 1/1</span>
-            </span>
-            <button id="pres-btn-prev" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.prev()" title="Ato Anterior" class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-mono-code transition-colors flex items-center space-x-1">
-              <span>◀</span>
-            </button>
-            <button id="pres-btn-playpause" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.togglePlayPause()" title="Pausar / Reproduzir" class="px-4 py-1.5 rounded-xl bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-400/60 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] flex items-center space-x-1">
-              <span id="pres-playpause-label">PAUSAR</span>
-            </button>
-            <button id="pres-btn-next" onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.next()" title="Próximo Ato" class="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-mono-code transition-colors flex items-center space-x-1">
-              <span>▶</span>
-            </button>
-            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Fechar Apresentação (Esc)" class="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-rose-950 border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-200 text-xs font-mono-code font-semibold transition-colors flex items-center space-x-1.5 ml-2">
-              <span>✕</span>
-              <span>FECHAR</span>
-            </button>
-          </div>
-        </div>
-
-        <div id="presentation-content-area" class="flex-1 w-full h-full p-8 overflow-y-auto flex items-center justify-center"></div>
-      </div>
+      
 
       <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
 
@@ -1352,6 +1321,24 @@
       <div id="card-email-featured" class="hidden"></div>
     </div>
   </main>
+
+  <!-- SEAMLESS SPATIAL WORKSPACE STAGE (OCUPA O ESPAÇO CENTRAL SEM JANELA EXTRA) -->
+  <div id="presentation-stage" class="absolute left-20 lg:left-24 right-6 lg:right-8 top-12 bottom-20 z-30 pointer-events-none opacity-0 transition-all duration-500 ease-out overflow-hidden flex flex-col">
+    <!-- Discrete Top Spatial Bar -->
+    <div id="presentation-stage-bar" class="w-full flex items-center justify-between pb-2 mb-1 border-b border-cyan-500/15 pointer-events-auto shrink-0 select-none">
+      <div class="flex items-center space-x-2.5">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+        <span id="presentation-header-title" class="text-[11px] font-bold text-white font-mono-code tracking-widest uppercase">J.A.R.V.I.S. // INTELIGÊNCIA ESPACIAL</span>
+      </div>
+      <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Concluir e Voltar ao Núcleo (Esc)" class="px-3.5 py-1 rounded-full bg-slate-900/90 hover:bg-rose-950/90 border border-slate-700 hover:border-rose-500/60 text-slate-300 hover:text-rose-100 text-[10px] font-mono-code font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-lg active:scale-95">
+        <span>✕</span>
+        <span>VOLTAR AO NÚCLEO (ESC)</span>
+      </button>
+    </div>
+    <!-- Direct In-Place Components Area -->
+    <div id="presentation-content-area" class="flex-1 w-full h-full relative overflow-hidden pointer-events-auto"></div>
+  </div>
+
 
   <!-- BOTTOM FOOTER (SUBTITLES & INTERACTION) -->
   <footer class="w-full flex flex-col items-center pb-5 pt-1 z-40 relative select-none">
@@ -2264,6 +2251,9 @@
     // =========================================================================
     function drawOrganicVortex() {
       ctx.clearRect(0, 0, width, height);
+      if (currentAuraAlpha < 0.01) return;
+      ctx.save();
+      ctx.globalAlpha = currentAuraAlpha;
 
       // Medição de Áudio da Fala do Jarvis
       if (isJarvisSpeaking && outputAnalyser && outputDataArray) {
@@ -2295,6 +2285,11 @@
       let targetCx = width / 2;
       let targetCy = height / 2 - 20;
       let targetScale = 1.0;
+      let targetAlpha = 1.0;
+      if (window.isPresentationActive) {
+        targetAlpha = 0.0;
+        targetScale = 0.0;
+      }
 
       if (isPresOpen) {
         targetCx = width - 180;
@@ -2309,6 +2304,7 @@
       currentCx += (targetCx - currentCx) * 0.08;
       currentCy += (targetCy - currentCy) * 0.08;
       currentScale += (targetScale - currentScale) * 0.08;
+      currentAuraAlpha += (targetAlpha - currentAuraAlpha) * 0.08;
 
       // Estado Visual
       const st = window.jarvisVisualState || 'idle';
@@ -2445,6 +2441,7 @@
       // 6. O interior do núcleo é 100% contínuo e idêntico ao fundo preto puro (sem disco desenhado)
 
       time += 1;
+      ctx.restore();
       requestAnimationFrame(drawOrganicVortex);
     }
 
@@ -5327,7 +5324,9 @@
             subtitleText = subtitleText.substring(0, 95).trim() + '...';
           }
         }
-        document.getElementById('live-subtitle').innerText = `"${subtitleText}"`;
+        let cleanSub = String(subtitleText || '').replace(/<toolcall[\s\S]*?<\/toolcall>/gi, '').replace(/<[^>]+>/g, '').trim();
+        if (!cleanSub || cleanSub.length < 3) cleanSub = "J.A.R.V.I.S. online. Aguardando comando do Senhor Werik.";
+        document.getElementById('live-subtitle').innerText = `"${cleanSub}"`;
         
         // ABRE O MENU LATERAL DIREITO COM O TEXTO COMPLETO E FORMATADO!
         openRightSidebarWithContent(val, data.reply);
@@ -7236,5 +7235,7 @@
 
 </script>
   <button id="push-enable-btn" onclick="enablePushNotifications()" title="Ativar notificações push do J.A.R.V.I.S." class="hidden fixed z-[90] bottom-24 right-4 safe-bottom w-12 h-12 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 text-xl shadow-[0_0_18px_rgba(0,240,255,0.5)] active:scale-95 transition-transform">🔔</button>
+
+
 </body>
 </html>
