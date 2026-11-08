@@ -110,3 +110,4 @@ read_hud_nav.py
 *.ipk
 tracked_files.txt
 current_screen.png
+ffmpeg.exe
