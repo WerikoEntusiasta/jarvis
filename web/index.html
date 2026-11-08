@@ -2250,10 +2250,44 @@
     // BLACK CORE — PROCEDURAL QUANTUM RING ENGINE (KURO AI / ARC REACTOR STYLE)
     // =========================================================================
     function drawOrganicVortex() {
+      // 1. Cálculo de Posição e Equilíbrio (Sempre ativo no loop)
+      const dockEl = document.getElementById('left-dock');
+      const isDockOpen = dockEl && !dockEl.classList.contains('hidden') && !dockEl.classList.contains('pointer-events-none');
+      const presEl = document.getElementById('jarvis-presentation-overlay');
+      const isPresOpen = presEl && !presEl.classList.contains('hidden');
+
+      let targetCx = width / 2;
+      let targetCy = height / 2 - 20;
+      let targetScale = 1.0;
+      let targetAlpha = 1.0;
+      if (window.isPresentationActive) {
+        targetAlpha = 0.0;
+        targetScale = 0.0;
+      } else if (isPresOpen) {
+        targetCx = width - 180;
+        targetCy = 85;
+        targetScale = 0.35;
+      } else if (isDockOpen && width >= 1200) {
+        targetCx = (width + 390) / 2;
+        targetScale = 0.90;
+      }
+
+      // Interpolação contínua (nunca interrompida)
+      currentCx += (targetCx - currentCx) * 0.08;
+      currentCy += (targetCy - currentCy) * 0.08;
+      currentScale += (targetScale - currentScale) * 0.08;
+      currentAuraAlpha += (targetAlpha - currentAuraAlpha) * 0.08;
+
       ctx.clearRect(0, 0, width, height);
-      if (currentAuraAlpha < 0.01) return;
+
+      // Se invisível durante apresentação, continua agendando frames para voltar quando fechar
+      if (currentAuraAlpha < 0.01) {
+        requestAnimationFrame(drawOrganicVortex);
+        return;
+      }
+
       ctx.save();
-      ctx.globalAlpha = currentAuraAlpha;
+      ctx.globalAlpha = Math.max(0, Math.min(1, currentAuraAlpha));
 
       // Medição de Áudio da Fala do Jarvis
       if (isJarvisSpeaking && outputAnalyser && outputDataArray) {
@@ -2275,36 +2309,6 @@
         targetIntensity = 0.0;
       }
       speechIntensity += (targetIntensity - speechIntensity) * 0.15;
-
-      // Cálculo de Posição de Equilíbrio
-      const dockEl = document.getElementById('left-dock');
-      const isDockOpen = dockEl && !dockEl.classList.contains('hidden') && !dockEl.classList.contains('pointer-events-none');
-      const presEl = document.getElementById('jarvis-presentation-overlay');
-      const isPresOpen = presEl && !presEl.classList.contains('hidden');
-
-      let targetCx = width / 2;
-      let targetCy = height / 2 - 20;
-      let targetScale = 1.0;
-      let targetAlpha = 1.0;
-      if (window.isPresentationActive) {
-        targetAlpha = 0.0;
-        targetScale = 0.0;
-      }
-
-      if (isPresOpen) {
-        targetCx = width - 180;
-        targetCy = 85;
-        targetScale = 0.35;
-      } else if (isDockOpen && width >= 1200) {
-        targetCx = (width + 390) / 2;
-        targetScale = 0.90;
-      }
-
-      // Interpolação suave
-      currentCx += (targetCx - currentCx) * 0.08;
-      currentCy += (targetCy - currentCy) * 0.08;
-      currentScale += (targetScale - currentScale) * 0.08;
-      currentAuraAlpha += (targetAlpha - currentAuraAlpha) * 0.08;
 
       // Estado Visual
       const st = window.jarvisVisualState || 'idle';
@@ -5331,7 +5335,10 @@
         document.getElementById('live-subtitle').innerText = `"${cleanSub}"`;
         
         // ABRE O MENU LATERAL DIREITO COM O TEXTO COMPLETO E FORMATADO!
-        openRightSidebarWithContent(val, data.reply);
+        // Atualiza o sidebar com os dados completos sem forçar abertura automática intrusiva
+        if (data.open_sidebar || (data.reply && data.reply.length > 280)) {
+          openRightSidebarWithContent(val, data.reply);
+        }
 
         // JARVIS DYNAMIC VISUAL OS ENGINE RENDERER (Renderização de UI Estruturada)
         const visualStage = document.getElementById('jarvis-visual-stage');

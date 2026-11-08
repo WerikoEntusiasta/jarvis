@@ -68,7 +68,7 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
-        opacity: 0.20;
+        opacity: 0.08;
         background-image: linear-gradient(rgba(0, 240, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 240, 255, 0.08) 1px, transparent 1px);
         background-size: 50px 50px;
         mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%);
@@ -327,7 +327,30 @@
     const p = c.props || {};
     const title = p.title || 'ANÁLISE DE PERFORMANCE';
     const source = p.source || 'TELEMETRIA OFICIAL STARK';
-    const chartOpts = p.options || p.option || {};
+    let chartOpts = p.options || p.option || {};
+    if (!chartOpts.series || !chartOpts.series.length) {
+      chartOpts = {
+        series: [{
+          type: 'pie',
+          radius: ['45%', '70%'],
+          center: ['50%', '50%'],
+          avoidLabelOverlap: false,
+          itemStyle: { borderRadius: 6, borderColor: '#020612', borderWidth: 2 },
+          label: { show: false },
+          data: [
+            { value: 40, name: 'Cérebro & MiMo (40%)', itemStyle: { color: '#00f0ff' } },
+            { value: 25, name: 'Spatial Workspace (25%)', itemStyle: { color: '#38bdf8' } },
+            { value: 15, name: 'ZimaOS Cloud (15%)', itemStyle: { color: '#10b981' } },
+            { value: 12, name: 'Automação Windows (12%)', itemStyle: { color: '#818cf8' } },
+            { value: 8, name: 'Esfera & Smart TV (8%)', itemStyle: { color: '#f59e0b' } }
+          ]
+        }],
+        legend: {
+          bottom: '2%',
+          textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 }
+        }
+      };
+    }
 
     return {
       html: `
@@ -545,7 +568,30 @@
         stageContainer.classList.add('opacity-100', 'pointer-events-auto');
       }
 
-      const rawComps = payload.components;
+      // Oculta suavemente o vórtice central para dar lugar ao palco limpo
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container') || document.getElementById('vortex-container');
+      if (vortex) {
+        vortex.style.transition = 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+        vortex.style.opacity = '0';
+        vortex.style.transform = 'scale(0.85)';
+        vortex.style.pointerEvents = 'none';
+      }
+      const visStage = document.getElementById('jarvis-visual-stage');
+      if (visStage) {
+        visStage.classList.add('hidden', 'opacity-0');
+        visStage.innerHTML = '';
+      }
+      if (typeof closeRightSidebar === 'function') {
+        closeRightSidebar();
+      }
+
+      let rawComps = payload.components;
+      if (!rawComps && Array.isArray(payload.scenes) && payload.scenes.length > 0) {
+        rawComps = payload.scenes[0].components;
+        if (!payload.title && payload.scenes[0].title) {
+          payload.title = payload.scenes[0].title;
+        }
+      }
       const comps = Array.isArray(rawComps) ? rawComps : (rawComps && typeof rawComps === 'object' ? Object.values(rawComps) : []);
       comps.forEach((c, idx) => {
         this.addSpatialComponent(c.id || ('comp_' + idx), c.type || 'hero_card', c.position, c.props || c, idx);
@@ -627,6 +673,14 @@
       if (stageContainer) {
         stageContainer.classList.remove('opacity-100', 'pointer-events-auto');
         stageContainer.classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      // Restaura o vórtice central do J.A.R.V.I.S.
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container') || document.getElementById('vortex-container');
+      if (vortex) {
+        vortex.style.opacity = '1';
+        vortex.style.transform = 'scale(1)';
+        vortex.style.pointerEvents = 'auto';
       }
     },
 

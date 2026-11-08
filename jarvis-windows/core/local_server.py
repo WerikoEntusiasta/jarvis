@@ -1565,7 +1565,12 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         fut_audio = executor.submit(_generate_audio)
 
-                        fut_laya = executor.submit(_generate_laya) if (not laya_screen and reply) else None
+                        should_gen_laya = False
+                        if not laya_screen and reply:
+                            msg_l = user_msg.lower()
+                            if any(w in msg_l for w in ["mostre tela", "abra tela", "card visual", "interface visual", "projetar tela", "painel visual"]):
+                                should_gen_laya = True
+                        fut_laya = executor.submit(_generate_laya) if should_gen_laya else None
 
                         audio_url = fut_audio.result(timeout=12)
 
