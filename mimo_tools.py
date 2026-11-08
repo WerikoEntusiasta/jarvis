@@ -3867,22 +3867,24 @@ TOOLS += [
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["compose", "create", "add_component", "update_component", "highlight_component", "remove_component", "clear"],
+                            "enum": ["compose", "create", "add_component", "update_component", "move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component", "highlight_component", "remove_component", "clear"],
                             "description": "Ação espacial a executar."
                         },
                         "title": {"type": "string", "description": "Título principal da composição espacial."},
                         "subtitle": {"type": "string", "description": "Subtítulo ou contexto da explicação."},
-                        "layout": {"type": "string", "enum": ["fluid_grid", "split", "triptych", "hero_focus"], "description": "Layout do espaço de trabalho."},
+                        "layout": {"type": "string", "enum": ["freeform", "hero_focus", "diagram", "immersive"], "description": "Composição espacial livre; não use grade de cartões."},
                         "components": {
                             "type": "array",
                             "description": "Lista de componentes para compor no espaço (usado na ação compose).",
                             "items": {"type": "object"}
                         },
                         "component_id": {"type": "string", "description": "ID do componente para ações específicas."},
-                        "component_type": {"type": "string", "description": "Tipo do componente: echarts, hero_card, smart_canvas, data_table, metric_dock."},
-                        "position": {"type": "object", "description": "Posicionamento no grid: col_span (1 a 12), row_span, etc."},
+                        "component_type": {"type": "string", "description": "Tipo: relationship_map, echarts, three_view, smart_canvas, narrative, annotation, media, metric_dock ou signal_list."},
+                        "position": {"type": "object", "description": "Geometria independente: x, y, width, height, depth, zIndex, layer, importance, responsive e allowOverlap; valores em porcentagem do palco."},
                         "props": {"type": "object", "description": "Propriedades ricas do componente."},
                         "updates": {"type": "object", "description": "Atualizações pontuais para update_component."}
+                        ,"target_id": {"type": "string", "description": "Componente de destino para connect_component."}
+                        ,"group_id": {"type": "string", "description": "Grupo lógico para group_component."}
                     },
                     "required": ["action"]
                 }
@@ -6216,19 +6218,19 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     title=args.get("title", "Spatial Hub"),
                     subtitle=args.get("subtitle", ""),
                     components=args.get("components", []),
-                    layout=args.get("layout", "fluid_grid")
+                    layout=args.get("layout", "freeform")
                 )
             elif act == "create":
                 return pe.create_spatial_workspace(
                     title=args.get("title", "Spatial Workspace"),
                     subtitle=args.get("subtitle", ""),
-                    layout=args.get("layout", "fluid_grid")
+                    layout=args.get("layout", "freeform")
                 )
             elif act == "add_component":
                 return pe.add_spatial_component(
                     component_id=args.get("component_id"),
                     component_type=args.get("component_type", "hero_card"),
-                    position=args.get("position", {"col_span": 6}),
+                    position=args.get("position", {}),
                     props=args.get("props", {})
                 )
             elif act == "update_component":
@@ -6237,6 +6239,14 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     updates=args.get("updates", {}),
                     animate=bool(args.get("animate", True))
                 )
+            elif act in {"move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component"}:
+                operation = act.replace("_component", "")
+                params = dict(args.get("updates") or args.get("position") or {})
+                if args.get("target_id"):
+                    params["target_id"] = args["target_id"]
+                if args.get("group_id"):
+                    params["group_id"] = args["group_id"]
+                return pe.apply_spatial_operation(args.get("component_id"), operation, params)
             elif act == "highlight_component":
                 return pe.highlight_spatial_component(
                     component_id=args.get("component_id"),

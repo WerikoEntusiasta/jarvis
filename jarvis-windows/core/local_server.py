@@ -1488,6 +1488,8 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                         from mimo_tts import synthesize
 
                         clean_speech = re.sub(r'```[\s\S]*?```', '', reply)
+                        clean_speech = re.sub(r'<toolcall[\s\S]*?(?:<\/toolcall>|$)', '', clean_speech, flags=re.IGNORECASE)
+                        clean_speech = re.sub(r'<[^>]+>', '', clean_speech)
 
                         clean_speech = re.sub(r'\*?\[[^\]]+\]\*?', '', clean_speech)
 
@@ -1495,6 +1497,8 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         clean_speech = re.sub(r'\s+', ' ', clean_speech).strip()
 
+                        if not clean_speech or len(clean_speech) < 2:
+                            clean_speech = 'Comando processado com sucesso, Senhor Werik.'
                         if clean_speech:
 
                             pcm = synthesize(clean_speech, use_cache=True)
@@ -1692,7 +1696,7 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                     res = pe.create_spatial_workspace(
                         title=data.get("title", "Spatial Workspace"),
                         subtitle=data.get("subtitle", ""),
-                        layout=data.get("layout", "fluid_grid"),
+                        layout=data.get("layout", "freeform"),
                         options=data.get("options")
                     )
                 self._send_json(res)
@@ -1707,13 +1711,15 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 action = data.get("action", "add")
                 cid = data.get("id") or data.get("component_id")
                 if action == "add":
-                    res = pe.add_spatial_component(cid, data.get("type", "hero_card"), data.get("position"), data.get("props"))
+                    res = pe.add_spatial_component(cid, data.get("type", "narrative"), data.get("position"), data.get("props"))
                 elif action == "update":
                     res = pe.update_spatial_component(cid, data.get("updates", {}), data.get("animate", True))
                 elif action == "remove":
                     res = pe.remove_spatial_component(cid)
                 elif action == "highlight":
                     res = pe.highlight_spatial_component(cid, float(data.get("duration", 3.0)))
+                elif action in {"move", "resize", "reposition", "focus", "expand", "minimize", "group", "separate", "connect"}:
+                    res = pe.apply_spatial_operation(cid, action, data.get("params") or data.get("updates") or data.get("position") or {})
                 else:
                     res = {"ok": False, "error": f"Ação spatial desconhecida: {action}"}
                 self._send_json(res)
@@ -1729,7 +1735,7 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                     title=data.get("title", "Cena Espacial"),
                     subtitle=data.get("subtitle", ""),
                     components=data.get("components", []),
-                    layout=data.get("layout", "fluid_grid")
+                    layout=data.get("layout", "freeform")
                 )
                 self._send_json(res)
             except Exception as e:

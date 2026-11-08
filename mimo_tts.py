@@ -41,7 +41,7 @@ ELEVENLABS_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5")
 MIMO_API_BASE = os.environ.get("MIMO_API_BASE", "https://token-plan-sgp.xiaomimimo.com/v1").rstrip("/")
 MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "tp-shj7qyndg8imsci7kvfgcbjrus518hemr1pu2p1m0tvtafeb")
 
-TTS_MODE = os.environ.get("JARVIS_TTS_MODE", "elevenlabs").lower()
+TTS_MODE = os.environ.get("JARVIS_TTS_MODE", "design").lower()
 TTS_VOICE = os.environ.get("JARVIS_TTS_VOICE", "mimo_default")
 VOICE_DESC = os.environ.get(
     "JARVIS_VOICE_DESC",
@@ -223,12 +223,35 @@ def synthesize(text: str, use_cache: bool = True) -> bytes:
             logger.warning("Cache TTS ilegível (%s): %s", cp.name, e)
 
     out = b""
-    if mode in ("elevenlabs", "eleven", "auto", "default"):
-        out = _synthesize_elevenlabs(text)
-    elif mode in ("design", "clone", "preset"):
-        out = _synthesize_mimo(text, mode=mode)
+    if mode in ("elevenlabs", "eleven"):
+        try:
+            out = _synthesize_elevenlabs(text)
+        except Exception as ex_eleven:
+            logger.warning("Falha ElevenLabs TTS (%s). Acionando Xiaomi MiMo VoiceDesign...", ex_eleven)
+            try:
+                out = _synthesize_mimo(text, mode="design")
+            except Exception as ex_design:
+                logger.warning("Falha MiMo VoiceDesign (%s). Acionando MiMo Preset...", ex_design)
+                out = _synthesize_mimo(text, mode="preset")
+    elif mode in ("design", "clone", "preset", "auto", "default"):
+        target_mode = mode if mode in ("design", "clone", "preset") else "design"
+        try:
+            out = _synthesize_mimo(text, mode=target_mode)
+        except Exception as ex_mimo:
+            logger.warning("Falha MiMo TTS modo '%s' (%s), acionando fallback preset...", target_mode, ex_mimo)
+            out = _synthesize_mimo(text, mode="preset")
     else:
-        out = _synthesize_elevenlabs(text)
+        try:
+            out = _synthesize_mimo(text, mode="design")
+        except Exception:
+            out = _synthesize_mimo(text, mode="preset")
+
+    if not out:
+        try:
+            out = _synthesize_mimo(text, mode="preset")
+        except Exception as ex_final:
+            logger.error("Falha em todos os motores TTS: %s", ex_final)
+            return b""
 
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
