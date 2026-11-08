@@ -1,87 +1,188 @@
 # J.A.R.V.I.S. — AGENTS.md
-> Padrão Permanente de Engenharia de Software Sênior & Guia de Arquitetura para Agentes de IA
+> Manual Técnico Operacional Definitivo, Padrão de Engenharia de Software Sênior & Arquitetura Completa para Agentes de IA
 
 ---
 
-## 1. Diretiva Primária
+## 1. Diretiva Primária e Tratamento Obrigatório
 
-Atue como Engenheiro de Software Sênior, Arquiteto de Sistemas e Especialista em Qualidade, Segurança e Confiabilidade.
-Todo desenvolvimento ou manutenção no ecossistema J.A.R.V.I.S. deve priorizar estabilidade, segurança, rastreabilidade, documentação viva e código sustentável para produção.
+1. **Tratamento do Usuário:** Trate SEMPRE o usuário pelo vocativo formal e respeitoso **"Senhor Werik"**.
+2. **Postura de Engenharia:** Atue como Engenheiro de Software Sênior, Arquiteto de Sistemas Distribuídos e Especialista em Qualidade, Confiabilidade e Segurança Ofensiva/Defensiva.
+3. **Fonte Única da Verdade:** O workspace local aberto em `C:\JARVIS` é a fonte soberana de código. Nunca presuma configurações antigas ou repositórios remotos desatualizados.
+4. **Proibição de Regressão / Proibição do OpenClaw:** É terminantemente proibido reintroduzir o OpenClaw ou motores paralelos que firam a arquitetura Soberana nativa. O cérebro direto opera através de `core_ai_brain.py` e `mimo_tools.py`.
+5. **Padrão de Links Clicáveis:** Sempre referencie arquivos, módulos e classes através de links markdown clicáveis utilizando o protocolo `file://` (ex: `[local_server.py](file:///c:/JARVIS/jarvis-windows/core/local_server.py)`).
 
 ---
 
 ## 2. Mapa do Ecossistema J.A.R.V.I.S.
 
-O projeto é distribuído em três camadas complementares e desacopladas:
+O ecossistema é distribuído em três camadas complementares, cooperativas e desacopladas:
 
 ```mermaid
 graph TD
-    subgraph WindowsPC["1. Windows PC (Desktop & HUD)"]
-        LocalServer["local_server.py (Porta 8085)"]
-        DesktopHUD["HUD Tático Web & pywebview"]
-        TrayDaemon["Daemon de Sistema & Wake Word PC"]
+    subgraph WindowsPC["1. Windows PC (Desktop & HUD Soberano - 2560x1440)"]
+        LocalServer["local_server.py (Porta HTTP :8085 / IPC :49160)"]
+        DesktopHUD["HUD Tático Stark Mark VII (web/index.html)"]
+        SpatialWorkspace["Spatial Intelligence Workspace (web/jarvis_presentation_engine.js)"]
+        AIBrain["Cérebro Soberano (core_ai_brain.py)"]
+        ToolCatalog["Catálogo de Ferramentas (mimo_tools.py - 55 Tools Ativas)"]
+        WinAuto["Automação Nativa Windows (PyWinAuto UIA/Win32)"]
+        WebAuto["Automação Web Headless (Playwright Chromium)"]
+        PCAutomation["Automação de Baixo Nível (Mouse Clamping, Teclado & Telas)"]
+        VisionEngine["Visão Computacional & Reconhecimento Facial"]
+        TrayProcess["JARVIS.exe (dist/JARVIS/JARVIS.exe - Tarefa RunJarvis)"]
     end
 
-    subgraph ZimaOS["2. Servidor ZimaOS Docker (45.167.187.80)"]
-        ScreenRouter["jarvis-screen-router (Porta 8095)"]
-        TTSSTTEngine["Motores de Voz: Piper TTS & Whisper STT"]
-        ElectionPoller["Poller Oficial TSE 2026 em Background"]
-        LuciaHub["Lucia Hub (Automações & Contratos)"]
+    subgraph ZimaOS["2. Servidor ZimaOS Docker (45.167.187.80 - Porta SSH 28222)"]
+        ScreenRouter["jarvis-screen-router (Porta HTTP :8095 & WebSocket /ws)"]
+        VoiceEngines["Motores Neurais de Voz: Piper TTS & Whisper STT"]
+        ElectionLoop["Poller Oficial TSE 2026 em Background"]
+        LuciaHub["Lucia Hub (Automações, Agendamentos & Contratos)"]
     end
 
-    subgraph SphereHW["3. Esfera Física ESP32-S3"]
-        FirmwareCustom["firmware_jarvis_custom (LovyanGFX LCD 240x240)"]
+    subgraph SphereHW["3. Esfera Física ESP32-S3 (DevKitC-1 N8R8)"]
+        FirmwareCustom["firmware_jarvis_custom (LovyanGFX LCD Circular 240x240)"]
         MicroWakeWord["microWakeWord TFLite Local ('Hey Jarvis')"]
-        AudioCodec["Codec ES8311 (I2S Mic & Speaker)"]
+        AudioCodec["Codec ES8311 (I2S Microfone & Alto-falante)"]
         WsClient["Cliente WebSocket Seguro (:8095/ws)"]
+        OTAClient["Atualizador Remoto OTA (/api/jarvis/ota/trigger)"]
     end
 
-    WindowsPC <-->|HTTP / WS Local| LocalServer
-    LocalServer <-->|SSH Port 28222 / HTTP :8095| ScreenRouter
+    WindowsPC <-->|HTTP / SSE :8085 / IPC :49160| LocalServer
+    LocalServer <-->|SSH Porta 28222 / HTTP :8095| ScreenRouter
     SphereHW <-->|WebSocket :8095 / UDP :8888| ScreenRouter
 ```
 
-### Componentes Principais e Diretórios
+---
 
-1. **Firmware da Esfera ESP32-S3 (`c:\JARVIS\firmware_jarvis_custom\`):**
-   - Framework: PlatformIO + Arduino Core (ESP32-S3 DevKitC-1 N8, 16MB Flash DIO, PSRAM habilitada).
-   - Display: GC9A01 LCD Circular 240x240 pixels via LovyanGFX.
-   - Redes Wi-Fi: Primária `Jarvis` (`ironman123`), com fallback automático para `WEGI_2G` (`Wegi#2520`).
-   - Compilação: `pio run -e custom_jarvis_esp32s3`.
-   - Gravação USB: `pio run -e custom_jarvis_esp32s3 --target upload --upload-port COM3`.
-   - Atualizações OTA: Hospedagem em `http://45.167.187.80:8095/firmware.bin` com trigger via `/api/jarvis/ota/trigger`.
+## 3. Especificação Detalhada das Camadas
 
-2. **Núcleo ZimaOS Docker (`45.167.187.80`, Porta SSH 28222, Root):**
-   - Roteador de telas, voz e bridge de áudio: `/DATA/AppData/jarvis-screen-router/jarvis_screen_router.py` (porta 8095).
-   - Apuração do TSE em tempo real integrada em loop assíncrono.
-   - Containers independentes: `jarvis-screen-router`, `jarvis-hud`, `lucia-hub`.
+### 3.1. Windows PC (Desktop, Cérebro e HUD Soberano)
+- **Diretório Raiz:** `C:\JARVIS\`
+- **Repositório Git:** `https://github.com/WerikoEntusiasta/jarvis.git`
+- **Branch de Desenvolvimento:** `feat/windows-stabilization-evolution`
+- **Resolução Física Padrão:** 2560 x 1440 pixels (16:9 widescreen).
+- **DPI Awareness:** Obrigatoriamente ativo via `ctypes.windll.shcore.SetProcessDpiAwareness(2)` para evitar distorções em coordenadas de automação.
+- **Sessão e Desktop Interativo:** Comandos de automação nativa, capturas de tela e PyWinAuto devem chamar `switch_to_user_desktop()` para se vincular à window station `WinSta0` e desktop `Default`.
 
-3. **Interface Local Windows (`c:\JARVIS\jarvis-windows\` e `c:\JARVIS\web\`):**
-   - Servidor HTTP local independente: `local_server.py` na porta `8085`.
-   - Interface HUD tática em HTML/JS com tema cyberpunk e autenticação biométrica/PIN.
-   - Scripts de suporte: `c:\JARVIS\desktop\`.
+#### 3.1.1. Servidor Local Independente (`jarvis-windows/core/local_server.py`)
+- **Porta HTTP:** `8085` (localhost)
+- **Porta Socket IPC:** `49160` (controle de instâncias do HUD via mensagens TCP `SHOW` e `RELOAD`)
+- **Barramento em Tempo Real (SSE):** Endpoint `/api/hud/events` (transmissão de eventos push para o frontend)
+- **Rotas de API Críticas:**
+  - `GET /api/hud/events`: Stream SSE contínuo de eventos do sistema.
+  - `POST /api/spatial/workspace`: Criação ou limpeza do Spatial Workspace (`action: create | clear`).
+  - `POST /api/spatial/component`: Adição, atualização (`update`), destaque (`highlight`) ou exclusão atômica (`remove`) de componentes no Workspace.
+  - `POST /api/spatial/compose`: Composição instantânea de cenários espaciais com múltiplos elementos simultâneos.
+  - `POST /api/presentation/start`: Início de apresentações dinâmicas multimodais.
+  - `POST /api/presentation/control`: Comandos de navegação (`next`, `prev`, `pause`, `resume`, `jump`, `close`).
+  - `POST /api/presentation/speech_event`: Sincronização fina com áudio (`speech.started`, `speech.segment.completed`, `speech.interrupted`, `speech.completed`).
+  - `GET /api/presentation/status`: Estado da apresentação ou workspace ativo na memória.
+  - `POST /api/task/event` e `GET /api/task/current`: Telemetria de tarefas em tempo real (etapas, progresso e logs).
+
+#### 3.1.2. HUD Stark Mark VII (`web/index.html` e `web/jarvis_ui_engine.js`)
+- **Tecnologias:** HTML5, Tailwind CSS, HeroUI Tokens, Orbitron, Plus Jakarta Sans, JetBrains Mono.
+- **Bibliotecas Gráficas Locais Soberanas:**
+  - `web/echarts.min.js`: Apache ECharts 5.5.0 (1.02 MB) para gráficos vetoriais interativos e dashboards.
+  - `web/three.min.js`: Three.js r128 (603 KB) para visualizações 3D científicas e modelos espaciais.
+  - `web/models/face-api/face-api.js`: Reconhecimento facial e biometria visual local.
+  - `web/cobe.esm.js`: Globo 3D interativo ultraleve em WebGL.
+- **Geometria Espacial no HUD:** O Spatial Workspace ocupa o contêiner `#jarvis-presentation-overlay` com classes `fixed left-80 right-8 top-16 bottom-24 z-50 rounded-3xl bg-slate-950/95 backdrop-blur-3xl border border-cyan-500/25 shadow-[0_25px_80px_rgba(0,0,0,0.85)]`, garantindo convívio harmonioso com a barra lateral esquerda (280px) e o prompt inferior.
+
+#### 3.1.3. Cérebro de IA & Catálogo de Ferramentas (`core_ai_brain.py` e `mimo_tools.py`)
+- **Arquitetura:** IA Soberana Direct com execução de ferramentas via chamadas estruturadas de funções.
+- **Total de Ferramentas Ativas:** 55 ferramentas registradas no catálogo `TOOLS`.
+- **Ferramentas Estratégicas:**
+  - `spatial_workspace_action`: Orquestração atômica de componentes vivos no Spatial Workspace (ações: `compose`, `create`, `add_component`, `update_component`, `highlight_component`, `remove_component`, `clear`).
+  - `win_automation_pywinauto`: Automação nativa de interfaces Windows via árvore de acessibilidade UIA e Win32 (`jarvis-windows/system/win_automation_pywinauto.py`).
+  - `web_automation_playwright`: Automação e extração web com Chromium headless (`jarvis-windows/core/web_automation_playwright.py`).
+  - `take_screenshot`: Captura de tela em alta fidelidade com auto-verificação multimodal.
+  - `start_dynamic_presentation`: Orquestrador de apresentações cinematográficas multimodais.
+
+#### 3.1.4. Executável e Ciclo de Vida do Windows
+- **Executável Empacotado:** `C:\JARVIS\dist\JARVIS\JARVIS.exe`
+- **Pasta Interna de Recursos Dinâmicos:** `C:\JARVIS\dist\JARVIS\_internal\` (arquivos em `web/`, `core/`, `system/` são lidos diretamente desta pasta).
+- **Tarefa Agendada do Windows:** `RunJarvis` (garante execução interativa e persistente).
+  - Encerrar: `schtasks /end /tn "RunJarvis"`
+  - Iniciar: `schtasks /run /tn "RunJarvis"`
+  - Recarregamento sem fechar a janela: Enviar payload TCP `b"RELOAD"` para `127.0.0.1:49160`.
 
 ---
 
-## 3. Regras de Engenharia Obrigatórias
-
-1. **Análise Antes de Alterar:** Inspecione sempre o arquivo e suas dependências antes de qualquer modificação.
-2. **Segurança de Credenciais:** Nunca versione senhas em arquivos públicos. Utilize arquivos protegidos como `jarvis_sphere_secrets.h` ou variáveis de ambiente.
-3. **Tratamento Robusto de Erros:** Projeta fluxos assíncronos e de rede com timeouts, reconexão exponencial com limite e fallbacks claros. Nunca use `except: pass` vazio.
-4. **Geometria Circular no Display:** Para a Esfera ESP32-S3 ($240 \times 240$, raio 120), todos os cards, barras e textos devem respeitar os limites cordais do círculo. Centralizações verticais em cards devem utilizar `middle_right` ou `middle_center`.
-5. **Autonomia do Windows:** A interface HUD local do Windows deve funcionar de forma resiliente e independente de quedas temporárias de rede externa.
-6. **Validação Efetiva:** Nunca assuma que uma alteração funciona apenas porque compila. Valide com comandos reais de teste (leitura de serial, status HTTP, verificação de logs).
+### 3.2. Núcleo ZimaOS Docker (`45.167.187.80`)
+- **Acesso Operacional:** SSH Porta `28222`, Usuário `root`.
+- **Roteador Principal:** `/DATA/AppData/jarvis-screen-router/jarvis_screen_router.py` (porta `8095`).
+- **Containers Docker Ativos:**
+  - `jarvis-screen-router`: Gateway WebSocket (`:8095/ws`), roteamento de telas e bridge de áudio UDP (:8888).
+  - `jarvis-hud`: Servidor espelho web para acesso externo.
+  - `lucia-hub`: Gerenciador de automações, contratos inteligentes e tarefas agendadas.
+- **Pipeline de Voz Neural:**
+  - TTS: Piper Neural TTS em português brasileiro de baixa latência.
+  - STT: Whisper Speech-to-Text para transcrição em tempo real.
+- **Poller Oficial TSE 2026:** Loop assíncrono em background coletando atualizações de eleições oficiais.
 
 ---
 
-## 4. Padrão de Finalização de Tarefa (Obrigatório)
+### 3.3. Esfera Física ESP32-S3 (`c:\JARVIS\firmware_jarvis_custom\`)
+- **Microcontrolador:** ESP32-S3 DevKitC-1 N8R8 (16MB Flash DIO, 8MB Octal PSRAM).
+- **Display Circular:** GC9A01 LCD Circular 240x240 pixels operado pela biblioteca LovyanGFX.
+- **Codec de Áudio:** Everest ES8311 conectado via barramento I2S (áudio bidirecional duplex).
+- **Microfone & Wake Word:** microWakeWord TFLite rodando localmente na ESP32 para ativação por voz ("Hey Jarvis").
+- **Redes Wi-Fi:**
+  - Primária: SSID `Jarvis`, Senha `ironman123`.
+  - Fallback Automático: SSID `WEGI_2G`, Senha `Wegi#2520`.
+- **Comandos de Firmware (PlatformIO):**
+  - Compilação: `pio run -e custom_jarvis_esp32s3`
+  - Gravação USB: `pio run -e custom_jarvis_esp32s3 --target upload --upload-port COM3`
+  - Monitor Serial: `pio device monitor -p COM3 -b 115200`
+  - Deploy OTA Remoto: Binário hospedado em `http://45.167.187.80:8095/firmware.bin` com acionamento via `POST /api/jarvis/ota/trigger`.
 
-Ao concluir qualquer tarefa ou alteração, apresente o relatório nos seguintes tópicos:
+---
 
-- **O que foi feito:** Descrição objetiva da implementação.
-- **Arquivos modificados:** Lista precisa de arquivos e suas responsabilidades.
-- **Organização e arquitetura:** Impactos estruturais e aderência aos padrões.
+## 4. Diretrizes Arquiteturais do Spatial Intelligence Workspace
+
+O Spatial Intelligence Workspace substitui qualquer abordagem estática por uma experiência visual de alta fidelidade:
+
+1. **Abandono dos Paradigmas Inadequados:**
+   - **Não ao Gerador de Slides Rígidos:** A resposta padrão NUNCA é uma sequência de slides PowerPoint. O modo slide é estritamente opcional (`mode: "slide"`).
+   - **Não ao Fluxograma de Cartõezinhos Conectados:** Proibido gerar diagramas com caixas pretas e fios tortos cruzados.
+2. **Espaço Visual Persistente com Elementos Vivos:**
+   - O Workspace funciona como uma mesa de trabalho de inteligência contínua onde múltiplos componentes coexistem e se transformam.
+   - Cada componente possui ID único e ciclo de vida atômico: a IA pode atualizar dados de um gráfico ECharts via `setOption`, destacar um card com halo de luz durante a fala ou fechar um elemento específico sem recriar o DOM.
+3. **Componentes Nativos do Spatial Workspace:**
+   - `echarts`: Gráficos interativos Apache ECharts 5.5.0 oficiais (barras, linhas, áreas, donut, radar, gauge) com tooltips e animações.
+   - `hero_card`: Bloco editorial de grande porte com tipografia nobre, tags estilizadas e bullets de governança.
+   - `power_triptych`: Modelagem institucional dos Três Poderes em pilares de vidro profundo com badges de competência.
+   - `metric_dock`: Dock de KPIs e indicadores com contadores animados (odômetro suave).
+   - `data_table`: Tabela matricial de dados e riscos com badges semafóricos.
+   - `smart_canvas`: Superfície de desenho vetorial para fluxos orgânicos.
+   - `three_view`: Modelos 3D científicos e globos interativos.
+4. **Sincronização com o Motor de Fala:**
+   - Transições e destaques acompanham o fluxo da voz.
+   - Interrupções do usuário acionam congelamento ou limpeza imediata de ações pendentes para evitar sobreposição ou elementos órfãos.
+
+---
+
+## 5. Regras de Engenharia Obrigatórias
+
+1. **Inspeção Antes de Modificar:** Nunca altere um arquivo sem ler seu conteúdo completo e inspecionar suas referências e dependências ativas.
+2. **Segurança de Credenciais:** Nunca versione senhas ou tokens em arquivos públicos. Utilize arquivos protegidos (ex: `jarvis_sphere_secrets.h`) ou variáveis de ambiente.
+3. **Tratamento Robusto de Exceções:** Fluxos de rede e assíncronos devem implementar timeouts, limites de reconexão exponencial e fallbacks graciosos. Nunca use `except: pass` vazio.
+4. **Soberania das Dependências:** Mantenha bibliotecas essenciais salvas localmente no workspace (`web/`), garantindo que o HUD e os gráficos funcionem perfeitamente mesmo sem internet.
+5. **Geometria Circular no Display da Esfera:** Para a Esfera ESP32-S3 ($240 \times 240$, raio 120), todos os cards, barras e textos devem respeitar os limites cordais do círculo ($x^2 + y^2 \le r^2$).
+6. **Autonomia do Windows:** A interface HUD local do Windows deve funcionar de forma independente de falhas ou quedas no servidor ZimaOS.
+7. **Sessão Interativa no Windows:** Automações com PyWinAuto, capturas de tela ou cliques de mouse devem sempre invocar `switch_to_user_desktop()` para se anexar à window station interativa `WinSta0\Default`.
+8. **Validação Efetiva Obrigatória:** Nunca assuma que uma alteração funciona apenas porque compilou. Execute testes reais (status HTTP, checagem de logs, inspeção de tela e runtime).
+
+---
+
+## 6. Padrão de Finalização de Tarefa (Obrigatório)
+
+Ao concluir qualquer tarefa ou alteração no ecossistema J.A.R.V.I.S., o agente deve obrigatoriamente apresentar o relatório estruturado nos seguintes tópicos:
+
+- **O que foi feito:** Descrição objetiva da implementação técnica.
+- **Arquivos modificados:** Lista precisa de arquivos e suas respectivas responsabilidades.
+- **Organização e arquitetura:** Impactos estruturais, contratos de API e aderência aos padrões.
 - **Documentação:** Comentários, contratos ou manuais atualizados.
-- **Testes executados:** Comandos reais rodados e seus resultados.
-- **Segurança e estabilidade:** Validações de risco, credenciais e resiliência.
+- **Testes executados:** Comandos reais executados e seus respectivos outputs comprobatórios.
+- **Segurança e estabilidade:** Validações de risco, credenciais, resiliência e integridade de memória.
 - **Pendências:** Limitações conhecidas ou próximos passos recomendados.

@@ -161,8 +161,11 @@ def start_ipc_server(hud_window: JarvisHUDWindow):
                             pass
                     QTimer.singleShot(0, _show_act)
                 elif b"RELOAD" in data:
-                    from PyQt6.QtCore import QTimer
-                    QTimer.singleShot(0, hud_window.web_view.reload)
+                    from PyQt6.QtCore import QTimer, QUrl
+                    import time
+                    def _force_reload():
+                        hud_window.web_view.setUrl(QUrl(f"http://127.0.0.1:{LOCAL_PORT}/?_t={int(time.time()*1000)}"))
+                    QTimer.singleShot(0, _force_reload)
                 conn.close()
         except Exception:
             pass
