@@ -55,7 +55,7 @@ class JarvisHUDWindow(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.Window
         )
-        self.setStyleSheet("background-color: #010614;")
+        self.setStyleSheet("background-color: #000000;")
         self.setMouseTracking(True)
 
         # Garante foco no Monitor Principal (Primary Display - 2560x1440)
@@ -71,59 +71,49 @@ class JarvisHUDWindow(QMainWindow):
     def _init_ui(self):
         self.central_widget = QWidget(self)
         self.central_widget.setMouseTracking(True)
-        self.central_widget.setStyleSheet("background-color: #010614; margin: 0; padding: 0;")
+        self.central_widget.setStyleSheet("background-color: #000000; margin: 0; padding: 0;")
         self.central_layout = QVBoxLayout(self.central_widget)
         self.central_layout.setContentsMargins(0, 0, 0, 0)
         self.central_layout.setSpacing(0)
 
-        # 1. Barra de Controle Superior Stark Ultra-Discreta (Arrastável nativamente)
+        # 1. Barra de Controle Superior Minimalista Black Core (Arrastável nativamente)
         self.top_control_bar = QFrame(self.central_widget)
-        self.top_control_bar.setFixedHeight(28)
+        self.top_control_bar.setFixedHeight(26)
         self.top_control_bar.setMouseTracking(True)
         self.top_control_bar.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(1, 6, 20, 0.95), stop:0.5 rgba(3, 20, 56, 0.95), stop:1 rgba(1, 6, 20, 0.95));
-                border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+                background: #000000;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
             }
             QLabel {
-                color: #00f0ff;
+                color: #64748b;
                 font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 2px;
+                font-weight: 700;
+                letter-spacing: 3px;
                 font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
             }
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #94a3b8;
+                color: #64748b;
                 font-size: 11px;
-                font-weight: bold;
-                padding: 2px 8px;
+                font-weight: normal;
+                padding: 1px 8px;
             }
             QPushButton:hover {
-                color: #00f0ff;
-                background: rgba(0, 240, 255, 0.15);
+                color: #38bdf8;
+                background: rgba(255, 255, 255, 0.05);
             }
         """)
 
         top_layout = QHBoxLayout(self.top_control_bar)
-        top_layout.setContentsMargins(12, 0, 8, 0)
-        top_layout.setSpacing(8)
+        top_layout.setContentsMargins(14, 0, 8, 0)
+        top_layout.setSpacing(6)
 
-        self.title_label = QLabel("⚡ J.A.R.V.I.S. STARK HUD OS • DESKTOP INDEPENDENTE", self.top_control_bar)
+        self.title_label = QLabel("J . A . R . V . I . S .", self.top_control_bar)
         self.title_label.setMouseTracking(True)
         top_layout.addWidget(self.title_label)
         top_layout.addStretch()
-
-        btn_reload = QPushButton("🔄 F5", self.top_control_bar)
-        btn_reload.setToolTip("Recarregar HUD (F5)")
-        btn_reload.clicked.connect(self.reload_hud)
-        top_layout.addWidget(btn_reload)
-
-        btn_mic = QPushButton("🎙 F2 Falar", self.top_control_bar)
-        btn_mic.setToolTip("Ativar/Desativar Microfone (F2)")
-        btn_mic.clicked.connect(self.trigger_mic)
-        top_layout.addWidget(btn_mic)
 
         btn_min = QPushButton("🗕", self.top_control_bar)
         btn_min.setToolTip("Minimizar na Bandeja")
@@ -137,11 +127,10 @@ class JarvisHUDWindow(QMainWindow):
 
         btn_close = QPushButton("✕", self.top_control_bar)
         btn_close.setToolTip("Ocultar HUD (Ctrl+Espaço para reabrir)")
-        btn_close.setStyleSheet("QPushButton:hover { color: #ff0055; background: rgba(255, 0, 85, 0.2); }")
+        btn_close.setStyleSheet("QPushButton:hover { color: #f43f5e; background: rgba(244, 63, 94, 0.15); }")
         btn_close.clicked.connect(self.hide)
         top_layout.addWidget(btn_close)
 
-        # Instala filtro de eventos na barra e no título para captura de arrasto DWM e duplo-clique
         self.top_control_bar.installEventFilter(self)
         self.title_label.installEventFilter(self)
 
@@ -189,7 +178,7 @@ class JarvisHUDWindow(QMainWindow):
         self.web_view.page().featurePermissionRequested.connect(_grant_permissions)
 
         # Fundo escuro imediato para zero flicker branco
-        self.web_view.page().setBackgroundColor(QColor("#010614"))
+        self.web_view.page().setBackgroundColor(QColor("#000000"))
 
         # Monitoramento de carregamento
         self.web_view.loadStarted.connect(lambda: _log("web_view loadStarted"))

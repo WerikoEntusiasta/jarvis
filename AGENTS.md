@@ -223,6 +223,8 @@ Ao concluir qualquer tarefa ou alteração no ecossistema J.A.R.V.I.S., o agente
 ## 7. Histórico Cronológico de Modificações (Changelog)
 
 ### 📅 08 de Novembro de 2026
+- **03:54:30** — `[Antigravity]` `feat(hud-redesign)`: Conclusão da reformulação visual Black Core (inspirada na referência Kuro AI): fundo preto puro (`#000000`), anel quântico de plasma volumétrico e orgânico contínuo com o fundo, remoção do botão 'Painel Lateral', suporte nativo a upload e envio de arquivos/imagens via chat, barra superior PyQt6 minimalista em preto com tipografia nobre, e implementação funcional dos 7 flyout panels no Icon Rail esquerdo com widgets reais de telemetria, hardware, cloud, visão, finanças e Smart TV.
+- **03:17:18** — `[Codex]` `feat(spatial-workspace)`: Substituição do renderer em grade por um palco espacial livre e persistente. Cada componente agora carrega geometria normalizada (`x`, `y`, `width`, `height`, `depth`, `zIndex`, camada, importância e comportamento responsivo), com transições incrementais, foco, expansão, minimização, grupos e relações sem recriação do Workspace. Adicionados `relationship_map`, `annotation`, `media` e `three_view` (Three.js local), preservando compatibilidade dos tipos legados e dos eventos SSE/HTTP.
 - **03:12:00** — `[Antigravity]` `docs(agents)`: Aplicação da tag soberana `[Antigravity]` nas entradas do changelog e na regra 5.9 de auditoria contínua.
 - **03:11:00** — `[Antigravity]` `docs(agents)`: Integração da documentação arquitetural da Smart TV LG webOS (WoL, IPK, ZimaOS dispatch e áudio TTS) e atualização da regra contínua de changelog.
 - **03:10:00** — `[Antigravity]` `docs(agents)`: Inclusão da regra compulsória de atualização do `AGENTS.md` a cada alteração com registro do histórico cronológico.
