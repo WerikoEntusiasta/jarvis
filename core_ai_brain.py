@@ -897,6 +897,18 @@ def stream_direct_ai(user_msg: str, context: str = "", history: list = None, voi
 
     messages = _build_messages(user_msg, context, history, route, voice, image_b64, audio_b64)
 
+    try:
+        import task_tracker
+        task_tracker.start_task(
+            title=user_msg[:60],
+            description=f"Processando instrução cognitiva (rota {route})",
+            total_steps=2,
+            method="Cognição Multimodal & Roteamento Dinâmico"
+        )
+        task_tracker.add_log(f"Comando recebido: '{user_msg[:60]}'", icon="🚀", log_type="start")
+    except Exception:
+        pass
+
 
 
     tools = None
@@ -1041,8 +1053,52 @@ def stream_direct_ai(user_msg: str, context: str = "", history: list = None, voi
                 except Exception:
                     args = {}
             tool_name = c.get("name") or ""
+            try:
+                import task_tracker
+                method_map = {
+                    "take_screenshot": "Captura Win32 GDI BitBlt + Visão Multimodal",
+                    "mouse_click": "Mouse Click DPI-Aware (Hover Delay)",
+                    "mouse_move": "Mouse Move Suave (easeInOutQuad)",
+                    "keyboard_type": "Digitação Segura ABNT2 (Clipboard Ctrl+V)",
+                    "keyboard_press": "Tecla Direta Win32 SendInput",
+                    "keyboard_hotkey": "Atalho Global de Sistema",
+                    "obsidian_search_notes": "Pesquisa Semântica no Terceiro Cérebro",
+                    "obsidian_read_note": "Leitura de Nota no Obsidian",
+                    "obsidian_append_learning": "Registro de Aprendizado & Correção",
+                    "obsidian_write_note": "Escrita no Cofre do Obsidian",
+                    "list_windows": "Enumeração de Janelas Win32",
+                    "focus_window": "Foco e Ativação de Janela Win32",
+                    "start_dynamic_presentation": "Dynamic Presentation Engine (HUD)",
+                }
+                method_name = method_map.get(tool_name, f"Execução de Ferramenta Nativa ({tool_name})")
+                step_icon = "📸" if "screenshot" in tool_name else ("📚" if "obsidian" in tool_name else ("🖱️" if "mouse" in tool_name else ("⌨️" if "keyboard" in tool_name else "⚡")))
+                task_tracker.update_step(
+                    step=i+1,
+                    total_steps=max(len(used_tools), 1),
+                    step_name=f"Executando {tool_name}",
+                    method=method_name,
+                    status="verifying" if "screenshot" in tool_name else "executing"
+                )
+                args_snippet = str(args)[:60]
+                task_tracker.add_log(f"Chamando: {tool_name}({args_snippet})", icon=step_icon, log_type="action", tool=tool_name)
+            except Exception:
+                pass
+
             result = execute_tool(tool_name, args)
             print(f"[CoreBrain] Ferramenta {tool_name}({args}) -> {serialize_result(result)[:120]}")
+
+            try:
+                import task_tracker
+                if result.get("_image_b64"):
+                    task_tracker.add_log("Analisando imagem capturada com modelo multimodal...", icon="👁️", log_type="vision")
+                    task_tracker.update_step(step=i+1, step_name="Inspeção visual da tela em andamento", method="Visão Computacional Multimodal", status="verifying")
+                elif result.get("ok") is False or result.get("success") is False:
+                    err_msg = str(result.get("erro") or result.get("error") or "falha")[:60]
+                    task_tracker.add_log(f"Alerta em {tool_name}: {err_msg}", icon="⚠️", log_type="warn")
+                else:
+                    task_tracker.add_log(f"{tool_name} concluído com êxito", icon="✓", log_type="success")
+            except Exception:
+                pass
             messages.append({"role": "tool", "tool_call_id": call_id, "content": serialize_result(result)})
 
             if result.get("_screen_data"):
@@ -1090,6 +1146,12 @@ def stream_direct_ai(user_msg: str, context: str = "", history: list = None, voi
         yield fallback
 
         return
+
+    try:
+        import task_tracker
+        task_tracker.finish_task(success=True, summary="Instrução concluída e resposta gerada com sucesso")
+    except Exception:
+        pass
 
     _persist_dialogue(user_msg, reply)
 

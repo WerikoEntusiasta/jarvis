@@ -384,6 +384,22 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+        if path == "/api/task/current":
+            try:
+                import task_tracker
+                self._send_json(task_tracker.get_current_task())
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/task/history":
+            try:
+                import task_tracker
+                self._send_json({"tasks": task_tracker.get_recent_history()})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
         if path == "/api/presentation/status":
 
             try:
@@ -461,6 +477,12 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
                 self.wfile.write(f"event: ready\ndata: {init_event.decode()}\n\n".encode("utf-8"))
+                try:
+                    import task_tracker
+                    curr_task = json.dumps(task_tracker.get_current_task())
+                    self.wfile.write(f"event: task_event\ndata: {curr_task}\n\n".encode("utf-8"))
+                except Exception:
+                    pass
 
 
 
@@ -1203,6 +1225,22 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+
+        if path == "/api/task/event":
+            try:
+                import json
+                payload = json.loads(body.decode("utf-8", errors="ignore") or "{}")
+                if isinstance(payload, dict):
+                    import task_tracker
+                    with task_tracker._LOCK:
+                        task_tracker._CURRENT_TASK.update(payload)
+                    broadcast_hud_event("task_event", task_tracker._CURRENT_TASK)
+                    self._send_json({"ok": True})
+                else:
+                    self._send_json({"ok": False, "error": "Invalid JSON"}, status=400)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
 
         # 1. Chat com IA Direta do Núcleo (Multi-Turn Session & Pending Action Gating)
 
