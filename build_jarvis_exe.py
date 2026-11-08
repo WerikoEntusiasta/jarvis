@@ -26,6 +26,12 @@ cmd = [
     "--paths", r"c:\JARVIS",
     "--add-data", r"c:\JARVIS\web;web",
     "--add-data", r"c:\JARVIS\config;config",
+    "--add-data", r"c:\JARVIS\jarvis-windows\system;system",
+    "--add-data", r"c:\JARVIS\jarvis-windows\core;core",
+    "--add-data", r"c:\JARVIS\jarvis-windows\ui;ui",
+    "--add-data", r"c:\JARVIS\jarvis-windows\voice;voice",
+    "--hidden-import", "obsidian_manager",
+    "--hidden-import", "task_tracker",
     "--hidden-import", "PyQt6.QtWebEngineWidgets",
     "--hidden-import", "PyQt6.QtWebEngineCore",
     "--hidden-import", "PyQt6.QtWidgets",
@@ -92,8 +98,8 @@ if res.returncode == 0:
     print("\n[SUCESSO] JARVIS.exe gerado com sucesso!")
     print(f"Caminho do executavel: {exe_path}")
 
-    # Criar atalhos no Desktop e Inicializacao do Windows
-    print("\nInstalando atalhos no Windows...")
+    # Criar atalhos no Desktop, Menu Iniciar e Inicializacao do Windows
+    print("\nInstalando atalhos oficiais no Windows...")
     ps_shortcut = f'''
 $WshShell = New-Object -ComObject WScript.Shell
 
@@ -107,7 +113,19 @@ $Shortcut.Description = "J.A.R.V.I.S. Artificial Intelligence System"
 $Shortcut.Save()
 Write-Host "Atalho Desktop criado com sucesso!"
 
-# 2. Atalho na Inicializacao Automatica (Startup)
+# 2. Atalho no Menu Iniciar
+$ProgramsPath = [Environment]::GetFolderPath('Programs')
+$StartDir = "$ProgramsPath\\J.A.R.V.I.S."
+if (-not (Test-Path $StartDir)) {{ New-Item -ItemType Directory -Path $StartDir -Force | Out-Null }}
+$StartShortcut = $WshShell.CreateShortcut("$StartDir\\J.A.R.V.I.S..lnk")
+$StartShortcut.TargetPath = "{exe_path}"
+$StartShortcut.WorkingDirectory = "{os.path.dirname(exe_path)}"
+$StartShortcut.IconLocation = "{ICON_PATH}"
+$StartShortcut.Description = "J.A.R.V.I.S. Artificial Intelligence System"
+$StartShortcut.Save()
+Write-Host "Atalho no Menu Iniciar criado com sucesso!"
+
+# 3. Atalho na Inicializacao Automatica (Startup)
 $StartupPath = [Environment]::GetFolderPath('Startup')
 $StartupShortcut = $WshShell.CreateShortcut("$StartupPath\\J.A.R.V.I.S..lnk")
 $StartupShortcut.TargetPath = "{exe_path}"
@@ -118,7 +136,7 @@ $StartupShortcut.Save()
 Write-Host "Atalho Inicializacao criado com sucesso!"
 '''
     subprocess.run(["powershell", "-NoProfile", "-Command", ps_shortcut])
-    print("[INSTALACAO CONCLUIDA] J.A.R.V.I.S. instalado no Desktop e na Inicializacao do Windows!")
+    print("[INSTALACAO CONCLUIDA] J.A.R.V.I.S. instalado no Desktop, Menu Iniciar e Inicializacao do Windows!")
 else:
     print(f"\n[ERRO] PyInstaller falhou com codigo {res.returncode}")
     sys.exit(res.returncode)
