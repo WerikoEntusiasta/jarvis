@@ -353,6 +353,7 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def do_GET(self):
+        import json
 
 
 
@@ -481,6 +482,14 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                     import task_tracker
                     curr_task = json.dumps(task_tracker.get_current_task())
                     self.wfile.write(f"event: task_event\ndata: {curr_task}\n\n".encode("utf-8"))
+                except Exception:
+                    pass
+                try:
+                    import dynamic_presentation_engine as pe
+                    curr_pres = pe.get_active_presentation()
+                    if curr_pres:
+                        pres_json = json.dumps(curr_pres)
+                        self.wfile.write(f"event: presentation_start\ndata: {pres_json}\n\n".encode("utf-8"))
                 except Exception:
                     pass
 
@@ -1199,6 +1208,7 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def do_POST(self):
+        import json
 
 
 
@@ -1228,7 +1238,6 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/task/event":
             try:
-                import json
                 payload = json.loads(body.decode("utf-8", errors="ignore") or "{}")
                 if isinstance(payload, dict):
                     import task_tracker
@@ -1599,21 +1608,17 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
         if path == "/api/presentation/start":
-
             try:
-
                 data = json.loads(_decode_body(body)) if body else {}
-
                 import dynamic_presentation_engine as pe
-
                 res = pe.start_dynamic_presentation(data)
-
+                active_pres = pe.get_active_presentation()
+                if active_pres:
+                    broadcast_hud_event("presentation_start", active_pres)
+                    broadcast_hud_event("toast", {"message": f"🎬 Apresentação: {active_pres['title']}"})
                 self._send_json(res)
-
             except Exception as e:
-
                 self._send_json({"ok": False, "error": str(e)}, status=500)
-
             return
 
 
@@ -1651,7 +1656,7 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 params = data.get("params")
 
                 res = pe.control_presentation(action, params)
-
+                broadcast_hud_event("presentation_control", {"action": action, "params": params or {}})
                 self._send_json(res)
 
             except Exception as e:

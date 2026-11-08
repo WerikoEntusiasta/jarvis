@@ -200,7 +200,9 @@ def main():
         "--use-fake-ui-for-media-stream "
         "--ignore-certificate-errors "
         "--allow-running-insecure-content "
-        "--disable-web-security"
+        "--disable-web-security "
+        "--use-angle=d3d11 "
+        "--enable-gpu-rasterization"
     )
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
@@ -363,10 +365,7 @@ def main():
     primary = QGuiApplication.primaryScreen()
     if primary:
         hud.setScreen(primary)
-        geom = primary.availableGeometry()
-        hud.setGeometry(geom.x(), geom.y(), geom.width(), geom.height())
-
-    hud.show()
+    hud.showMaximized()
     hud.raise_()
     hud.activateWindow()
     try:

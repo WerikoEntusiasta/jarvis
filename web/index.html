@@ -502,7 +502,7 @@
     <!-- WIDGET 0: MISSÃO & TAREFAS EM TEMPO REAL (LIVE TASK EXECUTION LOG) -->
     <div id="card-live-task" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl transition-all border border-cyan-500/40 hover:border-cyan-400 relative overflow-hidden group">
       <!-- Brilho de atividade superior neon -->
-      <div id="task-glow-line" class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80 animate-pulse"></div>
+      <div id="task-glow-line" class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80 shadow-[0_0_8px_rgba(0,240,255,0.8)]"></div>
 
       <!-- Header com Ícone, Título e Badge -->
       <div class="flex items-center justify-between mb-1.5 cursor-pointer" onclick="toggleTaskCardCollapse()">
@@ -515,7 +515,7 @@
           <div>
             <div class="text-[9px] tracking-widest text-amber-400 font-semibold uppercase flex items-center space-x-1.5">
               <span>MISSÃO • ATIVIDADE AO VIVO</span>
-              <span id="task-live-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
+              <span id="task-live-dot" class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#00f0ff]"></span>
             </div>
             <div class="text-xs font-bold text-white tracking-wide truncate max-w-[170px]" id="task-title-display">
               Aguardando Instrução
@@ -572,80 +572,7 @@
       </div>
     </div>
 
-    <!-- WIDGET 0: MISSÃO & TAREFAS EM TEMPO REAL (LIVE TASK EXECUTION LOG) -->
-    <div id="card-live-task" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl transition-all border border-cyan-500/40 hover:border-cyan-400 relative overflow-hidden group">
-      <!-- Brilho de atividade superior neon -->
-      <div id="task-glow-line" class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80 animate-pulse"></div>
-
-      <!-- Header com Ícone, Título e Badge -->
-      <div class="flex items-center justify-between mb-1.5 cursor-pointer" onclick="toggleTaskCardCollapse()">
-        <div class="flex items-center space-x-2">
-          <div id="task-icon-container" class="w-6 h-6 rounded-md bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 transition-colors">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-            </svg>
-          </div>
-          <div>
-            <div class="text-[9px] tracking-widest text-amber-400 font-semibold uppercase flex items-center space-x-1.5">
-              <span>MISSÃO • ATIVIDADE AO VIVO</span>
-              <span id="task-live-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span>
-            </div>
-            <div class="text-xs font-bold text-white tracking-wide truncate max-w-[170px]" id="task-title-display">
-              Aguardando Instrução
-            </div>
-          </div>
-        </div>
-        
-        <div class="flex items-center space-x-1">
-          <span id="task-status-badge" class="text-[9px] font-mono-code text-amber-300 px-2 py-0.5 rounded bg-amber-950/80 border border-amber-400/40">
-            STANDBY
-          </span>
-          <span id="task-collapse-icon" class="text-slate-400 hover:text-cyan-300 text-xs px-0.5 transition-transform">▾</span>
-        </div>
-      </div>
-
-      <!-- Bloco de Detalhes da Tarefa: Como está sendo feita, Etapa e Terminal de Logs -->
-      <div id="task-body-container" class="space-y-1.5 my-1.5 transition-all">
-        <!-- Método / Como está sendo feita -->
-        <div class="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 flex items-center justify-between text-[10px] font-mono-code">
-          <span class="text-slate-400 text-[9px]">COMO ESTÁ SENDO FEITA:</span>
-          <span id="task-method-display" class="font-bold text-cyan-300 truncate max-w-[160px]">
-            Aguardando ativação
-          </span>
-        </div>
-
-        <!-- Etapa Atual & Barra de Progresso Neon -->
-        <div class="p-1.5 rounded-lg bg-slate-900/80 border border-cyan-500/30 text-[10px] font-mono-code">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-slate-400 text-[9px]">ETAPA ATUAL:</span>
-            <span id="task-step-counter" class="text-cyan-400 font-bold text-[9px]">0/0 (0%)</span>
-          </div>
-          <div id="task-step-name" class="text-white font-bold truncate text-[11px] mb-1.5">
-            Sistema em repouso
-          </div>
-          <!-- Barra de Progresso Neon -->
-          <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-cyan-900/60 p-[1px]">
-            <div id="task-progress-bar" class="bg-gradient-to-r from-cyan-500 via-sky-400 to-emerald-400 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_rgba(0,240,255,0.8)]" style="width: 0%;"></div>
-          </div>
-        </div>
-
-        <!-- Terminal de Logs em Tempo Real (Live Step Feed) -->
-        <div class="rounded-lg bg-slate-950/95 border border-cyan-500/25 p-2 font-mono-code">
-          <div class="flex items-center justify-between text-[8px] text-slate-400 border-b border-cyan-950 pb-1 mb-1.5">
-            <span class="text-cyan-400 font-bold tracking-wider">LOG DE EXECUÇÃO EM TEMPO REAL</span>
-            <span id="task-elapsed-timer" class="text-slate-300 font-bold">⏱️ 0.0s</span>
-          </div>
-          <div id="task-live-logs" class="space-y-1 max-h-28 overflow-y-auto overflow-x-hidden text-[9px] no-scrollbar">
-            <div class="text-slate-500 italic flex items-center space-x-1.5">
-              <span>🟢</span>
-              <span>J.A.R.V.I.S. pronto para registrar etapas ao vivo...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- WIDGET FIXO: TELEMETRIA ZIMAOS CLOUD (CPU, TEMP, MEMÓRIA, DISCO, CONTAINERS) -->
+<!-- WIDGET FIXO: TELEMETRIA ZIMAOS CLOUD (CPU, TEMP, MEMÓRIA, DISCO, CONTAINERS) -->
     <div id="card-zima-fixed" onclick="triggerZimaInspect()" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-emerald-400/60 transition-all group" title="Clique para abrir a telemetria detalhada no Painel Lateral">
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center space-x-2">
@@ -1347,9 +1274,9 @@
         </svg>
       </button>
 
-      <input id="user-input" type="text" placeholder='Fale "Jarvis..." ou digite sua instrução...' onkeydown="if(event.key==='Enter') sendToOpenClaw()" class="flex-1 bg-slate-950/90 border border-sky-600/70 rounded-xl px-4 py-2.5 text-sm sm:text-xs text-sky-100 placeholder-sky-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]">
+      <input id="user-input" type="text" placeholder='Fale "Jarvis..." ou digite sua instrução...' onkeydown="if(event.key==='Enter') sendToJarvisCore()" class="flex-1 bg-slate-950/90 border border-sky-600/70 rounded-xl px-4 py-2.5 text-sm sm:text-xs text-sky-100 placeholder-sky-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]">
 
-      <button onclick="sendToOpenClaw()" class="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-[0_0_25px_rgba(0,210,255,0.6)] active:scale-95 shrink-0">
+      <button onclick="sendToJarvisCore()" class="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-[0_0_25px_rgba(0,210,255,0.6)] active:scale-95 shrink-0">
         ENVIAR
       </button>
     </div>
@@ -2508,7 +2435,7 @@
     function triggerJarvisCoreInspect() {
       sendToOpenClaw("Jarvis, telemetria completa do ecossistema");
     }
-    const sendToJarvisCore = (text, opts) => sendToOpenClaw(text, opts);
+    const sendToOpenClaw = (text, opts) => sendToJarvisCore(text, opts);
 
     function triggerOpenClawInspect() {
       executeCanvasAction('refresh_openclaw', '');
@@ -2666,15 +2593,6 @@
       if (!window.EventSource) return;
       try {
         const evtSource = new EventSource('/api/hud/events');
-
-        evtSource.addEventListener('task_event', (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            updateLiveTaskCard(data);
-          } catch(err) {
-            console.warn('[TaskCard SSE] Erro ao atualizar tarefa:', err);
-          }
-        });
 
         evtSource.addEventListener('task_event', (e) => {
           try {
@@ -4811,7 +4729,7 @@
       setTimeout(() => sendToOpenClaw(nextCommand, {fromVoice: true}), 0);
     }
 
-    async function sendToOpenClaw(textToSend = null, options = {}) {
+    async function sendToJarvisCore(textToSend = null, options = {}) {
       const fromVoice = !!options.fromVoice;
       const input = document.getElementById('user-input');
       const val = textToSend || input.value.trim();
@@ -6787,6 +6705,20 @@
     }
 
     setTimeout(loadInitialTaskState, 1000);
+    async function loadInitialPresentationState() {
+      try {
+        const res = await fetch('/api/presentation/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.is_active && data.presentation && window.JarvisPresentationEngine) {
+            console.log('[Presentation] Recuperando apresentacao ativa:', data.presentation.title);
+            window.JarvisPresentationEngine.start(data.presentation);
+          }
+        }
+      } catch(e) {}
+    }
+    setTimeout(loadInitialPresentationState, 1200);
+
 
     // ==============================================================================
     // LIVE TASK EXECUTION CARD (RASTREAMENTO DE TAREFA EM TEMPO REAL)
@@ -6885,17 +6817,6 @@
       }
     }
 
-    async function loadInitialTaskState() {
-      try {
-        const res = await fetch('/api/task/current');
-        if (res.ok) {
-          const data = await res.json();
-          updateLiveTaskCard(data);
-        }
-      } catch(e) {}
-    }
-
-    setTimeout(loadInitialTaskState, 1000);
 </script>
   <button id="push-enable-btn" onclick="enablePushNotifications()" title="Ativar notificações push do J.A.R.V.I.S." class="hidden fixed z-[90] bottom-24 right-4 safe-bottom w-12 h-12 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 text-xl shadow-[0_0_18px_rgba(0,240,255,0.5)] active:scale-95 transition-transform">🔔</button>
 </body>

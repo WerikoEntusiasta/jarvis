@@ -5893,34 +5893,10 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
         if name == "spawn_subagent":
             return {"ok": False, "erro": "Subagentes desativados por diretriz do Senhor Werik. Execute todas as tarefas diretamente no fluxo principal."}
         if name == "cancel_subagents":
-
-
-
-            from subagent_manager import get_subagent_manager
-
-
-
-            count = get_subagent_manager().cancel_all()
-
-
-
-            return {"ok": True, "count": count, "info": f"{count} subagente(s) cancelados imediatamente."}
-
-
+            return {"ok": True, "count": 0, "info": "Módulo de subagentes desativado. Execução unificada diretamente no Núcleo do J.A.R.V.I.S."}
 
         if name == "list_subagents":
-
-
-
-            from subagent_manager import get_subagent_manager
-
-
-
-            tasks = get_subagent_manager().get_active_tasks()
-
-
-
-            return {"ok": True, "tasks": tasks, "count": len(tasks)}
+            return {"ok": True, "tasks": [], "count": 0, "info": "Módulo de subagentes desativado. Execução unificada diretamente no Núcleo do J.A.R.V.I.S."}
 
 
 
