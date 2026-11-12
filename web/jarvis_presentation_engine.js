@@ -1,6 +1,8 @@
 /**
- * J.A.R.V.I.S. Mark VII - Spatial Intelligence Workspace & Cinematic Presentation Engine
- * High-End Futuristic Glassmorphism, Apache ECharts 5.5, Three.js Holograms & Dynamic Topologies.
+ * J.A.R.V.I.S. Mark VII - Organic Spatial Canvas Intelligence Engine
+ * Kuro Black Luxury Glassmorphism - Mesa de Trabalho de Inteligência Contínua.
+ * Cards são exibidos livremente sobre a tela padrão, sem janelas artificiais,
+ * acumulando-se e encaixando-se organicamente conforme o JARVIS narra cada tópico.
  */
 (function (root, factory) {
   if (typeof define === 'function' && define.amd) define([], factory);
@@ -11,478 +13,413 @@
 
   const state = {
     workspace: null,
-    activeMode: 'spatial',
+    title: 'SPATIAL INTELLIGENCE',
     components: new Map(),
-    slideSession: null,
-    slideIndex: 0,
-    isPlaying: false
+    activeInstances: new Map(),
+    sceneQueue: [],
+    sceneIndex: 0
   };
 
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
   })[c]);
 
-  const clamp = (value, min, max) => {
-    value = Number(value);
-    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min;
-  };
-
-  function geometry(component, index) {
-    const input = component.position || {};
-    const width = clamp(input.width == null ? 48 : input.width, 10, 98);
-    const height = clamp(input.height == null ? 46 : input.height, 10, 92);
-    return {
-      x: clamp(input.x == null ? (index % 2 === 0 ? 2 : 51) : input.x, 0, 100 - width),
-      y: clamp(input.y == null ? (index < 2 ? 2 : 50) : input.y, 0, 100 - height),
-      width, height,
-      depth: clamp(input.depth == null ? 1 : input.depth, 0, 10),
-      zIndex: Number(input.zIndex == null ? 5 : input.zIndex)
-    };
-  }
-
   function injectStyles() {
-    const existing = document.getElementById('jarvis-spatial-cinema-style'); if (existing) existing.remove();
+    const existing = document.getElementById('jarvis-spatial-canvas-style');
+    if (existing) existing.remove();
     const tag = document.createElement('style');
-    tag.id = 'jarvis-spatial-cinema-style';
+    tag.id = 'jarvis-spatial-canvas-style';
     tag.textContent = `
-      #presentation-content-area.spatial-stage {
-        padding: 0;
-        overflow: hidden;
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-      .spatial-workspace {
-        position: relative;
-        isolation: isolate;
-        width: 100%;
-        height: 100%;
-        min-height: 580px;
-        overflow: hidden;
-        color: #f4f4f5;
-        background: #000000;
-        padding: 16px;
-      }
-      .spatial-workspace::before {
-        content: '';
-        position: absolute;
-        inset: 0;
+      #jarvis-spatial-canvas {
+        position: fixed;
+        left: 80px;
+        right: 24px;
+        top: 56px;
+        bottom: 96px;
+        z-index: 35;
         pointer-events: none;
-        opacity: 0.03;
-        background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-        background-size: 40px 40px;
+        overflow: hidden;
       }
-      .spatial-el {
+      .spatial-card-wrapper {
         position: absolute;
         box-sizing: border-box;
+        pointer-events: auto;
         transition: left 0.6s cubic-bezier(0.16, 1, 0.3, 1),
                     top 0.6s cubic-bezier(0.16, 1, 0.3, 1),
                     width 0.6s cubic-bezier(0.16, 1, 0.3, 1),
                     height 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                    opacity 0.4s ease,
-                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+                    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                    box-shadow 0.4s ease,
+                    border-color 0.4s ease;
       }
-      .spatial-el.entering {
+      .spatial-card-wrapper.entering {
         opacity: 0;
-        transform: translateY(20px) scale(0.97);
+        transform: translateY(32px) scale(0.92);
+        filter: blur(8px);
       }
-      .spatial-surface {
+      .spatial-card-wrapper.leaving {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.90);
+        filter: blur(6px);
+        pointer-events: none;
+      }
+      .spatial-card-wrapper.highlighted .spatial-card-surface {
+        border-color: rgba(255, 255, 255, 0.65);
+        box-shadow: 0 0 50px rgba(255, 255, 255, 0.28), 0 25px 60px rgba(0, 0, 0, 0.95);
+        animation: cardSpeakingPulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      @keyframes cardSpeakingPulse {
+        0%, 100% { border-color: rgba(255, 255, 255, 0.45); }
+        50% { border-color: rgba(255, 255, 255, 0.9); box-shadow: 0 0 65px rgba(255, 255, 255, 0.4); }
+      }
+      .spatial-card-surface {
         position: relative;
         width: 100%;
         height: 100%;
         border-radius: 18px;
-        background: #09090b;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.98), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-        backdrop-filter: blur(24px);
+        background: rgba(9, 9, 11, 0.93);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: 0 25px 65px rgba(0, 0, 0, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(28px);
+        -webkit-backdrop-filter: blur(28px);
         padding: 20px 24px;
+        color: #f4f4f5;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
       }
-      .spatial-surface:hover {
-        border-color: rgba(255, 255, 255, 0.18);
-        box-shadow: 0 30px 70px rgba(0, 0, 0, 1), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      }
-      .spatial-surface::before {
+      .spatial-card-surface::before {
         content: '';
         position: absolute;
-        top: 0; left: 15%; right: 15%; height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
-        opacity: 0.9;
+        top: 0; left: 12%; right: 12%; height: 1.5px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
       }
-      /* Hero Card Typography - Kuro Black Style */
-      .hero-kicker {
+      .spatial-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        user-select: none;
+        flex-shrink: 0;
+      }
+      .spatial-card-title-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .spatial-card-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 9999px;
+        background: #ffffff;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
+        animation: spatialDotPulse 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      @keyframes spatialDotPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.35; transform: scale(0.85); }
+      }
+      .spatial-card-kicker {
         font-family: 'JetBrains Mono', monospace;
         font-size: 10px;
         font-weight: 700;
-        letter-spacing: 2.5px;
+        letter-spacing: 2px;
         color: #71717a;
         text-transform: uppercase;
       }
-      .hero-title {
+      .spatial-card-title {
         font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
-        font-size: clamp(20px, 1.8vw, 26px);
-        font-weight: 800;
+        font-size: 14px;
+        font-weight: 700;
         color: #ffffff;
-        letter-spacing: 0.5px;
-        margin: 6px 0 10px;
-        line-height: 1.15;
+        letter-spacing: 0.3px;
       }
-      .hero-copy {
-        font-size: 12px;
-        color: #a1a1aa;
-        line-height: 1.6;
-        margin-bottom: 14px;
-      }
-      .hero-tag {
-        display: inline-block;
-        padding: 3px 10px;
+      .spatial-card-close-btn {
+        width: 24px;
+        height: 24px;
         border-radius: 9999px;
         background: rgba(255, 255, 255, 0.04);
         border: 1px solid rgba(255, 255, 255, 0.10);
+        color: #a1a1aa;
         font-family: 'JetBrains Mono', monospace;
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 700;
-        color: #e4e4e7;
-        margin-right: 6px;
-        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
       }
-      .hero-bullet {
+      .spatial-card-close-btn:hover {
+        background: rgba(239, 68, 68, 0.25);
+        border-color: rgba(248, 113, 113, 0.45);
+        color: #ffffff;
+        transform: scale(1.08);
+      }
+      .spatial-card-body {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+      .spatial-card-body::-webkit-scrollbar {
+        width: 4px;
+      }
+      .spatial-card-body::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 4px;
+      }
+      .spatial-scene-copy {
+        font-size: 13px;
+        color: #a1a1aa;
+        line-height: 1.65;
+        margin-bottom: 12px;
+      }
+      .spatial-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .spatial-tag {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9.5px;
+        font-weight: 600;
+        color: #d4d4d8;
+      }
+      .spatial-bullets {
+        margin-top: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .spatial-bullet {
         display: flex;
         align-items: flex-start;
         gap: 8px;
-        font-size: 11px;
-        color: #d4d4d8;
-        margin-bottom: 6px;
+        font-size: 12px;
+        color: #e4e4e7;
         line-height: 1.45;
       }
-      .hero-bullet-dot {
+      .spatial-bullet-dot {
         color: #71717a;
         font-weight: bold;
       }
-      /* Metrics - Kuro Black Style */
-      .metrics-grid {
+      .spatial-metrics-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-        height: 100%;
-        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
       }
-      .metric-box {
-        padding: 12px 14px;
+      .spatial-metric-box {
+        padding: 10px 12px;
         border-radius: 12px;
         background: #121214;
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.07);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
       }
-      .metric-kicker {
+      .spatial-metric-label {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 9px;
+        font-size: 8.5px;
         font-weight: 700;
         color: #71717a;
-        letter-spacing: 1.5px;
+        letter-spacing: 1.2px;
         text-transform: uppercase;
       }
-      .metric-big {
+      .spatial-metric-val {
         font-family: 'JetBrains Mono', monospace;
-        font-size: clamp(22px, 2.2vw, 32px);
+        font-size: clamp(18px, 1.8vw, 24px);
         font-weight: 800;
         color: #ffffff;
-        margin: 4px 0;
+        margin: 2px 0;
       }
-      .metric-trend {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
-        color: #a1a1aa;
-        font-weight: 600;
-      }
-      /* Chart Header */
-      .chart-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
-        flex-shrink: 0;
-      }
-      .chart-title {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 11px;
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-      }
-      .chart-badge {
+      .spatial-metric-trend {
         font-family: 'JetBrains Mono', monospace;
         font-size: 9px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.12);
         color: #a1a1aa;
-        font-weight: 700;
-      }
-      /* Topology Graph */
-      .topo-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-      }
-      .topo-node {
-        position: absolute;
-        padding: 8px 14px;
-        border-radius: 12px;
-        background: #121214;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
-        color: #ffffff;
-        text-align: center;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 10px;
-        font-weight: 700;
-        transform: translate(-50%, -50%);
-        backdrop-filter: blur(10px);
-      }
-      .topo-node.core {
-        background: #18181b;
-        border-color: rgba(255, 255, 255, 0.35);
-        box-shadow: 0 0 25px rgba(255, 255, 255, 0.08);
-        font-size: 11px;
-        font-weight: 800;
-        padding: 12px 18px;
+        font-weight: 600;
       }
     `;
     document.head.appendChild(tag);
   }
 
-  // BUILDER 1: HERO CARD
-  function buildHeroCard(c) {
-    const p = c.props || {};
-    const kicker = p.kicker || p.badge || 'STARK INTELLIGENCE // SPATIAL OS';
-    const title = p.title || 'Arquitetura Soberana';
-    const summary = p.summary || p.subtitle || '';
-    const tags = (p.tags || []).map(t => `<span class="hero-tag">${esc(t)}</span>`).join('');
-    const bullets = (p.bullets || []).map(b => `
-      <div class="hero-bullet">
-        <span class="hero-bullet-dot">▸</span>
-        <span>${esc(b)}</span>
-      </div>
-    `).join('');
-
-    return {
-      html: `
-        <div class="spatial-surface">
-          <div>
-            <div class="hero-kicker">${esc(kicker)}</div>
-            <h2 class="hero-title">${esc(title)}</h2>
-            ${summary ? `<p class="hero-copy">${esc(summary)}</p>` : ''}
-            ${tags ? `<div style="margin-bottom:12px">${tags}</div>` : ''}
-          </div>
-          ${bullets ? `<div style="margin-top:auto">${bullets}</div>` : ''}
-        </div>
-      `
-    };
+  function hideLegacyDeck() {
+    const deck = document.getElementById('jarvis-presentation-deck');
+    if (deck) {
+      deck.classList.add('hidden', 'opacity-0');
+      deck.innerHTML = '';
+    }
+    const oldStage = document.getElementById('presentation-stage');
+    if (oldStage) {
+      oldStage.className = 'hidden pointer-events-none opacity-0 select-none';
+    }
   }
 
-  // BUILDER 2: METRIC DOCK
-  function buildMetricDock(c) {
-    const p = c.props || {};
-    const title = p.title || 'TELEMETRIA DE PERFORMANCE COGNITIVA';
-    const metrics = (p.metrics || []).slice(0, 4);
-
-    const boxes = metrics.map(m => `
-      <div class="metric-box">
-        <span class="metric-kicker">${esc(m.label || 'MÉTRICA')}</span>
-        <span class="metric-big">${esc(m.value || '--')}</span>
-        <span class="metric-trend">${esc(m.trend || '● Nominal')}</span>
-      </div>
-    `).join('');
-
-    return {
-      html: `
-        <div class="spatial-surface">
-          <div class="chart-header">
-            <span class="chart-title">${esc(title)}</span>
-            <span class="chart-badge">● STARK SENSORS</span>
-          </div>
-          <div class="metrics-grid">
-            ${boxes}
-          </div>
-        </div>
-      `
-    };
+  function getCanvas() {
+    hideLegacyDeck();
+    let canvas = document.getElementById('jarvis-spatial-canvas');
+    if (!canvas) {
+      canvas = document.createElement('div');
+      canvas.id = 'jarvis-spatial-canvas';
+      canvas.className = 'fixed left-20 right-6 top-14 bottom-24 z-30 pointer-events-none select-none';
+      document.body.appendChild(canvas);
+    }
+    return canvas;
   }
 
-  // BUILDER 3: APACHE ECHARTS
-  function buildECharts(c) {
-    const p = c.props || {};
-    const title = p.title || 'ANÁLISE DE PERFORMANCE';
-    const source = p.source || 'TELEMETRIA OFICIAL STARK';
-    let chartOpts = p.options || p.option || {};
-    if (!chartOpts.series || !chartOpts.series.length) {
-      chartOpts = {
-        series: [{
-          type: 'pie',
-          radius: ['45%', '70%'],
-          center: ['50%', '50%'],
-          avoidLabelOverlap: false,
-          itemStyle: { borderRadius: 6, borderColor: '#020612', borderWidth: 2 },
-          label: { show: false },
-          data: [
-            { value: 40, name: 'Cérebro & MiMo (40%)', itemStyle: { color: '#ffffff' } },
-            { value: 25, name: 'Spatial Workspace (25%)', itemStyle: { color: '#a1a1aa' } },
-            { value: 15, name: 'ZimaOS Cloud (15%)', itemStyle: { color: '#71717a' } },
-            { value: 12, name: 'Automação Windows (12%)', itemStyle: { color: '#52525b' } },
-            { value: 8, name: 'Esfera & Smart TV (8%)', itemStyle: { color: '#3f3f46' } }
-          ]
-        }],
-        legend: {
-          bottom: '2%',
-          textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 }
-        }
-      };
+  function updateGlobalActionsBadge() {
+    let badge = document.getElementById('spatial-canvas-actions');
+    const canvas = getCanvas();
+    if (!badge && canvas) {
+      badge = document.createElement('div');
+      badge.id = 'spatial-canvas-actions';
+      badge.className = 'absolute right-4 top-2 pointer-events-auto transition-opacity duration-300';
+      badge.innerHTML = `
+        <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.clearSpatialWorkspace()" class="px-3.5 py-1 rounded-full bg-zinc-950/85 hover:bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-zinc-300 hover:text-white text-[10px] font-mono-code font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-lg active:scale-95">
+          <span>✕</span>
+          <span>LIMPAR PALCO (ESC)</span>
+        </button>
+      `;
+      canvas.appendChild(badge);
+    }
+    if (badge) {
+      if (state.components.size > 0) {
+        badge.classList.remove('hidden');
+        badge.style.opacity = '1';
+      } else {
+        badge.classList.add('hidden');
+        badge.style.opacity = '0';
+      }
+    }
+  }
+
+  // ALGORITMO ORGÂNICO DE ENCAIXE DE CARDS (SPATIAL AUTO-SLOTTING)
+  function resolvePosition(position, index) {
+    const pos = position || {};
+    
+    // Coordenadas explícitas informadas pelo script
+    if (pos.left !== undefined || pos.x !== undefined) {
+      const left = pos.left !== undefined ? pos.left : (typeof pos.x === 'string' ? pos.x : `${pos.x}%`);
+      const top = pos.top !== undefined ? pos.top : (typeof pos.y === 'string' ? pos.y : `${pos.y}%`);
+      const width = pos.width !== undefined ? (typeof pos.width === 'string' ? pos.width : `${pos.width}%`) : '38%';
+      const height = pos.height !== undefined ? (typeof pos.height === 'string' ? pos.height : `${pos.height}%`) : 'auto';
+      return { left, top, width, height, maxHeight: pos.maxHeight || '580px' };
     }
 
-    return {
-      html: `
-        <div class="spatial-surface">
-          <div class="chart-header">
-            <span class="chart-title">${esc(title)}</span>
-            <span class="chart-badge">${esc(source)}</span>
-          </div>
-          <div data-echart-target style="flex:1;width:100%;min-height:160px"></div>
-        </div>
-      `,
-      mount(box) {
-        const target = box.querySelector('[data-echart-target]');
-        if (!target || !window.echarts) return null;
-        const instance = window.echarts.init(target, null, { renderer: 'canvas' });
-        
-        const defaultStyle = {
-          backgroundColor: 'transparent',
-          textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 },
-          grid: { left: 24, right: 14, top: 18, bottom: 24, containLabel: true },
-          tooltip: {
-            trigger: 'item',
-            backgroundColor: '#09090b',
-            borderColor: 'rgba(255, 255, 255, 0.12)',
-            textStyle: { color: '#f4f4f5', fontFamily: 'JetBrains Mono', fontSize: 11 }
-          }
-        };
+    // Slots orgânicos contornando o Arc Reactor central
+    // Slot 0 (Asa Esquerda): Card 1 (ex: Impostos)
+    // Slot 1 (Asa Direita): Card 2 (ex: STF - surge ao lado sem remover o primeiro!)
+    // Slot 2 (Inferior Esquerdo): Card 3
+    // Slot 3 (Inferior Direito): Card 4
+    const slots = [
+      { left: '3%',  top: '6%',  width: '38%', height: 'auto', maxHeight: '580px' },
+      { left: '59%', top: '6%',  width: '38%', height: 'auto', maxHeight: '580px' },
+      { left: '3%',  top: '52%', width: '38%', height: 'auto', maxHeight: '420px' },
+      { left: '59%', top: '52%', width: '38%', height: 'auto', maxHeight: '420px' }
+    ];
 
-        instance.setOption(Object.assign(defaultStyle, chartOpts));
-        const resize = () => instance.resize();
+    const slot = slots[index % slots.length];
+    return {
+      left: slot.left,
+      top: slot.top,
+      width: pos.width ? (typeof pos.width === 'string' ? pos.width : `${pos.width}%`) : slot.width,
+      height: pos.height ? (typeof pos.height === 'string' ? pos.height : `${pos.height}%`) : slot.height,
+      maxHeight: slot.maxHeight
+    };
+  }
+
+  // BUILDER: ECHARTS
+  function buildECharts(opts, minHeight = 220) {
+    const defaultOpts = {
+      backgroundColor: 'transparent',
+      textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 },
+      grid: { left: 20, right: 14, top: 18, bottom: 20, containLabel: true },
+      tooltip: {
+        trigger: 'item',
+        backgroundColor: '#09090b',
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        textStyle: { color: '#f4f4f5', fontFamily: 'JetBrains Mono', fontSize: 11 }
+      },
+      series: [{
+        type: 'pie',
+        radius: ['45%', '70%'],
+        center: ['50%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 6, borderColor: '#09090b', borderWidth: 2 },
+        label: { show: false },
+        data: [
+          { value: 40, name: 'Cérebro Soberano (40%)', itemStyle: { color: '#ffffff' } },
+          { value: 25, name: 'Automação Windows (25%)', itemStyle: { color: '#a1a1aa' } },
+          { value: 18, name: 'ZimaOS Gateway (18%)', itemStyle: { color: '#71717a' } },
+          { value: 10, name: 'Smart TV LG (10%)', itemStyle: { color: '#52525b' } },
+          { value: 7, name: 'Esfera ESP32 (7%)', itemStyle: { color: '#3f3f46' } }
+        ]
+      }],
+      legend: {
+        bottom: '0%',
+        textStyle: { color: '#71717a', fontFamily: 'JetBrains Mono', fontSize: 9 }
+      }
+    };
+    const finalOpts = Object.assign({}, defaultOpts, opts || {});
+    return {
+      html: `<div data-spatial-echart style="width:100%;min-height:${minHeight}px;flex:1"></div>`,
+      mount(dom) {
+        const target = dom.querySelector('[data-spatial-echart]');
+        if (!target || !window.echarts) return null;
+        const inst = window.echarts.init(target, null, { renderer: 'canvas' });
+        inst.setOption(finalOpts);
+        const resize = () => inst.resize();
         window.addEventListener('resize', resize);
         setTimeout(resize, 60);
-        setTimeout(resize, 250);
-
+        setTimeout(resize, 200);
         return {
-          instance,
+          instance: inst,
           cleanup: () => {
             window.removeEventListener('resize', resize);
-            instance.dispose();
+            inst.dispose();
           }
         };
       }
     };
   }
 
-  // BUILDER 4: RELATIONSHIP MAP / TOPOLOGY
-  function buildRelationshipMap(c) {
-    const p = c.props || {};
-    const title = p.title || 'TOPOLOGIA DO ECOSSISTEMA DISTRIBUÍDO';
-    
-    // 5 nós em formato de diamante equilibrado (nunca sobrepostos)
-    const nodes = [
-      { id: 'core', label: 'CÉREBRO SOBERANO', badge: 'LOCAL AI', x: 50, y: 50, isCore: true },
-      { id: 'windows', label: 'HUD WINDOWS 11', badge: 'QHD 2560x1440', x: 18, y: 24 },
-      { id: 'zima', label: 'ZIMAOS DOCKER', badge: '45.167.187.80', x: 82, y: 24 },
-      { id: 'tv', label: 'SMART TV LG', badge: 'webOS 1080p', x: 18, y: 76 },
-      { id: 'sphere', label: 'ESFERA ESP32-S3', badge: 'DevKitC-1 LCD', x: 82, y: 76 }
-    ];
-
-    const nodesHtml = nodes.map(n => `
-      <div class="topo-node ${n.isCore ? 'core' : ''}" style="left:${n.x}%;top:${n.y}%">
-        <div>${esc(n.label)}</div>
-        <div style="font-size:8px;color:#a1a1aa;font-weight:normal;margin-top:2px">${esc(n.badge)}</div>
-      </div>
-    `).join('');
-
+  // BUILDER: THREE.JS 3D HOLOGRAM
+  function buildThreeView(minHeight = 220) {
     return {
-      html: `
-        <div class="spatial-surface">
-          <div class="chart-header">
-            <span class="chart-title">${esc(title)}</span>
-            <span class="chart-badge">● 5 NÓS ATIVOS</span>
-          </div>
-          <div class="topo-container">
-            <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
-              <!-- Conexões do Core para os Nós -->
-              <line x1="50%" y1="50%" x2="18%" y2="24%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="82%" y2="24%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="18%" y2="76%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <line x1="50%" y1="50%" x2="82%" y2="76%" stroke="rgba(255,255,255,0.20)" stroke-width="1.5" stroke-dasharray="4 4" />
-              <circle cx="50%" cy="50%" r="48" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
-            </svg>
-            ${nodesHtml}
-          </div>
-        </div>
-      `
-    };
-  }
-
-  // BUILDER 5: THREE.JS 3D HOLOGRAPHIC CORE
-  function buildThreeView(c) {
-    const p = c.props || {};
-    const title = p.title || 'MODELO ESPACIAL HOLOGRÁFICO 3D';
-
-    return {
-      html: `
-        <div class="spatial-surface">
-          <div class="chart-header">
-            <span class="chart-title">${esc(title)}</span>
-            <span class="chart-badge">WebGL THREE.JS</span>
-          </div>
-          <div data-three-host style="flex:1;width:100%;min-height:180px;position:relative"></div>
-        </div>
-      `,
-      mount(box) {
-        const host = box.querySelector('[data-three-host]');
+      html: `<div data-spatial-three style="width:100%;min-height:${minHeight}px;position:relative;flex:1"></div>`,
+      mount(dom) {
+        const host = dom.querySelector('[data-spatial-three]');
         if (!host || !window.THREE) return null;
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
-        camera.position.set(0, 0, 5.2);
+        camera.position.set(0, 0, 5.0);
 
         const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         host.appendChild(renderer.domElement);
 
         const group = new THREE.Group();
-        // Núcleo Icosaedro holográfico monocromático titânio
-        const coreGeo = new THREE.IcosahedronGeometry(1.2, 2);
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.80 });
+        const coreGeo = new THREE.IcosahedronGeometry(1.15, 2);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.85 });
         const coreMesh = new THREE.Mesh(coreGeo, coreMat);
         group.add(coreMesh);
 
-        // Anel orbital de titânio acetinado
-        const ringGeo = new THREE.TorusGeometry(1.7, 0.02, 16, 100);
+        const ringGeo = new THREE.TorusGeometry(1.65, 0.02, 16, 100);
         const ringMat = new THREE.MeshBasicMaterial({ color: 0xa1a1aa, transparent: true, opacity: 0.65 });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
         ringMesh.rotation.x = Math.PI * 0.45;
         group.add(ringMesh);
-
-        // Anel grafite escuro
-        const ring2Geo = new THREE.TorusGeometry(2.0, 0.015, 16, 100);
-        const ring2Mat = new THREE.MeshBasicMaterial({ color: 0x52525b, transparent: true, opacity: 0.55 });
-        const ring2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
-        ring2Mesh.rotation.y = Math.PI * 0.35;
-        group.add(ring2Mesh);
 
         scene.add(group);
 
@@ -502,14 +439,12 @@
           group.rotation.y += 0.005;
           coreMesh.rotation.x += 0.003;
           ringMesh.rotation.z += 0.004;
-          ring2Mesh.rotation.x += 0.002;
           renderer.render(scene, camera);
           reqId = requestAnimationFrame(animate);
         };
 
         resize();
         animate();
-
         window.addEventListener('resize', resize);
         setTimeout(resize, 80);
 
@@ -526,177 +461,313 @@
     };
   }
 
-  const COMPONENT_REGISTRY = {
-    'hero_card': buildHeroCard,
-    'narrative': buildHeroCard,
-    'metric_dock': buildMetricDock,
-    'echarts': buildECharts,
-    'relationship_map': buildRelationshipMap,
-    'power_triptych': buildRelationshipMap,
-    'three_view': buildThreeView
-  };
+  // BUILDER: CARD CONTENT (Sem duplicar o título no corpo)
+  function buildCardContent(type, p) {
+    const summary = p.summary || p.content || '';
+    const tags = (p.tags || []).map(t => `<span class="spatial-tag">${esc(t)}</span>`).join('');
+    const bullets = (p.bullets || []).map(b => `
+      <div class="spatial-bullet">
+        <span class="spatial-bullet-dot">▸</span>
+        <span>${esc(b)}</span>
+      </div>
+    `).join('');
+
+    const metrics = (p.metrics || []).slice(0, 4);
+    const metricsHtml = metrics.length ? `
+      <div class="spatial-metrics-grid">
+        ${metrics.map(m => `
+          <div class="spatial-metric-box">
+            <span class="spatial-metric-label">${esc(m.label || 'KPI')}</span>
+            <span class="spatial-metric-val">${esc(m.value || '--')}</span>
+            <span class="spatial-metric-trend">${esc(m.trend || '● Nominal')}</span>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    let visualBuilder = null;
+    if (type === 'chart' || type === 'echarts' || p.options || p.option || p.data) {
+      const opts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data;
+      visualBuilder = buildECharts(opts, 200);
+    } else if (type === 'three_view' || type === '3d') {
+      visualBuilder = buildThreeView(200);
+    }
+
+    const html = `
+      ${summary ? `<p class="spatial-scene-copy">${esc(summary)}</p>` : ''}
+      ${tags ? `<div class="spatial-tags">${tags}</div>` : ''}
+      ${bullets ? `<div class="spatial-bullets">${bullets}</div>` : ''}
+      ${visualBuilder ? visualBuilder.html : ''}
+      ${metricsHtml}
+    `;
+
+    return {
+      html,
+      mount(dom) {
+        if (visualBuilder && typeof visualBuilder.mount === 'function') {
+          return visualBuilder.mount(dom);
+        }
+        return null;
+      }
+    };
+  }
 
   const engine = {
-    initSpatialWorkspace(payload) {
+    // Adiciona um card novo sobre o canvas preservando integralmente os existentes
+    addSpatialComponent(arg1, arg2, arg3, arg4) {
       injectStyles();
-      state.workspace = payload || {};
-      state.components.clear();
+      const canvas = getCanvas();
+      if (!canvas) return false;
 
-      window.isPresentationActive = true;
-      const stageContainer = document.getElementById('presentation-stage');
-      const mount = document.getElementById('presentation-content-area');
-      const titleEl = document.getElementById('presentation-header-title');
-
-      if (titleEl && payload.title) {
-        titleEl.textContent = payload.title.toUpperCase();
-      }
-
-      if (mount) {
-        mount.innerHTML = '';
-        mount.className = 'spatial-stage';
-        const stage = document.createElement('div');
-        stage.className = 'spatial-workspace';
-        mount.appendChild(stage);
-      }
-
-      if (stageContainer) {
-        stageContainer.classList.remove('opacity-0', 'pointer-events-none');
-        stageContainer.classList.add('opacity-100', 'pointer-events-auto');
-      }
-
-      // Oculta suavemente o vórtice central para dar lugar ao palco limpo
-      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container') || document.getElementById('vortex-container');
-      if (vortex) {
-        vortex.style.transition = 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
-        vortex.style.opacity = '0';
-        vortex.style.transform = 'scale(0.85)';
-        vortex.style.pointerEvents = 'none';
-      }
-      const visStage = document.getElementById('jarvis-visual-stage');
-      if (visStage) {
-        visStage.classList.add('hidden', 'opacity-0');
-        visStage.innerHTML = '';
-      }
-      if (typeof closeRightSidebar === 'function') {
-        closeRightSidebar();
-      }
-
-      let rawComps = payload.components;
-      if (!rawComps && Array.isArray(payload.scenes) && payload.scenes.length > 0) {
-        rawComps = payload.scenes[0].components;
-        if (!payload.title && payload.scenes[0].title) {
-          payload.title = payload.scenes[0].title;
-        }
-      }
-      const comps = Array.isArray(rawComps) ? rawComps : (rawComps && typeof rawComps === 'object' ? Object.values(rawComps) : []);
-      comps.forEach((c, idx) => {
-        this.addSpatialComponent(c.id || ('comp_' + idx), c.type || 'hero_card', c.position, c.props || c, idx);
-      });
-
-      return true;
-    },
-
-    createWorkspace(title = 'Spatial Workspace') {
-      return this.initSpatialWorkspace({ title, components: [] });
-    },
-
-    compose(payload) {
-      return this.initSpatialWorkspace(payload);
-    },
-
-    addSpatialComponent(arg1, arg2, arg3, arg4, arg5 = 0) {
-      let id, type, position, props, index;
+      let id, type, position, props;
       if (typeof arg1 === 'object' && arg1 !== null) {
-        id = arg1.id || arg1.component_id || ('comp_' + state.components.size);
-        type = arg1.type || 'hero_card';
+        id = arg1.id || arg1.component_id || ('card_' + Date.now() + '_' + state.components.size);
+        type = (arg1.type || 'narrative').toLowerCase();
         position = arg1.position || {};
         props = arg1.props || arg1;
-        index = arg2 || state.components.size;
       } else {
-        id = arg1 || ('comp_' + state.components.size);
-        type = arg2 || 'hero_card';
+        id = arg1 || ('card_' + Date.now() + '_' + state.components.size);
+        type = (arg2 || 'narrative').toLowerCase();
         position = arg3 || {};
         props = arg4 || {};
-        index = arg5 || state.components.size;
       }
 
-      const stage = document.querySelector('.spatial-workspace');
-      if (!stage) return false;
+      // Se o componente já existe, atualiza suavemente sem duplicar
+      if (state.components.has(id)) {
+        return this.updateSpatialComponent(id, { props, position });
+      }
 
-      const compData = { id, type, position: position || {}, props: props || {} };
-      const geom = geometry(compData, index);
+      const index = state.components.size;
+      const geom = resolvePosition(position, index);
 
-      const el = document.createElement('div');
-      el.className = 'spatial-el entering';
-      el.id = `spatial-comp-${id}`;
-      el.style.left = `${geom.x}%`;
-      el.style.top = `${geom.y}%`;
-      el.style.width = `${geom.width}%`;
-      el.style.height = `${geom.height}%`;
-      el.style.zIndex = geom.zIndex;
+      const wrapper = document.createElement('div');
+      wrapper.className = 'spatial-card-wrapper entering';
+      wrapper.id = `spatial-comp-${id}`;
+      wrapper.style.left = geom.left;
+      wrapper.style.top = geom.top;
+      wrapper.style.width = geom.width;
+      if (geom.height !== 'auto') wrapper.style.height = geom.height;
+      if (geom.maxHeight) wrapper.style.maxHeight = geom.maxHeight;
 
-      const builder = COMPONENT_REGISTRY[type] || buildHeroCard;
-      const built = builder(compData);
-      el.innerHTML = built.html;
+      const built = buildCardContent(type, props);
 
-      stage.appendChild(el);
+      const cardKicker = props.kicker || props.subtitle || 'INTELIGÊNCIA // SPATIAL HUD';
+      const cardTitle = props.title || 'CARD DE ANÁLISE';
 
+      wrapper.innerHTML = `
+        <div class="spatial-card-surface">
+          <div class="spatial-card-header">
+            <div class="spatial-card-title-group">
+              <span class="spatial-card-dot"></span>
+              <div>
+                <div class="spatial-card-kicker">${esc(cardKicker)}</div>
+                <div class="spatial-card-title">${esc(cardTitle)}</div>
+              </div>
+            </div>
+            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.removeSpatialComponent('${esc(id)}')" class="spatial-card-close-btn" title="Fechar este card (Esc fecha todos)">
+              ✕
+            </button>
+          </div>
+          <div class="spatial-card-body">
+            ${built.html}
+          </div>
+        </div>
+      `;
+
+      canvas.appendChild(wrapper);
+
+      // Mount de gráficos interativos ou WebGL
       let mountResult = null;
       if (typeof built.mount === 'function') {
-        mountResult = built.mount(el);
+        mountResult = built.mount(wrapper);
+        if (mountResult) state.activeInstances.set(id, mountResult);
       }
 
-      state.components.set(id, { dom: el, data: compData, mountResult });
+      state.components.set(id, { dom: wrapper, type, position, props, mountResult });
 
+      // Animação de entrada fluida (spring entrance)
       requestAnimationFrame(() => {
-        el.classList.remove('entering');
+        wrapper.classList.remove('entering');
       });
 
+      updateGlobalActionsBadge();
+      window.isPresentationActive = true;
       return true;
     },
 
-    clearSpatialWorkspace() {
-      state.components.forEach(record => {
+    // Destaque luminoso quando o JARVIS estiver narrando sobre esse card
+    highlightSpatialComponent(id, duration = 3.0) {
+      const record = state.components.get(id);
+      if (!record || !record.dom) return false;
+
+      record.dom.classList.add('highlighted');
+      setTimeout(() => {
+        if (record.dom) record.dom.classList.remove('highlighted');
+      }, duration * 1000);
+      return true;
+    },
+
+    // Atualização pontual do conteúdo ou dados de um card existente
+    updateSpatialComponent(id, updates, animate = true) {
+      const record = state.components.get(id);
+      if (!record || !record.dom) return false;
+
+      if (updates.props) {
+        Object.assign(record.props, updates.props);
+      }
+      if (updates.position) {
+        const geom = resolvePosition(updates.position, 0);
+        record.dom.style.left = geom.left;
+        record.dom.style.top = geom.top;
+        if (geom.width) record.dom.style.width = geom.width;
+      }
+
+      // Re-renderiza o corpo do card mantendo o DOM base
+      const bodyEl = record.dom.querySelector('.spatial-card-body');
+      if (bodyEl) {
         if (record.mountResult && typeof record.mountResult.cleanup === 'function') {
           record.mountResult.cleanup();
         }
-        if (record.dom) record.dom.remove();
+        const built = buildCardContent(record.type, record.props);
+        bodyEl.innerHTML = built.html;
+        if (typeof built.mount === 'function') {
+          const res = built.mount(record.dom);
+          if (res) state.activeInstances.set(id, res);
+        }
+      }
+
+      if (animate) {
+        this.highlightSpatialComponent(id, 1.5);
+      }
+      return true;
+    },
+
+    // Remove um card específico individualmente com animação suave
+    removeSpatialComponent(id) {
+      const record = state.components.get(id);
+      if (!record) return false;
+
+      if (record.mountResult && typeof record.mountResult.cleanup === 'function') {
+        record.mountResult.cleanup();
+      }
+      state.activeInstances.delete(id);
+
+      if (record.dom) {
+        record.dom.classList.add('leaving');
+        setTimeout(() => {
+          if (record.dom) record.dom.remove();
+        }, 500);
+      }
+
+      state.components.delete(id);
+      updateGlobalActionsBadge();
+      if (state.components.size === 0) {
+        window.isPresentationActive = false;
+      }
+      return true;
+    },
+
+    // Limpa todos os cards do canvas de forma orquestrada
+    clearSpatialWorkspace() {
+      state.activeInstances.forEach(inst => {
+        try {
+          if (typeof inst.cleanup === 'function') inst.cleanup();
+        } catch (e) {}
+      });
+      state.activeInstances.clear();
+
+      state.components.forEach(record => {
+        if (record.dom) {
+          record.dom.classList.add('leaving');
+          setTimeout(() => {
+            if (record.dom) record.dom.remove();
+          }, 450);
+        }
       });
       state.components.clear();
 
+      updateGlobalActionsBadge();
       window.isPresentationActive = false;
-      const stageContainer = document.getElementById('presentation-stage');
-      if (stageContainer) {
-        stageContainer.classList.remove('opacity-100', 'pointer-events-auto');
-        stageContainer.classList.add('opacity-0', 'pointer-events-none');
-      }
-
-      // Restaura o vórtice central do J.A.R.V.I.S.
-      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container') || document.getElementById('vortex-container');
-      if (vortex) {
-        vortex.style.opacity = '1';
-        vortex.style.transform = 'scale(1)';
-        vortex.style.pointerEvents = 'auto';
-      }
+      return true;
     },
 
     close() {
       this.clearSpatialWorkspace();
     },
 
+    // Inicia ou compõe um conjunto de cards
+    compose(payload) {
+      this.clearSpatialWorkspace();
+      const comps = payload.components || [];
+      comps.forEach((c, idx) => {
+        this.addSpatialComponent(c.id || ('card_' + idx), c.type || 'narrative', c.position, c.props || c);
+      });
+      return true;
+    },
+
+    initSpatialWorkspace(payload) {
+      return this.compose(payload || {});
+    },
+
+    createWorkspace(title = 'Spatial Workspace') {
+      this.clearSpatialWorkspace();
+      state.title = title;
+      return true;
+    },
+
+    // Suporte ao start de apresentações progressivas ou sequenciais
     start(script) {
-      return this.initSpatialWorkspace(script);
+      this.clearSpatialWorkspace();
+      const scenes = script.scenes || [];
+      if (scenes.length === 0) {
+        this.addSpatialComponent({
+          id: 'card_main',
+          type: 'narrative',
+          props: {
+            title: script.title || 'Apresentação Executiva',
+            subtitle: script.subtitle || 'STARK HUD',
+            content: script.content || 'Inteligência visual ativada.'
+          }
+        });
+        return true;
+      }
+
+      // Adiciona a primeira cena como Card 1
+      const sc1 = scenes[0];
+      this.addSpatialComponent({
+        id: sc1.scene_id || 'scene_1',
+        type: sc1.component_type || 'narrative',
+        props: sc1
+      });
+
+      // Se houver cena 2, adiciona ao lado após um breve intervalo ou sincronizado
+      if (scenes.length > 1) {
+        state.sceneQueue = scenes.slice(1);
+        state.sceneIndex = 1;
+      }
+      return true;
+    },
+
+    next() {
+      if (state.sceneQueue && state.sceneQueue.length > 0) {
+        const nextScene = state.sceneQueue.shift();
+        this.addSpatialComponent({
+          id: nextScene.scene_id || ('scene_' + (++state.sceneIndex)),
+          type: nextScene.component_type || 'narrative',
+          props: nextScene
+        });
+      }
     },
 
     isOpen() {
-      return Boolean(window.isPresentationActive);
+      return state.components.size > 0;
     }
   };
 
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape' && engine.isOpen()) {
-        engine.close();
+        engine.clearSpatialWorkspace();
       }
     });
     window.JarvisPresentationEngine = engine;

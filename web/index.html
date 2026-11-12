@@ -3,7 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>J.A.R.V.I.S. High-Tech Interface - Stark HUD</title>
+    <title>J.A.R.V.I.S. High-Tech Interface - Stark HUD</title>
+  
+  <!-- DESKTOP STANDALONE SHIELD: Neutraliza Web Speech API no QtWebEngine para prevenir crash do Chromium Mojo -->
+  <script>
+    (function() {
+      const isDesktop = (
+        navigator.userAgent.includes('QtWebEngine') || 
+        window.__JARVIS_DESKTOP_STANDALONE === true || 
+        location.search.includes('desktop') || 
+        location.hostname === '127.0.0.1' || 
+        location.hostname === 'localhost'
+      );
+      if (isDesktop) {
+        window.__JARVIS_DESKTOP_STANDALONE = true;
+        try {
+          Object.defineProperty(window, 'SpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+          Object.defineProperty(window, 'webkitSpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            delete Window.prototype.SpeechRecognition;
+            delete Window.prototype.webkitSpeechRecognition;
+          }
+        } catch(e) {}
+      }
+    })();
+  </script>
   
   <!-- PWA & Mobile Web App Meta Tags -->
   <meta name="theme-color" content="#00f0ff">
@@ -1253,6 +1277,9 @@
 
       
 
+      <!-- JARVIS PRESENTATION DECK (CARDS EM CIMA DA TELA PADRÃO, SOBRE O VÓRTICE) -->
+      <div id="jarvis-presentation-deck" class="w-full max-w-4xl mx-auto mb-4 hidden opacity-0 scale-95 spring-trans z-30 pointer-events-auto"></div>
+
       <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
 
       <!-- WIDGET CARD CUSTOMIZADO DINÂMICO -->
@@ -1322,8 +1349,19 @@
     </div>
   </main>
 
+  <!-- ORGANIC SPATIAL WORKSPACE CANVAS (CARDS LIVRES E CUMULATIVOS SOBRE A TELA PADRÃO) -->
+  <div id="jarvis-spatial-canvas" class="fixed left-20 right-6 top-14 bottom-24 z-30 pointer-events-none select-none">
+    <!-- Global Clear Action Badge (visível apenas quando houver cards ativos) -->
+    <div id="spatial-canvas-actions" class="absolute right-4 top-2 pointer-events-auto hidden transition-opacity duration-300">
+      <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.clearSpatialWorkspace()" class="px-3.5 py-1 rounded-full bg-zinc-950/85 hover:bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-zinc-300 hover:text-white text-[10px] font-mono-code font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-lg active:scale-95">
+        <span>✕</span>
+        <span>LIMPAR PALCO (ESC)</span>
+      </button>
+    </div>
+  </div>
+
   <!-- SEAMLESS SPATIAL WORKSPACE STAGE (OCUPA O ESPAÇO CENTRAL SEM JANELA EXTRA) -->
-  <div id="presentation-stage" class="absolute left-20 lg:left-24 right-6 lg:right-8 top-12 bottom-20 z-30 pointer-events-none opacity-0 transition-all duration-500 ease-out overflow-hidden flex flex-col">
+  <div id="presentation-stage" class="hidden pointer-events-none opacity-0 select-none">
     <!-- Discrete Top Spatial Bar - Kuro Black Style -->
     <div id="presentation-stage-bar" class="w-full flex items-center justify-between pb-2 mb-1 border-b border-white/10 pointer-events-auto shrink-0 select-none">
       <div class="flex items-center space-x-2.5">
@@ -2260,10 +2298,7 @@
       let targetCy = height / 2 - 20;
       let targetScale = 1.0;
       let targetAlpha = 1.0;
-      if (window.isPresentationActive) {
-        targetAlpha = 0.0;
-        targetScale = 0.0;
-      } else if (isPresOpen) {
+      if (isPresOpen) {
         targetCx = width - 180;
         targetCy = 85;
         targetScale = 0.35;
@@ -5688,7 +5723,7 @@
     }
 
     function initSpeechEngine() {
-      if (window.__JARVIS_DESKTOP_STANDALONE) {
+      if (window.__JARVIS_DESKTOP_STANDALONE || navigator.userAgent.includes('QtWebEngine') || location.search.includes('desktop') || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
         console.log("[J.A.R.V.I.S. Desktop] Motor de Voz Nativo ativo via Python + Whisper. Web Speech API suprimida para estabilidade.");
         return;
       }

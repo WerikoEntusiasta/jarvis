@@ -5428,6 +5428,7 @@
         console.log("[SpeechEngine] Ambiente QtWebEngine detectado: escuta contínua via nuvem desativada para estabilidade nativa.");
         return;
       }
+      if (window.__JARVIS_DESKTOP_STANDALONE || navigator.userAgent.includes('QtWebEngine') || location.hostname === '127.0.0.1') return;
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
 

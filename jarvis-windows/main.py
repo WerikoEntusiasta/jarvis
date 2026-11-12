@@ -204,7 +204,7 @@ def main():
         "--ignore-certificate-errors "
         "--allow-running-insecure-content "
         "--disable-web-security "
-        "--use-angle=d3d11 "
+        "--disable-features=SpeechRecognition "
         "--enable-gpu-rasterization"
     )
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)

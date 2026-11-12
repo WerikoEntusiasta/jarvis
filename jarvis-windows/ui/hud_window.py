@@ -22,7 +22,7 @@ except ImportError:
 
 def _log(msg):
     try:
-        log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "jarvis_windows.log")
+        log_file = "C:/JARVIS/jarvis_windows.log"
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
     except Exception:
@@ -146,10 +146,12 @@ class JarvisHUDWindow(QMainWindow):
         bootstrap_script.setSourceCode("""
             window.__JARVIS_DESKTOP_STANDALONE = true;
             try {
-                delete window.SpeechRecognition;
-                delete window.webkitSpeechRecognition;
-                window.SpeechRecognition = undefined;
-                window.webkitSpeechRecognition = undefined;
+                Object.defineProperty(window, 'SpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+                Object.defineProperty(window, 'webkitSpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+                if (typeof Window !== 'undefined' && Window.prototype) {
+                    delete Window.prototype.SpeechRecognition;
+                    delete Window.prototype.webkitSpeechRecognition;
+                }
                 localStorage.setItem('jarvis_session_token', '8145760953033109');
                 localStorage.setItem('jarvis_client_id', 'desktop_windows_standalone');
             } catch(e) {}
@@ -184,6 +186,7 @@ class JarvisHUDWindow(QMainWindow):
         self.web_view.loadStarted.connect(lambda: _log("web_view loadStarted"))
         self.web_view.loadProgress.connect(lambda p: _log(f"web_view progresso: {p}%") if p in [25, 50, 75, 100] else None)
         self.web_view.loadFinished.connect(self._on_load_finished)
+        self.web_view.page().renderProcessTerminated.connect(self._on_render_terminated)
 
         target_url = QUrl(f"{CORE_URL}/?client=desktop_windows_standalone")
         _log(f"Carregando URL no WebEngine: {target_url.toString()}")
@@ -232,6 +235,10 @@ class JarvisHUDWindow(QMainWindow):
             self.showNormal()
         else:
             self.hide()
+
+    def _on_render_terminated(self, termination_status, exit_code):
+        _log(f"[ALERTA CRITICO] Render process terminado: status={termination_status}, exit_code={exit_code}. Reiniciando HUD...")
+        QTimer.singleShot(1000, self.web_view.reload)
 
     def _on_load_finished(self, ok):
         _log(f"web_view loadFinished ok={ok}, url={self.web_view.url().toString()}")

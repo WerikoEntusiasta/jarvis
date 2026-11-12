@@ -50,7 +50,7 @@ SILENCE_BLOCKS = int(os.environ.get("JARVIS_SILENCE_BLOCKS", "9"))  # 9 x 80 ms 
 TTS_ENGINE = os.environ.get("JARVIS_TTS_MODE", "edge").lower()
 NATIVE_AUDIO = os.environ.get("JARVIS_NATIVE_AUDIO", "0") == "1"
 BARGE_IN_VOICE = os.environ.get("JARVIS_BARGE_IN_VOICE", "0") == "1"  # exige fones (evita eco do alto-falante)
-WAKE_WORD_THRESHOLD = float(os.environ.get("JARVIS_WAKE_WORD_THRESHOLD", "0.30"))
+WAKE_WORD_THRESHOLD = float(os.environ.get("JARVIS_WAKE_WORD_THRESHOLD", "0.65"))
 WAKE_WORD_MODEL_NAME = os.environ.get("JARVIS_WAKE_WORD_MODEL", "hey_jarvis_v0.1.onnx")
 
 _CURRENT_VOICE_ENGINE: Optional["JarvisVoiceEngine"] = None
@@ -246,6 +246,8 @@ class JarvisVoiceEngine(threading.Thread):
         self._noise_floor = 120.0
         self._barge_hits = 0
         self._turn_id = 0  # invalida turnos antigos quando o usuário interrompe
+        self._wake_hits = 0
+        self._last_wake_time = 0.0
 
         self.speaker = _Speaker()
         self.history = deque(maxlen=8)
@@ -273,31 +275,61 @@ class JarvisVoiceEngine(threading.Thread):
             from openwakeword.model import Model
 
             models_search_dirs = []
-            if hasattr(sys, "_MEIPASS"):
-                models_search_dirs.append(os.path.join(sys._MEIPASS, "openwakeword", "resources", "models"))
-            if hasattr(sys, "executable"):
-                models_search_dirs.append(os.path.join(os.path.dirname(sys.executable), "_internal", "openwakeword", "resources", "models"))
+            if hasattr(sys, '_MEIPASS'):
+                models_search_dirs.append(os.path.join(sys._MEIPASS, 'openwakeword', 'resources', 'models'))
+            if hasattr(sys, 'executable'):
+                models_search_dirs.append(os.path.join(os.path.dirname(sys.executable), '_internal', 'openwakeword', 'resources', 'models'))
             try:
-                models_search_dirs.append(os.path.join(os.path.dirname(openwakeword.__file__), "resources", "models"))
+                models_search_dirs.append(os.path.join(os.path.dirname(openwakeword.__file__), 'resources', 'models'))
             except Exception:
                 pass
-            models_search_dirs.append(r"C:\Users\werik\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\openwakeword\resources\models")
+            models_search_dirs.append(os.path.join(r"C:\Users\werik\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\openwakeword\resources\models"))
 
             model_file = None
+            melspec_file = None
+            embedding_file = None
+
             for d in models_search_dirs:
-                cand = os.path.join(d, "hey_jarvis_v0.1.onnx")
-                if os.path.exists(cand):
-                    model_file = cand
-                    break
+                if not model_file:
+                    cand = os.path.join(d, 'hey_jarvis_v0.1.onnx')
+                    if os.path.exists(cand):
+                        model_file = cand
+                if not melspec_file:
+                    cand = os.path.join(d, 'melspectrogram.onnx')
+                    if os.path.exists(cand):
+                        melspec_file = cand
+                if not embedding_file:
+                    cand = os.path.join(d, 'embedding_model.onnx')
+                    if os.path.exists(cand):
+                        embedding_file = cand
+
+            kwargs = {'inference_framework': 'onnx'}
+            if melspec_file:
+                kwargs['melspec_model_path'] = melspec_file
+            if embedding_file:
+                kwargs['embedding_model_path'] = embedding_file
 
             if model_file:
-                self.wake_model = Model(wakeword_models=[model_file], inference_framework="onnx")
-                print(f"[VoiceEngine] ⚡ Wake Word 'hey_jarvis_v0.1' carregado com sucesso via {model_file}")
+                kwargs['wakeword_models'] = [model_file]
             else:
-                self.wake_model = Model(wakeword_models=["hey_jarvis_v0.1"], inference_framework="onnx")
-                print("[VoiceEngine] ⚡ Wake Word 'hey_jarvis_v0.1' carregado com sucesso (ONNX padrão).")
+                kwargs['wakeword_models'] = ['hey_jarvis_v0.1']
+
+            self.wake_model = Model(**kwargs)
+            print(f"[VoiceEngine] Wake Word hey_jarvis_v0.1 carregado com sucesso via {model_file or 'padrao'}")
+            try:
+                from main import _log
+                _log(f"[VoiceEngine] Wake Word carregado com sucesso: {model_file}")
+            except Exception:
+                pass
         except BaseException as e:
-            print(f"[VoiceEngine] Aviso: Wake Word neural indisponível ({e}). Escuta por hotkey ativa.")
+            import traceback
+            tb = traceback.format_exc()
+            try:
+                from main import _log
+                _log(f"[VoiceEngine] Erro ao carregar OpenWakeWord: {e}\n{tb}")
+            except Exception:
+                pass
+            print(f"[VoiceEngine] Aviso: Wake Word neural indisponivel ({e}). Escuta por hotkey ativa.")
             self.wake_model = None
 
     def run(self):
@@ -358,15 +390,29 @@ class JarvisVoiceEngine(threading.Thread):
                 if self.wake_model is not None:
                     try:
                         scores = self.wake_model.predict(pcm16)
+                        now_ts = time.time()
                         for k, score in scores.items():
-                            if score >= self.wake_threshold:
-                                log_msg = f"[VoiceEngine] ⚡ Wake Word '{k}' detectado ({score:.2f} >= {self.wake_threshold:.2f})!"
+                            # Cooldown: evita re-disparo em eco nos 2.0s seguintes
+                            if now_ts - self._last_wake_time < 2.0:
+                                break
+                            
+                            # Confirmação robusta:
+                            # 1) Disparo com score muito alto (>= 0.75)
+                            # 2) Disparo se 2 blocos consecutivos atingirem o limiar (>= self.wake_threshold)
+                            if score >= 0.75 or (score >= self.wake_threshold and self._wake_hits >= 1):
+                                self._wake_hits = 0
+                                self._last_wake_time = now_ts
+                                log_msg = f"[VoiceEngine] ⚡ Wake Word '{k}' confirmado com confiança ({score:.2f} >= {self.wake_threshold:.2f})!"
                                 print(log_msg)
                                 logger.info(log_msg)
                                 if hasattr(self.wake_model, "reset"):
                                     self.wake_model.reset()
                                 self.trigger_manual_listen()
                                 break
+                            elif score >= self.wake_threshold:
+                                self._wake_hits += 1
+                            else:
+                                self._wake_hits = 0
                     except Exception as e:
                         logger.debug("Wake model: %s", e)
 
@@ -384,6 +430,12 @@ class JarvisVoiceEngine(threading.Thread):
                         return
 
                 now = time.time()
+                # Se não houve fala nenhuma após 4.0s do acionamento, aborta e volta ao repouso sem enviar silêncio à IA
+                if not self.has_spoken and (now - self.record_start_ts >= 4.0):
+                    print("[VoiceEngine] Nenhuma fala detectada após acionamento (4s). Cancelando gravação e voltando ao repouso.")
+                    self._end_conversation()
+                    return
+
                 if self.followup_mode and not self.has_spoken and now > self.followup_deadline:
                     print("[VoiceEngine] Janela de conversa encerrada sem fala. Voltando ao modo de espera.")
                     self._end_conversation()
@@ -431,7 +483,8 @@ class JarvisVoiceEngine(threading.Thread):
         self.recorded_frames = []
         self.followup_mode = False
         self.state = "PROCESSING"
-        if not frames:
+        if not frames or not self.has_spoken or len(frames) < 6:
+            print("[VoiceEngine] Áudio sem fala confirmada ou muito curto (<480ms). Descartado.")
             self.state = "WAKEWORD"
             return
         threading.Thread(target=self._process_turn_worker, args=(frames, self._turn_id), daemon=True, name="VoiceTurn").start()
@@ -460,13 +513,20 @@ class JarvisVoiceEngine(threading.Thread):
                     audio_for_llm = wav_bytes
                     text = ""
                 else:
-                    from stt_engine import transcribe_groq
+                    from stt_engine import transcribe_groq, clean_hallucinations
                     raw_text = transcribe_groq(wav_bytes)
-                    if not raw_text:
+                    if not raw_text or len(raw_text.strip()) < 2:
+                        return
+                    cleaned = clean_hallucinations(raw_text)
+                    if not cleaned:
+                        print(f"[VoiceEngine] Áudio descartado como ruído/alucinação ('{raw_text}')")
                         return
                     text = re.sub(
                         r"^\s*(?:(?:hey|ei|oi|olá|ola)\s+)?(?:jarvis|jarvez|jarvi|javis)\b\s*[,.:;!?-]*\s*",
-                        "", raw_text, flags=re.IGNORECASE).strip() or raw_text
+                        "", cleaned, flags=re.IGNORECASE).strip() or cleaned
+                    if not text or len(text.strip()) < 2:
+                        print("[VoiceEngine] Apenas nome detectado sem comando adicional. Retornando ao repouso.")
+                        return
                     print(f"[VoiceEngine] Transcrição ({time.time() - t_start:.2f}s): '{text}'")
                     if self.on_speech_recognized:
                         self.on_speech_recognized(text)

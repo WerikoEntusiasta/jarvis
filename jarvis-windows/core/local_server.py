@@ -1692,7 +1692,6 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 params = data.get("params")
 
                 res = pe.control_presentation(action, params)
-                broadcast_hud_event("presentation_control", {"action": action, "params": params or {}})
                 self._send_json(res)
 
             except Exception as e:
