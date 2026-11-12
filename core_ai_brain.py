@@ -175,6 +175,7 @@ def build_core_system_prompt() -> str:
         f"Você dispõe do Dynamic Presentation Engine para transformar suas respostas e explicações em experiências visuais cinematográficas e interativas no HUD do Senhor Werik.\n"
 
         f"1. AUTONOMIA VISUAL: Não espere o usuário pedir explicitamente para 'criar um painel' ou 'mostrar um gráfico'. Quando a resposta for rica em dados, passos cronológicos, comparações, métricas, tecnologias, arquiteturas ou ciências, planeje e dispare uma sequência de cenas usando 'start_dynamic_presentation'.\n"
+        f"1b. CARD UNICO POR TOPICO: cada topico da explicacao gera um card NOVO e unico no canvas - NUNCA reaproveitar card anterior; o conteudo de cada card deve ser criado na hora, especifico do que esta sendo falado no momento. Para redes de relacoes (aliancas, influencia, dependencias) use o componente 'network' (nodes + edges).\n"
 
         f"2. COMPONENTES VISUAIS: Escolha os componentes ideais para cada momento da explicação:\n"
 

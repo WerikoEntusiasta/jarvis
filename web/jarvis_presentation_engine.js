@@ -17,7 +17,8 @@
     components: new Map(),
     activeInstances: new Map(),
     sceneQueue: [],
-    sceneIndex: 0
+    sceneIndex: 0,
+    seq: 0
   };
 
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
@@ -88,6 +89,27 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+      }
+      .spatial-card-wrapper[data-type="network"] .spatial-card-dot,
+      .spatial-card-wrapper[data-type="graph"] .spatial-card-dot { background: #a78bfa; box-shadow: 0 0 8px #a78bfa; }
+      .spatial-card-wrapper[data-type="chart"] .spatial-card-dot { background: #34d399; box-shadow: 0 0 8px #34d399; }
+      .spatial-card-wrapper[data-type="table"] .spatial-card-dot { background: #facc15; box-shadow: 0 0 8px #facc15; }
+      .spatial-card-wrapper[data-type="diagram"] .spatial-card-dot { background: #fb923c; box-shadow: 0 0 8px #fb923c; }
+      .spatial-card-wrapper[data-type="comparison"] .spatial-card-dot { background: #f472b6; box-shadow: 0 0 8px #f472b6; }
+      .spatial-card-wrapper[data-type="conclusion"] .spatial-card-dot { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
+      .spatial-card-wrapper[data-type="metric_grid"] .spatial-card-dot { background: #22d3ee; box-shadow: 0 0 8px #22d3ee; }
+      .spatial-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+      .spatial-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(34, 211, 238, 0.45);
+        background: rgba(34, 211, 238, 0.10);
+        color: #67e8f9;
+        font-size: 10px;
+        font-family: monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
       .spatial-card-surface::before {
         content: '';
@@ -462,8 +484,52 @@
   }
 
   // BUILDER: CARD CONTENT (Sem duplicar o título no corpo)
+  // IDs unicos: cada card e criado na hora e NUNCA reaproveitado.
+  let _cardSeq = 0;
+  function uniqueId(base) {
+    _cardSeq += 1;
+    return (base || 'card') + '_' + Date.now() + '_' + _cardSeq;
+  }
+
+  // Grafo de relacoes (Cytoscape.js): nodes + edges
+  function buildCytoscapeNetwork(p, minHeight) {
+    const nodes = (p.nodes || p.vertices || []).map((n, i) => {
+      if (typeof n === 'string') return { data: { id: 'n' + i, label: n } };
+      return { data: { id: n.id || n.label || ('n' + i), label: n.label || n.id || ('n' + i), group: n.group || n.type || '' } };
+    });
+    const edges = (p.edges || p.links || p.connections || []).map((e, i) => {
+      if (typeof e === 'string') {
+        const parts = e.split('->');
+        return { data: { id: 'e' + i, source: (parts[0] || '').trim(), target: (parts[1] || '').trim() } };
+      }
+      return { data: { id: e.id || ('e' + i), source: e.source || e.from, target: e.target || e.to, label: e.label || e.relation || '' } };
+    });
+    const divId = 'cy_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    return {
+      html: `<div id="${divId}" style="width:100%;height:${minHeight}px;"></div>`,
+      mount(dom) {
+        if (!window.cytoscape) return null;
+        const el = dom.querySelector('#' + divId);
+        if (!el) return null;
+        const cy = window.cytoscape({
+          container: el,
+          elements: { nodes, edges },
+          style: [
+            { selector: 'node', style: { 'label': 'data(label)', 'color': '#e4e4e7', 'text-valign': 'bottom', 'text-margin-y': 6, 'text-wrap': 'wrap', 'text-max-width': 110, 'background-color': '#0ea5e9', 'border-color': '#22d3ee', 'border-width': 2, 'width': 32, 'height': 32, 'font-size': 11, 'font-family': 'monospace' } },
+            { selector: 'node:selected', style: { 'background-color': '#f472b6' } },
+            { selector: 'edge', style: { 'width': 2, 'line-color': '#38bdf8', 'target-arrow-color': '#38bdf8', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'label': 'data(label)', 'font-size': 9, 'color': '#a1a1aa', 'text-rotation': 'autorotate' } }
+          ],
+          layout: { name: 'cose', animate: true, animationDuration: 700, padding: 20 },
+          wheelSensitivity: 0.25
+        });
+        return { cleanup() { try { cy.destroy(); } catch (e) {} } };
+      }
+    };
+  }
+
   function buildCardContent(type, p) {
-    const summary = p.summary || p.content || '';
+    const cRaw = p.content;
+    const summary = p.summary || (cRaw && typeof cRaw === 'object' ? (cRaw.text || cRaw.summary || cRaw.heading || '') : (cRaw || ''));
     const tags = (p.tags || []).map(t => `<span class="spatial-tag">${esc(t)}</span>`).join('');
     const bullets = (p.bullets || []).map(b => `
       <div class="spatial-bullet">
@@ -486,15 +552,20 @@
     ` : '';
 
     let visualBuilder = null;
-    if (type === 'chart' || type === 'echarts' || p.options || p.option || p.data) {
+    if (type === 'network' || type === 'graph' || type === 'cytoscape') {
+      visualBuilder = buildCytoscapeNetwork(p, 220);
+    } else if (type === 'chart' || type === 'echarts' || p.options || p.option || p.data) {
       const opts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data;
       visualBuilder = buildECharts(opts, 200);
     } else if (type === 'three_view' || type === '3d') {
       visualBuilder = buildThreeView(200);
     }
 
+    const badgeList = (p.badges || (cRaw && typeof cRaw === 'object' ? cRaw.badges : null) || []);
+    const badgesHtml = badgeList.length ? `<div class="spatial-badges">${badgeList.map(b => `<span class="spatial-badge">${esc(b)}</span>`).join('')}</div>` : '';
     const html = `
       ${summary ? `<p class="spatial-scene-copy">${esc(summary)}</p>` : ''}
+      ${badgesHtml}
       ${tags ? `<div class="spatial-tags">${tags}</div>` : ''}
       ${bullets ? `<div class="spatial-bullets">${bullets}</div>` : ''}
       ${visualBuilder ? visualBuilder.html : ''}
@@ -537,11 +608,18 @@
         return this.updateSpatialComponent(id, { props, position });
       }
 
-      const index = state.components.size;
+      const index = state.seq++;
+      // Canvas vivo: maximo 4 cards - remove o mais antigo (nunca reaproveita)
+      while (state.components.size >= 4) {
+        const oldest = state.components.keys().next().value;
+        if (oldest === id) break;
+        this.removeSpatialComponent(oldest);
+      }
       const geom = resolvePosition(position, index);
 
       const wrapper = document.createElement('div');
       wrapper.className = 'spatial-card-wrapper entering';
+      wrapper.dataset.type = type;
       wrapper.id = `spatial-comp-${id}`;
       wrapper.style.left = geom.left;
       wrapper.style.top = geom.top;
@@ -586,9 +664,18 @@
       state.components.set(id, { dom: wrapper, type, position, props, mountResult });
 
       // Animação de entrada fluida (spring entrance)
-      requestAnimationFrame(() => {
+      // Animacao de entrada - GSAP quando disponivel (fallback CSS acima)
+      if (window.gsap) {
         wrapper.classList.remove('entering');
-      });
+        try {
+          window.gsap.fromTo(wrapper, { opacity: 0, y: 34, scale: 0.90, filter: 'blur(8px)' },
+            { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.6, ease: 'back.out(1.5)' });
+        } catch (e) {}
+      } else {
+        requestAnimationFrame(() => {
+          wrapper.classList.remove('entering');
+        });
+      }
 
       updateGlobalActionsBadge();
       window.isPresentationActive = true;
@@ -653,10 +740,17 @@
       state.activeInstances.delete(id);
 
       if (record.dom) {
-        record.dom.classList.add('leaving');
-        setTimeout(() => {
-          if (record.dom) record.dom.remove();
-        }, 500);
+        const dom = record.dom;
+        if (window.gsap) {
+          try {
+            window.gsap.to(dom, { opacity: 0, scale: 0.9, y: -18, duration: 0.4, ease: 'power2.in', onComplete: () => dom.remove() });
+          } catch (e) { dom.classList.add('leaving'); setTimeout(() => dom.remove(), 500); }
+        } else {
+          dom.classList.add('leaving');
+          setTimeout(() => {
+            if (dom) dom.remove();
+          }, 500);
+        }
       }
 
       state.components.delete(id);
@@ -735,7 +829,7 @@
       // Adiciona a primeira cena como Card 1
       const sc1 = scenes[0];
       this.addSpatialComponent({
-        id: sc1.scene_id || 'scene_1',
+        id: uniqueId(sc1.scene_id || 'scene'),
         type: sc1.component_type || 'narrative',
         props: sc1
       });
@@ -752,11 +846,46 @@
       if (state.sceneQueue && state.sceneQueue.length > 0) {
         const nextScene = state.sceneQueue.shift();
         this.addSpatialComponent({
-          id: nextScene.scene_id || ('scene_' + (++state.sceneIndex)),
+          id: uniqueId(nextScene.scene_id || 'scene'),
           type: nextScene.component_type || 'narrative',
           props: nextScene
         });
       }
+    },
+
+    // Cada cena recebida vira um card NOVO e unico no canvas.
+    // Nunca reaproveita card anterior - cada assunto tem seu proprio card.
+    renderCurrentScene(scene) {
+      if (!scene || typeof scene !== 'object') return false;
+      return this.addSpatialComponent({
+        id: uniqueId(scene.scene_id || 'scene'),
+        type: (scene.component_type || scene.type || 'narrative').toLowerCase(),
+        props: scene
+      });
+    },
+
+    // Controles de apresentacao (usados pelos eventos SSE do narrador)
+    togglePlayPause() {
+      state.paused = !state.paused;
+      return !state.paused;
+    },
+
+    prev() {
+      const ids = Array.from(state.components.keys());
+      if (ids.length) this.highlightSpatialComponent(ids[ids.length - 1], 2.5);
+      return true;
+    },
+
+    jumpTo(index) {
+      const ids = Array.from(state.components.keys());
+      const id = ids[Math.max(0, Math.min(index, ids.length - 1))];
+      if (id) this.highlightSpatialComponent(id, 3.0);
+      return !!id;
+    },
+
+    close() {
+      this.clearSpatialWorkspace();
+      return true;
     },
 
     isOpen() {

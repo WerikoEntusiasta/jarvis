@@ -69,7 +69,7 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
     valid_types = {
         "hologram_card", "video", "gallery", "chart", "table", 
         "map", "diagram", "comparison", "metric_grid", "conclusion",
-        "smart_canvas", "canvas"
+        "smart_canvas", "canvas", "network", "graph"
     }
 
     for idx, sc in enumerate(scenes):
@@ -79,21 +79,47 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
         if c_type not in valid_types:
             c_type = "hologram_card"
 
+        # Conteudo estruturado (dict) do modelo: distribui nos campos da cena
+        # em vez de serializar o dict como string (lixo no card).
+        raw_content = sc.get("content", "")
+        rich = raw_content if isinstance(raw_content, dict) else {}
+        if rich:
+            content_text = str(rich.get("text") or rich.get("summary") or rich.get("description") or rich.get("heading") or "")
+            bullets = sc.get("bullets") or rich.get("bullets") or []
+            badges = rich.get("badges") or []
+            metrics = sc.get("metrics") or rich.get("metrics") or []
+            nodes = sc.get("nodes") or rich.get("nodes") or []
+            edges = sc.get("edges") or sc.get("links") or rich.get("edges") or rich.get("links") or []
+            data = dict(sc.get("data") or {})
+            for k in ("chart_type", "series", "categories", "x_label", "y_label"):
+                if k in rich and k not in data:
+                    data[k] = rich[k]
+        else:
+            content_text = str(raw_content)
+            bullets = sc.get("bullets", [])
+            badges = []
+            metrics = sc.get("metrics", [])
+            nodes = sc.get("nodes", [])
+            edges = sc.get("edges", [])
+            data = sc.get("data", {})
+
         scene_obj = {
             "scene_id": str(sc.get("scene_id") or f"scene_{idx + 1}"),
-            "title": str(sc.get("title") or f"Cena {idx + 1}"),
-            "subtitle": str(sc.get("subtitle", "")),
+            "title": str(sc.get("title") or rich.get("heading") or f"Cena {idx + 1}"),
+            "subtitle": str(sc.get("subtitle") or rich.get("subtitle") or ""),
             "component_type": c_type,
-            "content": str(sc.get("content", "")),
+            "content": content_text,
             "duration_sec": float(sc.get("duration_sec", 0)),
-            "bullets": sc.get("bullets", []),
+            "bullets": bullets,
             "tags": sc.get("tags", []),
-            "metrics": sc.get("metrics", []),
-            "data": sc.get("data", {}),
+            "metrics": metrics,
+            "data": data,
             "media": sc.get("media", {}),
             "thumbnail": sc.get("thumbnail", ""),
             "caption": sc.get("caption", ""),
-            "nodes": sc.get("nodes", []),
+            "nodes": nodes,
+            "edges": edges,
+            "badges": badges,
             "headers": sc.get("headers", []),
             "rows": sc.get("rows", []),
             "item_a": sc.get("item_a", {}),
