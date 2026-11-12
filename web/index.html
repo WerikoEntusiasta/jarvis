@@ -63,6 +63,7 @@
   <script src="/echarts.min.js"></script>
   <script src="/three.min.js"></script>
   <script src="/jarvis_presentation_engine.js"></script>
+<script src="/qwen_live_voice.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -5826,6 +5827,22 @@
     // Botão de clique manual no microfone
     function manualMicToggle() {
       closeAnyOpenCard(true);
+      // CONVERSA AO VIVO (Qwen-Audio realtime): quando disponivel, o microfone
+      // fica aberto e a resposta chega falada em pt-BR (fala->fala). Sem ponte
+      // ou sem chave no .env, cai para o fluxo classico (gravar -> STT -> texto).
+      if (window.QwenLiveVoice && QwenLiveVoice.isActive()) {
+        QwenLiveVoice.stop();
+        return;
+      }
+      if (window.QwenLiveVoice && !isRecordingAudio) {
+        QwenLiveVoice.toggle().then(function (ok) {
+          if (!ok && !isRecordingAudio) {
+            isAwake = true;
+            startAudioRecording();
+          }
+        });
+        return;
+      }
       if (isRecordingAudio) {
         stopAudioRecordingAndSend();
       } else {

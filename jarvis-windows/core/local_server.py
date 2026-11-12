@@ -2418,6 +2418,15 @@ def start_local_server(port: int = LOCAL_PORT) -> bool:
     global _SERVER_INSTANCE, _SERVER_THREAD
 
 
+    # Conversa ao vivo (Qwen-Audio realtime): ponte WebSocket em 127.0.0.1:8087.
+    # Falha aqui nunca derruba o HUD - apenas desativa o modo fala->fala.
+    try:
+        from qwen_live_bridge import start_live_bridge
+        start_live_bridge()
+    except Exception as _exc_live:
+        print(f"[JarvisLocalServer] Ponte de conversa ao vivo indisponivel: {_exc_live}")
+
+
 
 
 

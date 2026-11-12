@@ -311,5 +311,138 @@ class TestConverseTurn(unittest.TestCase):
             self.assertFalse(asyncio.run(_run()))
 
 
+class TestLiveConversation(unittest.TestCase):
+    """Conversa ao vivo: streaming continuo com VAD no servidor."""
+
+    def _rodar(self, eventos, alimentar_pcm=None):
+        audios, estados, transcricoes, tools = [], [], [], []
+        ws = _FalsoWS(eventos)
+        stub = _StubWebsockets(ws)
+
+        async def _run():
+            from qwen_realtime import LiveConversation
+
+            conv = LiveConversation(
+                on_audio=lambda pcm: audios.append(pcm),
+                on_transcript=lambda papel, texto: transcricoes.append((papel, texto)),
+                on_state=lambda estado: estados.append(estado),
+                on_tool=lambda name, args: tools.append((name, args)),
+            )
+            with patch("qwen_realtime.websockets", stub):
+                await conv.start()
+                if alimentar_pcm:
+                    await conv.send_audio(alimentar_pcm)
+                # da tempo do recv consumir os eventos scriptados
+                for _ in range(30):
+                    await asyncio.sleep(0.01)
+                await conv.close()
+
+        asyncio.run(_run())
+        return ws, audios, estados, transcricoes, tools
+
+    def test_fluxo_fala_fala_com_transcricoes(self):
+        pcm24 = _pcm16(440, 0.3, 24000)
+        eventos = [
+            {"type": "session.created", "session": {"id": "s1"}},
+            {"type": "session.updated", "session": {"id": "s1"}},
+            {"type": "input_audio_buffer.speech_started"},
+            {"type": "conversation.item.input_audio_transcription.completed",
+             "transcript": "que horas sao?"},
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "response.audio_transcript.delta", "delta": "Sao dez."},
+            {"type": "response.audio.delta", "response_id": "r1",
+             "delta": base64.b64encode(pcm24).decode()},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ws, audios, estados, transcricoes, tools = self._rodar(
+            eventos, alimentar_pcm=b"\x01\x02" * 1600
+        )
+        tipos = [m["type"] for m in ws.enviados]
+        self.assertIn("session.update", tipos)
+        self.assertIn("input_audio_buffer.append", tipos)
+        # resposta falada chegou (24 kHz puro, sem reamostrar)
+        self.assertEqual(b"".join(audios), pcm24)
+        self.assertIn(("user", "que horas sao?"), transcricoes)
+        self.assertIn(("assistant", "Sao dez."), transcricoes)
+        self.assertIn("speaking", estados)
+        self.assertIn("listening", estados)
+        self.assertEqual(tools, [])
+
+    def test_turn_detection_configuravel(self):
+        eventos = [{"type": "session.created", "session": {"id": "s"}},
+                   {"type": "session.updated", "session": {"id": "s"}}]
+        ws, _, _, _, _ = self._rodar(eventos)
+        cfg = next(m for m in ws.enviados if m["type"] == "session.update")["session"]
+        self.assertEqual(cfg["turn_detection"], {"type": "server_vad"})
+
+    def test_barge_in_limpa_estado_para_interrupt(self):
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "response.audio.delta", "response_id": "r1",
+             "delta": base64.b64encode(_pcm16(440, 0.1, 24000)).decode()},
+            {"type": "input_audio_buffer.speech_started"},  # usuario falou por cima
+        ]
+        _, _, estados, _, _ = self._rodar(eventos)
+        self.assertIn("interrupt", estados)
+        self.assertGreater(estados.count("listening"), 0)
+
+    def test_function_call_na_conversa_roteia_para_agente(self):
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "response.function_call_arguments.done",
+             "call_id": "c1", "name": "executar",
+             "arguments": json.dumps({"instrucao": "aumentar volume"})},
+            {"type": "response.done", "response": {"status": "completed"}},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ws = _FalsoWS(eventos)
+        stub = _StubWebsockets(ws)
+        audios, estados, transcricoes, tools = [], [], [], []
+
+        async def _run():
+            from qwen_realtime import LiveConversation
+
+            conv = LiveConversation(
+                on_audio=lambda pcm: audios.append(pcm),
+                on_transcript=lambda papel, texto: transcricoes.append((papel, texto)),
+                on_state=lambda estado: estados.append(estado),
+                on_tool=lambda name, args: tools.append((name, args)),
+            )
+            with patch("qwen_realtime.websockets", stub), \
+                 patch("qwen_realtime._run_agent_sync", return_value="volume ajustado") as agente:
+                await conv.start()
+                await conv.send_audio(b"\x01\x02" * 1600)
+                for _ in range(50):
+                    await asyncio.sleep(0.01)
+                await conv.close()
+                return agente.called
+
+        chamado = asyncio.run(_run())
+        self.assertTrue(chamado)  # tool foi roteada para o agente MiMo
+        self.assertEqual(tools, [("executar", json.dumps({"instrucao": "aumentar volume"}))])
+        outputs = [m for m in ws.enviados
+                   if m.get("type") == "conversation.item.create"
+                   and m.get("item", {}).get("type") == "function_call_output"]
+        self.assertEqual(len(outputs), 1)
+        self.assertIn("thinking", estados)
+
+
+class TestBridge(unittest.TestCase):
+    def test_ponte_recusa_cliente_sem_chave(self):
+        import qwen_live_bridge as bridge
+
+        async def _run():
+            ws = _FalsoWS([])
+            handler = bridge._ClientBridge(ws)
+            with patch.dict(os.environ, {}, clear=True):
+                await handler.rodar()
+            return ws
+
+        ws = asyncio.run(_run())
+        erros = [m for m in ws.enviados if m.get("type") == "error"]
+        self.assertTrue(erros)
+        self.assertIn("QWEN_REALTIME_API_KEY", erros[0]["message"])
+
+
 if __name__ == "__main__":
     unittest.main()
