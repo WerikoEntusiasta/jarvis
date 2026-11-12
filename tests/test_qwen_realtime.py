@@ -1,0 +1,315 @@
+import asyncio
+import base64
+import json
+import os
+import unittest
+from unittest.mock import patch
+
+import numpy as np
+
+from qwen_realtime import (
+    AudioPipe,
+    QwenRealtimeSession,
+    build_function_call_output,
+    build_session_config,
+    converse_turn,
+    is_enabled,
+    resample_pcm16,
+    QWEN_AGENT_TOOLS,
+)
+
+
+def _pcm16(freq_hz: float, segundos: float, taxa: int = 16000) -> bytes:
+    t = np.linspace(0, segundos, int(taxa * segundos), endpoint=False)
+    onda = (0.4 * np.sin(2 * np.pi * freq_hz * t) * 32767).astype("<i2")
+    return onda.tobytes()
+
+
+class TestConfig(unittest.TestCase):
+    def test_is_enabled_exige_chave(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(is_enabled())
+        with patch.dict(os.environ, {"QWEN_REALTIME_API_KEY": "sk-teste"}, clear=True):
+            self.assertTrue(is_enabled())
+
+    def test_is_enabled_aceita_chaves_alternativas(self):
+        for var in ("CUBICSPACES_API_KEY", "DASHSCOPE_API_KEY"):
+            with patch.dict(os.environ, {var: "sk-teste"}, clear=True):
+                self.assertTrue(is_enabled(), var)
+
+    def test_session_config_voz_ptbr_e_tools(self):
+        with patch.dict(os.environ, {"QWEN_REALTIME_VOICE": "longanqian"}, clear=True):
+            cfg = build_session_config()
+        self.assertEqual(cfg["voice"], "longanqian")
+        self.assertIn("portugues do Brasil", cfg["instructions"])
+        self.assertIn("Senhor Werik", cfg["instructions"])
+        self.assertIsNone(cfg["turn_detection"])  # turno manual (VAD da esfera)
+        self.assertEqual(cfg["modalities"], ["text", "audio"])
+        self.assertEqual(cfg["tools"], QWEN_AGENT_TOOLS)
+
+    def test_tools_tem_raciocinar_e_executar(self):
+        nomes = [t["function"]["name"] for t in QWEN_AGENT_TOOLS]
+        self.assertEqual(nomes, ["raciocinar", "executar"])
+        for tool in QWEN_AGENT_TOOLS:
+            self.assertEqual(tool["type"], "function")
+            params = tool["function"]["parameters"]
+            self.assertEqual(params["type"], "object")
+            self.assertTrue(params["required"])
+
+
+class TestFunctionCallOutput(unittest.TestCase):
+    def test_output_e_json_string(self):
+        item = build_function_call_output("call-1", "resultado qualquer")
+        self.assertEqual(item["type"], "function_call_output")
+        self.assertEqual(item["call_id"], "call-1")
+        self.assertIsInstance(item["output"], str)
+        payload = json.loads(item["output"])
+        self.assertEqual(payload["resultado"], "resultado qualquer")
+
+
+class TestResample(unittest.TestCase):
+    def test_identidade_quando_taxas_iguais(self):
+        dados = b"\x01\x02\x03\x04"
+        self.assertEqual(resample_pcm16(dados, 16000, 16000), dados)
+
+    def test_vazio(self):
+        self.assertEqual(resample_pcm16(b"", 24000, 16000), b"")
+
+    def test_24k_para_16k_duracao_correta(self):
+        pcm = _pcm16(440, 1.0, 24000)  # 1 s @ 24 kHz
+        saida = resample_pcm16(pcm, 24000, 16000)
+        self.assertEqual(len(saida), 16000 * 2)  # 1 s @ 16 kHz s16le
+
+    def test_16k_para_24k_duracao_correta(self):
+        pcm = _pcm16(440, 1.0, 16000)
+        saida = resample_pcm16(pcm, 16000, 24000)
+        self.assertEqual(len(saida), 24000 * 2)
+
+    def test_preserva_amplitude_aproximada(self):
+        pcm = _pcm16(440, 0.5, 24000)
+        saida = resample_pcm16(pcm, 24000, 16000)
+        entrada = np.frombuffer(pcm, dtype="<i2").astype(np.float32)
+        saida_np = np.frombuffer(saida, dtype="<i2").astype(np.float32)
+        self.assertLess(
+            abs(float(np.abs(entrada).max()) - float(np.abs(saida_np).max())) / 32767.0,
+            0.05,
+        )
+
+    def test_bytes_impares_sao_truncados(self):
+        saida = resample_pcm16(b"\x01\x02\x03", 24000, 16000)
+        self.assertEqual(len(saida) % 2, 0)
+
+
+class TestAudioPipe(unittest.TestCase):
+    def test_envia_frames_com_pacing_e_eventos(self):
+        frames = []
+
+        async def _run():
+            pipe = AudioPipe(
+                lambda f: frames.append(f),
+                on_start=lambda: frames.append("start"),
+                on_stop=lambda: frames.append("stop"),
+            )
+            pipe.start()
+            pipe.submit("r1", b"\x01\x02" * 2000)  # ~4000 B -> 7 frames de 640
+            pipe.end_response()
+            await pipe.drain(timeout=5)
+
+        asyncio.run(_run())
+        self.assertEqual(frames[0], "start")
+        self.assertEqual(frames[-1], "stop")
+        blocos = [f for f in frames if isinstance(f, bytes)]
+        self.assertEqual(sum(len(b) for b in blocos), 4000)
+
+    def test_cancel_descarta_frames_da_resposta(self):
+        frames = []
+
+        async def _run():
+            pipe = AudioPipe(lambda f: frames.append(f))
+            pipe.start()
+            pipe.submit("r1", b"\x01\x02" * 2000)
+            pipe.cancel("r1")
+            pipe.end_response()
+            await pipe.drain(timeout=5)
+
+        asyncio.run(_run())
+        self.assertEqual(frames, [])
+
+
+class _FalsoWS:
+    """WebSocket falso: registra envios e devolve eventos scriptados."""
+
+    def __init__(self, eventos):
+        self.enviados = []
+        self._eventos = list(eventos)
+        self.closed = False
+
+    async def send(self, mensagem):
+        self.enviados.append(json.loads(mensagem))
+
+    async def __aiter__(self):
+        for evento in self._eventos:
+            yield json.dumps(evento)
+        # mantem a conexao "aberta" aguardando (o recv_task e cancelado no close)
+        await asyncio.Event().wait()
+
+    async def close(self):
+        self.closed = True
+
+
+class _StubWebsockets:
+    """Substitui o modulo websockets devolvendo um _FalsoWS no connect()."""
+
+    def __init__(self, ws):
+        self._ws = ws
+        self.url = None
+
+    async def connect(self, url, **kwargs):
+        self.url = url
+        return self._ws
+
+
+class TestSessaoProtocolo(unittest.TestCase):
+    def _rodar(self, eventos, audio, resposta_tool=None):
+        frames = []
+        ws = _FalsoWS(eventos)
+        stub = _StubWebsockets(ws)
+
+        async def _run():
+            pipe = AudioPipe(lambda f: frames.append(f))
+            sessao = QwenRealtimeSession("dev-1", pipe)
+            with patch("qwen_realtime.websockets", stub):
+                if resposta_tool is not None:
+                    with patch("qwen_realtime._run_agent_sync", return_value=resposta_tool):
+                        ok = await sessao.converse(audio, timeout=5)
+                else:
+                    ok = await sessao.converse(audio, timeout=5)
+            await sessao.close()
+            return ok
+
+        return asyncio.run(_run()), ws, frames
+
+    def test_turno_simples_texto_e_audio(self):
+        pcm24 = _pcm16(440, 0.5, 24000)
+        eventos = [
+            {"type": "session.created", "session": {"id": "s1"}},
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "response.audio.delta", "response_id": "r1",
+             "delta": base64.b64encode(pcm24).decode()},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ok, ws, frames = self._rodar(eventos, _pcm16(300, 0.3, 16000))
+        self.assertTrue(ok)
+        tipos = [m["type"] for m in ws.enviados]
+        self.assertIn("session.update", tipos)
+        self.assertIn("input_audio_buffer.append", tipos)
+        self.assertIn("input_audio_buffer.commit", tipos)
+        self.assertIn("response.create", tipos)
+        # audio de saida reamostrado 24k -> 16k
+        enviados = [f for f in frames if isinstance(f, bytes)]
+        self.assertGreater(sum(len(f) for f in enviados), 0)
+
+    def test_function_call_executa_agente_e_devolve_output(self):
+        pcm24 = _pcm16(440, 0.2, 24000)
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {
+                "type": "response.function_call_arguments.done",
+                "call_id": "c1",
+                "name": "raciocinar",
+                "arguments": json.dumps({"pergunta": "qual a raiz de 144?"}),
+            },
+            {"type": "response.done", "response": {"status": "completed"}},
+            {"type": "response.created", "response": {"id": "r2"}},
+            {"type": "response.audio.delta", "response_id": "r2",
+             "delta": base64.b64encode(pcm24).decode()},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ok, ws, _ = self._rodar(eventos, _pcm16(300, 0.2, 16000), resposta_tool="12")
+        self.assertTrue(ok)
+        outputs = [
+            m for m in ws.enviados
+            if m.get("type") == "conversation.item.create"
+            and m.get("item", {}).get("type") == "function_call_output"
+        ]
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(outputs[0]["item"]["call_id"], "c1")
+        self.assertEqual(json.loads(outputs[0]["item"]["output"])["resultado"], "12")
+        creates = [m for m in ws.enviados if m.get("type") == "response.create"]
+        self.assertEqual(len(creates), 2)  # um por turno + um apos a tool
+
+    def test_function_call_executar_usa_ferramentas(self):
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {
+                "type": "response.function_call_arguments.done",
+                "call_id": "c1",
+                "name": "executar",
+                "arguments": json.dumps({"instrucao": "aumentar volume"}),
+            },
+            {"type": "response.done", "response": {"status": "completed"}},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        capturas = {}
+
+        def _fake_agent(prompt, force_route, allow_tools):
+            capturas["prompt"] = prompt
+            capturas["force_route"] = force_route
+            capturas["allow_tools"] = allow_tools
+            return "volume ajustado"
+
+        with patch("qwen_realtime._run_agent_sync", side_effect=_fake_agent):
+            frames = []
+            ws = _FalsoWS(eventos)
+            stub = _StubWebsockets(ws)
+
+            async def _run():
+                pipe = AudioPipe(lambda f: frames.append(f))
+                sessao = QwenRealtimeSession("dev-1", pipe)
+                with patch("qwen_realtime.websockets", stub):
+                    ok = await sessao.converse(_pcm16(300, 0.1, 16000), timeout=5)
+                await sessao.close()
+                return ok
+
+            ok = asyncio.run(_run())
+
+        self.assertTrue(ok)
+        self.assertIn("EXECUCAO DE ACAO", capturas["prompt"])
+        self.assertIsNone(capturas["force_route"])  # rota fast (MiMo flash)
+        self.assertTrue(capturas["allow_tools"])  # com mimo_tools
+
+    def test_erro_do_servidor_falha_turno(self):
+        eventos = [{"type": "error", "error": {"message": "boom"}}]
+        ok, _, _ = self._rodar(eventos, _pcm16(300, 0.1, 16000))
+        self.assertFalse(ok)
+
+
+class TestConverseTurn(unittest.TestCase):
+    def test_sem_chave_retorna_false_sem_enviar(self):
+        enviados = []
+
+        async def _run():
+            return await converse_turn(
+                "dev-1", b"\x00\x00" * 100,
+                send_json=lambda p: enviados.append(p),
+                send_bin=lambda f: asyncio.sleep(0),
+            )
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(asyncio.run(_run()))
+        self.assertEqual(enviados, [])
+
+    def test_audio_vazio_retorna_false(self):
+        async def _run():
+            return await converse_turn(
+                "dev-1", b"",
+                send_json=lambda p: None,
+                send_bin=lambda f: asyncio.sleep(0),
+            )
+
+        with patch.dict(os.environ, {"QWEN_REALTIME_API_KEY": "sk"}, clear=True):
+            self.assertFalse(asyncio.run(_run()))
+
+
+if __name__ == "__main__":
+    unittest.main()
