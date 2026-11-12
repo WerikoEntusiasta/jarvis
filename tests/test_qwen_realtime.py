@@ -571,5 +571,79 @@ class TestBridge(unittest.TestCase):
         self.assertIn("QWEN_REALTIME_API_KEY", erros[0]["message"])
 
 
+class TestValidadorApresentacao(unittest.TestCase):
+    """Regressao: campos estruturados do content dict chegam ao HUD.
+
+    Bug real: o modelo manda table em {content:{columns,rows}} e comparison em
+    {content:{items}} - o validador so lia chaves de topo, entao tabelas e
+    comparacoes chegavam vazias no canvas.
+    """
+
+    def _validar(self, scenes):
+        from dynamic_presentation_engine import validate_presentation_script
+        return validate_presentation_script({"title": "T", "scenes": scenes})
+
+    def test_table_extraido_do_content_dict(self):
+        v = self._validar([{
+            "title": "Mercado", "component_type": "table",
+            "content": {"heading": "Taxas", "columns": ["Regiao", "Taxa"],
+                        "rows": [["EUA", "3.7"], ["Brasil", "7.8"]]}
+        }])
+        s = v["scenes"][0]
+        self.assertEqual(s["headers"], ["Regiao", "Taxa"])
+        self.assertEqual(len(s["rows"]), 2)
+        self.assertEqual(s["content"], "Taxas")
+
+    def test_comparison_items_extraido_do_content_dict(self):
+        v = self._validar([{
+            "title": "Desafios", "component_type": "comparison",
+            "content": {"heading": "Pro/con", "items": [
+                {"title": "Inflacao", "pro": "Politica", "con": "Pressao"}]}
+        }])
+        s = v["scenes"][0]
+        self.assertEqual(len(s["items"]), 1)
+        self.assertEqual(s["items"][0]["title"], "Inflacao")
+
+    def test_chart_data_preservado_como_opcoes_amigaveis(self):
+        v = self._validar([{
+            "title": "Temp", "component_type": "chart",
+            "content": {"chart_type": "line", "categories": ["06h", "09h"],
+                        "series": [{"name": "T", "data": [22, 25]}]}
+        }])
+        d = v["scenes"][0]["data"]
+        self.assertEqual(d["chart_type"], "line")
+        self.assertEqual(d["categories"], ["06h", "09h"])
+        self.assertEqual(d["series"][0]["data"], [22, 25])
+
+    def test_campos_de_topaindem_contam(self):
+        # Cenas antigas usavam chaves de topo - nao podem quebrar
+        v = self._validar([{
+            "title": "Old", "component_type": "table",
+            "headers": ["A"], "rows": [["1"]],
+            "content": "texto livre"
+        }])
+        s = v["scenes"][0]
+        self.assertEqual(s["headers"], ["A"])
+        self.assertEqual(s["rows"], [["1"]])
+        self.assertEqual(s["content"], "texto livre")
+
+    def test_toda_tool_schema_ainda_valido(self):
+        # Garante que a edicao da description nao quebrou o schema
+        import json
+        import mimo_tools
+        json.dumps(mimo_tools.TOOLS)
+        alvo = [t for t in mimo_tools.TOOLS
+                if t["function"]["name"] == "start_dynamic_presentation"]
+        self.assertEqual(len(alvo), 1)
+        # a orientacao de formatos fica na description do array "scenes"
+        scenes_desc = (alvo[0]["function"]["parameters"]
+                       .get("properties", {})
+                       .get("scenes", {})
+                       .get("description", ""))
+        self.assertIn("columns", scenes_desc)
+        self.assertIn("items", scenes_desc)
+        self.assertIn("chart_type", scenes_desc)
+
+
 if __name__ == "__main__":
     unittest.main()

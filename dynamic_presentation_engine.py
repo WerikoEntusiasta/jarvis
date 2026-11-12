@@ -103,6 +103,30 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
             edges = sc.get("edges", [])
             data = sc.get("data", {})
 
+        # Campos estruturados que o modelo manda DENTRO do content (dict):
+        # table (columns/rows), comparison (items), conclusion, map (markers)...
+        # Sem isto, tabelas/comparacoes chegam vazias ao HUD.
+        def _pick(*keys, default=None):
+            for src in (sc, rich):
+                for k in keys:
+                    v = src.get(k)
+                    if v not in (None, "", [], {}):
+                        return v
+            return default
+
+        headers = _pick("headers", "columns", default=[]) or []
+        rows = _pick("rows", default=[]) or []
+        items = _pick("items", default=[]) or []
+        markers = _pick("markers", default=[]) or []
+        conclusion = str(_pick("conclusion", default="") or "")
+        summary_points = _pick("summary_points", default=[]) or []
+        actions = _pick("actions", default=[]) or []
+        media = _pick("media", default={}) or {}
+        caption = str(_pick("caption", default="") or "")
+        thumbnail = str(_pick("thumbnail", default="") or "")
+        item_a = _pick("item_a", default={}) or {}
+        item_b = _pick("item_b", default={}) or {}
+
         scene_obj = {
             "scene_id": str(sc.get("scene_id") or f"scene_{idx + 1}"),
             "title": str(sc.get("title") or rich.get("heading") or f"Cena {idx + 1}"),
@@ -114,20 +138,21 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
             "tags": sc.get("tags", []),
             "metrics": metrics,
             "data": data,
-            "media": sc.get("media", {}),
-            "thumbnail": sc.get("thumbnail", ""),
-            "caption": sc.get("caption", ""),
             "nodes": nodes,
             "edges": edges,
             "badges": badges,
-            "headers": sc.get("headers", []),
-            "rows": sc.get("rows", []),
-            "item_a": sc.get("item_a", {}),
-            "item_b": sc.get("item_b", {}),
-            "markers": sc.get("markers", []),
-            "conclusion": sc.get("conclusion", ""),
-            "summary_points": sc.get("summary_points", []),
-            "actions": sc.get("actions", []),
+            "headers": headers,
+            "rows": rows,
+            "items": items,
+            "item_a": item_a,
+            "item_b": item_b,
+            "markers": markers,
+            "conclusion": conclusion,
+            "summary_points": summary_points,
+            "actions": actions,
+            "media": media,
+            "caption": caption,
+            "thumbnail": thumbnail,
             "canvas_elements": sc.get("canvas_elements") or sc.get("elements", []),
             "canvas_connections": sc.get("canvas_connections") or sc.get("connections", []),
             "canvas_width": int(sc.get("canvas_width") or 800),

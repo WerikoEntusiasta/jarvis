@@ -3771,7 +3771,7 @@ TOOLS += [
 
                             "type": "array",
 
-                            "description": "Lista de cenas da apresentação. Cada cena possui: title, component_type (hologram_card, chart, video, gallery, table, map, diagram, comparison, metric_grid, conclusion, network, graph), content e propriedades específicas do componente. O campo content pode ser uma string OU um objeto com heading, text, bullets[], badges[], metrics[], nodes[], edges[], chart_type, series[], categories[]. Cada tópico falado vira uma cena nova - nunca reaproveite.",
+                            "description": "Lista de cenas da apresentação. Cada cena possui: title, component_type (hologram_card, chart, video, gallery, table, map, diagram, comparison, metric_grid, conclusion, network, graph), content e propriedades específicas do componente. O campo content pode ser uma string OU um objeto com heading, text, bullets[], badges[], metrics[], nodes[], edges[], chart_type, series[], categories[], columns[], rows[], items[{title,pro,con}]. Para chart use chart_type (line/bar/pie/area) com categories[] e series[{name,data[]}]; para table use columns[] e rows[]; para comparison use items[]. Cada tópico falado vira uma cena nova - nunca reaproveite.",
 
                             "items": {"type": "object"}
 

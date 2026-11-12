@@ -274,6 +274,88 @@
         color: #a1a1aa;
         font-weight: 600;
       }
+      .spatial-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        margin-top: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+      }
+      .spatial-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+      }
+      .spatial-table thead th {
+        background: rgba(34, 211, 238, 0.07);
+        color: #67e8f9;
+        font-size: 9px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 9px 12px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+        white-space: nowrap;
+      }
+      .spatial-table tbody td {
+        padding: 8px 12px;
+        color: #e4e4e7;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .spatial-table tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+      .spatial-table tbody tr:hover td { background: rgba(34, 211, 238, 0.06); }
+      .spatial-table tbody tr:last-child td { border-bottom: none; }
+      .spatial-compare-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-top: 8px;
+      }
+      .spatial-compare-item {
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .spatial-compare-title {
+        font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 0.3px;
+      }
+      .spatial-compare-row {
+        display: flex;
+        gap: 7px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #a1a1aa;
+      }
+      .spatial-compare-row.pro span:first-child { color: #34d399; }
+      .spatial-compare-row.con span:first-child { color: #f87171; }
+      .spatial-chart-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 140px;
+        border: 1px dashed rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        color: #71717a;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        text-align: center;
+        padding: 16px;
+        margin-top: 8px;
+      }
+      .spatial-empty-fallback {
+        color: #71717a;
+        font-style: italic;
+      }
     `;
     document.head.appendChild(tag);
   }
@@ -361,6 +443,121 @@
       height: pos.height ? (typeof pos.height === 'string' ? pos.height : `${pos.height}%`) : slot.height,
       maxHeight: slot.maxHeight
     };
+  }
+
+  // Normaliza opcoes de grafico vindas do modelo no formato amigavel
+  // {chart_type, categories, series[]} para opcoes validas do ECharts.
+  // O ECharts exige series[].type e xAxis/yAxis - sem isto o chart fica vazio.
+  function normalizeChartOptions(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const hasChartType = typeof raw.chart_type === 'string';
+    const hasCategories = Array.isArray(raw.categories);
+    const rawSeries = Array.isArray(raw.series) ? raw.series
+      : (Array.isArray(raw.values) ? [{ name: raw.name || 'Série', data: raw.values }] : null);
+
+    // Sem cabecalho amigavel: so passa adiante se ja for opcao ECharts valida.
+    if (!hasChartType && !hasCategories) {
+      if (raw.xAxis || raw.yAxis) return raw;
+      if (rawSeries && rawSeries.length &&
+          rawSeries.every(s => s && typeof s === 'object' && s.type && Array.isArray(s.data))) {
+        return raw;
+      }
+      return null;
+    }
+    if (!rawSeries || !rawSeries.length) return null;
+
+    const ctype = String(raw.chart_type || 'bar').toLowerCase();
+    const categories = hasCategories ? raw.categories : [];
+    const isPie = ['pie', 'doughnut', 'donut', 'rosca'].includes(ctype);
+    const isArea = ctype === 'area';
+    const baseType = isPie ? 'pie'
+      : (ctype === 'line' || isArea) ? 'line'
+      : ctype === 'scatter' ? 'scatter'
+      : 'bar';
+
+    const out = {
+      backgroundColor: 'transparent',
+      textStyle: { color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 10 },
+      tooltip: {
+        trigger: isPie ? 'item' : 'axis',
+        backgroundColor: '#09090b',
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        textStyle: { color: '#f4f4f5', fontFamily: 'JetBrains Mono', fontSize: 11 }
+      }
+    };
+
+    if (isPie) {
+      // series [{name, data:[...]}] + categories -> [{name, value}]
+      let pieData = [];
+      if (rawSeries.length === 1 && Array.isArray(rawSeries[0].data)) {
+        const s0 = rawSeries[0];
+        pieData = s0.data.map((v, i) => {
+          if (v && typeof v === 'object') return { name: String(v.name || categories[i] || s0.name || `Item ${i + 1}`), value: Number(v.value) || 0 };
+          return { name: String(categories[i] || s0.name || `Item ${i + 1}`), value: Number(v) || 0 };
+        });
+      } else {
+        rawSeries.forEach(s => {
+          if (s && typeof s === 'object' && !Array.isArray(s) && 'value' in s) pieData.push(s);
+          else if (s && Array.isArray(s.data)) {
+            s.data.forEach((v, i) => pieData.push({ name: String(categories[i] || s.name || `Item ${i + 1}`), value: Number(v) || 0 }));
+          }
+        });
+      }
+      if (!pieData.length) return null;
+      out.legend = { bottom: '0%', textStyle: { color: '#71717a', fontFamily: 'JetBrains Mono', fontSize: 9 } };
+      out.series = [{
+        type: 'pie',
+        radius: ctype === 'pie' ? ['0%', '62%'] : ['45%', '70%'],
+        center: ['50%', '48%'],
+        itemStyle: { borderRadius: 6, borderColor: '#09090b', borderWidth: 2 },
+        label: { color: '#a1a1aa', fontFamily: 'JetBrains Mono', fontSize: 10, formatter: '{b}: {c}' },
+        labelLine: { lineStyle: { color: '#3f3f46' } },
+        data: pieData
+      }];
+      return out;
+    }
+
+    // Cartesiano: line / bar / area / scatter
+    const normSeries = rawSeries.map(s => {
+      if (Array.isArray(s)) return { type: baseType, data: s };
+      if (s && typeof s === 'object' && Array.isArray(s.data)) {
+        const item = {
+          type: (typeof s.type === 'string' && s.type) ? s.type : baseType,
+          data: s.data
+        };
+        if (s.name) item.name = String(s.name);
+        if (isArea) item.areaStyle = { opacity: 0.3 };
+        if (item.type === 'line') item.smooth = true;
+        return item;
+      }
+      return null;
+    }).filter(Boolean);
+    if (!normSeries.length) return null;
+
+    const xData = categories.length ? categories
+      : (Array.isArray(normSeries[0].data) ? normSeries[0].data.map((_, i) => String(i + 1)) : []);
+
+    out.grid = { left: 24, right: 16, top: 24, bottom: 24, containLabel: true };
+    out.xAxis = {
+      type: 'category',
+      data: xData,
+      axisLabel: { color: '#71717a', fontFamily: 'JetBrains Mono', fontSize: 9 },
+      axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.15)' } },
+      splitLine: { show: false }
+    };
+    out.yAxis = {
+      type: 'value',
+      axisLabel: { color: '#71717a', fontFamily: 'JetBrains Mono', fontSize: 9 },
+      splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.07)' } }
+    };
+    if (raw.x_label) out.xAxis.name = String(raw.x_label);
+    if (raw.y_label) out.yAxis.name = String(raw.y_label);
+    if (normSeries.length > 1 || normSeries[0].name) {
+      out.legend = { top: 0, textStyle: { color: '#71717a', fontFamily: 'JetBrains Mono', fontSize: 9 } };
+    }
+    out.series = normSeries;
+    return out;
   }
 
   // BUILDER: ECHARTS
@@ -532,7 +729,8 @@
 
   function buildCardContent(type, p) {
     const cRaw = p.content;
-    const summary = p.summary || (cRaw && typeof cRaw === 'object' ? (cRaw.text || cRaw.summary || cRaw.heading || '') : (cRaw || ''));
+    const isObj = cRaw && typeof cRaw === 'object';
+    const summary = p.summary || (isObj ? (cRaw.text || cRaw.summary || cRaw.heading || '') : (cRaw || ''));
     const tags = (p.tags || []).map(t => `<span class="spatial-tag">${esc(t)}</span>`).join('');
     const bullets = (p.bullets || []).map(b => `
       <div class="spatial-bullet">
@@ -554,25 +752,83 @@
       </div>
     ` : '';
 
+    // Tabela (table): headers/columns + rows - tambem lidos do content dict
+    const tableHeaders = (p.headers && p.headers.length) ? p.headers
+      : (isObj && Array.isArray(cRaw.headers) && cRaw.headers.length) ? cRaw.headers
+      : (isObj && Array.isArray(cRaw.columns) && cRaw.columns.length) ? cRaw.columns : [];
+    const tableRows = (p.rows && p.rows.length) ? p.rows
+      : (isObj && Array.isArray(cRaw.rows) && cRaw.rows.length) ? cRaw.rows : [];
+    let tableHtml = '';
+    if (type === 'table' && (tableHeaders.length || tableRows.length)) {
+      const head = tableHeaders.map(h => `<th>${esc(typeof h === 'object' ? (h.label || h.title || h.key || '') : h)}</th>`).join('');
+      const body = tableRows.map(r => {
+        const cells = Array.isArray(r) ? r : tableHeaders.map(h => {
+          const key = typeof h === 'object' ? (h.key || h.label || h.title) : h;
+          return (r && typeof r === 'object') ? r[key] : '';
+        });
+        return `<tr>${cells.map(c => `<td>${esc(c == null ? '' : c)}</td>`).join('')}</tr>`;
+      }).join('');
+      tableHtml = `<div class="spatial-table-wrap"><table class="spatial-table">${head ? `<thead><tr>${head}</tr></thead>` : ''}<tbody>${body}</tbody></table></div>`;
+    }
+
+    // Comparacao (comparison): items [{title, pro, con}] - tambem do content dict
+    const compareItems = (Array.isArray(p.items) && p.items.length) ? p.items
+      : (isObj && Array.isArray(cRaw.items) && cRaw.items.length) ? cRaw.items : [];
+    let compareHtml = '';
+    if (type === 'comparison' && compareItems.length) {
+      compareHtml = `<div class="spatial-compare-grid">${compareItems.slice(0, 6).map(it => {
+        if (!it || typeof it !== 'object') return '';
+        const pro = it.pro || it.positive || it.advantage || '';
+        const con = it.con || it.negative || it.disadvantage || '';
+        return `<div class="spatial-compare-item">
+          <div class="spatial-compare-title">${esc(it.title || it.name || it.label || '')}</div>
+          ${pro ? `<div class="spatial-compare-row pro"><span>▲</span><span>${esc(pro)}</span></div>` : ''}
+          ${con ? `<div class="spatial-compare-row con"><span>▼</span><span>${esc(con)}</span></div>` : ''}
+        </div>`;
+      }).join('')}</div>`;
+    }
+
     let visualBuilder = null;
     if (type === 'network' || type === 'graph' || type === 'cytoscape') {
       visualBuilder = buildCytoscapeNetwork(p, 220);
-    } else if (type === 'chart' || type === 'echarts' || p.options || p.option || p.data) {
-      const opts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data;
-      visualBuilder = buildECharts(opts, 200);
+    } else if (type === 'chart' || type === 'echarts' || p.options || p.option || (p.data && Object.keys(p.data).length)) {
+      const rawOpts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data
+        || (isObj && (cRaw.chart_type || cRaw.series || cRaw.xAxis) ? cRaw : null);
+      const opts = normalizeChartOptions(rawOpts);
+      if (opts) {
+        visualBuilder = buildECharts(opts, 200);
+      } else if (type === 'chart' || type === 'echarts') {
+        // Chart sem dados validos: placeholder em vez de card vazio
+        visualBuilder = {
+          html: '<div class="spatial-chart-empty">📊 Séries temporais em preparação — dados numéricos serão exibidos aqui.</div>',
+          mount() { return null; }
+        };
+      }
     } else if (type === 'three_view' || type === '3d') {
       visualBuilder = buildThreeView(200);
     }
 
-    const badgeList = (p.badges || (cRaw && typeof cRaw === 'object' ? cRaw.badges : null) || []);
+    const badgeList = (p.badges || (isObj ? cRaw.badges : null) || []);
     const badgesHtml = badgeList.length ? `<div class="spatial-badges">${badgeList.map(b => `<span class="spatial-badge">${esc(b)}</span>`).join('')}</div>` : '';
+    const visualHtml = visualBuilder ? visualBuilder.html : '';
+
+    // Anti-card-vazio: se nada de conteudo foi gerado, mostra placeholder legivel
+    const hasBody = summary || badgesHtml || tags || bullets || tableHtml || compareHtml || visualHtml || metricsHtml;
+    const placeholder = hasBody ? '' : `<p class="spatial-scene-copy spatial-empty-fallback">${esc(
+      p.subtitle || p.caption || p.conclusion ||
+      'Conteúdo em processamento — o J.A.R.V.I.S. está estruturando os dados deste tópico.'
+    )}</p>`;
+
     const html = `
       ${summary ? `<p class="spatial-scene-copy">${esc(summary)}</p>` : ''}
       ${badgesHtml}
       ${tags ? `<div class="spatial-tags">${tags}</div>` : ''}
       ${bullets ? `<div class="spatial-bullets">${bullets}</div>` : ''}
-      ${visualBuilder ? visualBuilder.html : ''}
+      ${tableHtml}
+      ${compareHtml}
+      ${visualHtml}
       ${metricsHtml}
+      ${placeholder}
     `;
 
     return {
@@ -658,9 +914,16 @@
       canvas.appendChild(wrapper);
 
       // Mount de gráficos interativos ou WebGL
+      // try/catch: se o mount lançar erro (ex.: ECharts com opções ruins),
+      // o card continua visível com o conteúdo estático em vez de sumir.
       let mountResult = null;
       if (typeof built.mount === 'function') {
-        mountResult = built.mount(wrapper);
+        try {
+          mountResult = built.mount(wrapper);
+        } catch (err) {
+          console.warn('[Spatial] mount falhou (card segue sem visual interativo):', err);
+          mountResult = null;
+        }
         if (mountResult) state.activeInstances.set(id, mountResult);
       }
 
@@ -721,8 +984,12 @@
         const built = buildCardContent(record.type, record.props);
         bodyEl.innerHTML = built.html;
         if (typeof built.mount === 'function') {
-          const res = built.mount(record.dom);
-          if (res) state.activeInstances.set(id, res);
+          try {
+            const res = built.mount(record.dom);
+            if (res) state.activeInstances.set(id, res);
+          } catch (err) {
+            console.warn('[Spatial] re-mount falhou (conteudo estatico mantido):', err);
+          }
         }
       }
 
