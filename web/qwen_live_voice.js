@@ -136,7 +136,12 @@
       ws.send(pcm);
     };
     fonte.connect(procNode);
-    procNode.connect(micCtx.destination); // Chromium exige conexão com destination para processar
+    // Conecta ao destination via gain zero: o Chromium exige a conexao para
+    // processar, mas o microfone NUNCA vaza para os alto-falantes (anti-eco).
+    var mute = micCtx.createGain();
+    mute.gain.value = 0;
+    procNode.connect(mute);
+    mute.connect(micCtx.destination);
     try {
       var btn = document.getElementById('mic-btn');
       if (btn) btn.classList.add('bg-rose-950', 'border-rose-400');

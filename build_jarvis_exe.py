@@ -58,6 +58,8 @@ cmd = [
     "--hidden-import", "lg_tv_manager",
     "--hidden-import", "mimo_tts",
     "--hidden-import", "stt_engine",
+ "--hidden-import", "qwen_realtime",
+ "--hidden-import", "qwen_live_bridge",
     "--hidden-import", "services.device_api",
     "--hidden-import", "comtypes.client",
     "--hidden-import", "cryptography.hazmat.primitives.ciphers",

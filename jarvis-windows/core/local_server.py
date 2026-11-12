@@ -1999,11 +1999,55 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
-                from stt_engine import transcribe_groq
+                from stt_engine import transcribe_audio
 
 
 
-                text = transcribe_groq(body)
+                # MediaRecorder envia webm/opus; a cascata de STT espera WAV.
+
+                # Converte via ffmpeg quando necessario (Groq -> MiMo ASR -> Whisper local).
+
+                audio_bytes = body
+
+                if audio_bytes and not audio_bytes.startswith(b"RIFF"):
+
+                    try:
+
+                        import subprocess, tempfile as _tf
+
+                        with _tf.TemporaryDirectory() as _tmpdir:
+
+                            _src = os.path.join(_tmpdir, "in.bin")
+
+                            _dst = os.path.join(_tmpdir, "out.wav")
+
+                            with open(_src, "wb") as _f:
+
+                                _f.write(audio_bytes)
+
+                            _ff = os.path.join("C:\\JARVIS", "ffmpeg.exe")
+
+                            _ffbin = _ff if os.path.exists(_ff) else "ffmpeg"
+
+                            subprocess.run(
+
+                                [_ffbin, "-y", "-i", _src, "-ar", "16000", "-ac", "1", _dst],
+
+                                capture_output=True, timeout=8,
+
+                            )
+
+                            if os.path.exists(_dst):
+
+                                with open(_dst, "rb") as _f:
+
+                                    audio_bytes = _f.read()
+
+                    except Exception:
+
+                        pass
+
+                text = transcribe_audio(audio_bytes, language="pt")
 
 
 

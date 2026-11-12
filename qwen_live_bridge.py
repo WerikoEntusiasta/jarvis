@@ -151,6 +151,7 @@ def start_live_bridge(host: str = WS_HOST, port: int = WS_PORT):
     """Inicia a ponte numa thread daemon com event loop proprio.
 
     Seguro para chamar de servidores threadados (ex.: local_server do HUD).
+    Idempotente: se a porta ja estiver em uso, outra ponte ja roda - retorna True.
     Retorna False quando a ponte nao pode iniciar (sem websockets/chave).
     """
     global _loop, _thread, _server
@@ -160,7 +161,18 @@ def start_live_bridge(host: str = WS_HOST, port: int = WS_PORT):
     if _thread is not None and _thread.is_alive():
         return True
 
+    # Ponte ja ativa nesta porta (ex.: processo standalone)?
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=0.3):
+            print(f"[QWEN LIVE] ponte ja ativa em ws://{host}:{port}{WS_PATH}")
+            return True
+    except OSError:
+        pass
+
     pronto = threading.Event()
+    erro = []
 
     def _rodar():
         global _loop, _server
@@ -172,13 +184,21 @@ def start_live_bridge(host: str = WS_HOST, port: int = WS_PORT):
             _server = await websockets.serve(_handler, host, port)
             pronto.set()
 
-        _loop.run_until_complete(_start())
+        try:
+            _loop.run_until_complete(_start())
+        except Exception as exc:
+            erro.append(exc)
+            pronto.set()
+            return
         _loop.run_forever()
 
     _thread = threading.Thread(target=_rodar, daemon=True, name="QwenLiveBridge")
     _thread.start()
     if not pronto.wait(timeout=5):
         print("[QWEN LIVE] ponte nao respondeu no boot.")
+        return False
+    if erro:
+        print(f"[QWEN LIVE] ponte nao iniciou ({type(erro[0]).__name__}): {erro[0]}")
         return False
     print(f"[QWEN LIVE] ponte ativa em ws://{host}:{port}{WS_PATH}")
     return True

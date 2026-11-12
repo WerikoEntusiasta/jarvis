@@ -513,8 +513,9 @@ class JarvisVoiceEngine(threading.Thread):
                     audio_for_llm = wav_bytes
                     text = ""
                 else:
-                    from stt_engine import transcribe_groq, clean_hallucinations
-                    raw_text = transcribe_groq(wav_bytes)
+                    from stt_engine import transcribe_audio, clean_hallucinations
+                    # Cascata completa: Groq -> MiMo ASR -> Whisper local.
+                    raw_text = transcribe_audio(wav_bytes, language="pt")
                     if not raw_text or len(raw_text.strip()) < 2:
                         return
                     cleaned = clean_hallucinations(raw_text)
