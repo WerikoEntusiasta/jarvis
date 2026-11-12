@@ -72,6 +72,19 @@ class TestConfig(unittest.TestCase):
         self.assertIn("raciocinar", nomes)
         self.assertIn("subagente", nomes)
 
+    def test_toda_tool_tem_name_e_description(self):
+        """Regressao: a API do Qwen valida o schema - toda tool precisa de name."""
+        import mimo_tools
+
+        nomes = []
+        for i, t in enumerate(mimo_tools.TOOLS):
+            fn = t.get("function") or {}
+            self.assertTrue(fn.get("name"), f"tool #{i} sem name: {str(t)[:120]}")
+            self.assertTrue(fn.get("description"), f"tool #{i} sem description")
+            nomes.append(fn["name"])
+        self.assertEqual(len(nomes), len(set(nomes)), "nomes de tool duplicados")
+        self.assertIn("start_dynamic_presentation", nomes)
+
 
 class TestFunctionCallOutput(unittest.TestCase):
     def test_output_e_json_string(self):

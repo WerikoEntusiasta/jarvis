@@ -3751,9 +3751,9 @@ TOOLS += [
 
             "function": {
 
+                "name": "start_dynamic_presentation",
                 "description": "Inicia uma apresentação multimodal cinematográfica no HUD do J.A.R.V.I.S. com sequência de cenas dinâmicas. CADA tópico ou assunto da explicação vira UMA cena/card NOVO e único no canvas - nunca reaproveite cenas anteriores. Componentes: hologram_card (painel holográfico), chart (gráficos ECharts animados), table, map, diagram, comparison, metric_grid, conclusion, video, gallery e network (grafo de relações com nodes/edges - alianças, influência, dependências).",
 
-                "description": "Inicia uma apresentação multimodal cinematográfica no HUD do J.A.R.V.I.S. com sequência de cenas dinâmicas (painéis holográficos, gráficos animados, vídeos, imagens, tabelas cyberpunk, mapas táticos, diagramas de fluxo, comparações visuais e métricas).",
 
                 "parameters": {
 
