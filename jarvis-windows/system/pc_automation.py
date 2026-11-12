@@ -46,6 +46,16 @@ except Exception as e:
 
 user32 = ctypes.windll.user32
 
+# Habilita DPI Awareness no Windows para garantir alinhamento exato de coordenadas físicas de tela
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
 
 # ==============================================================================
 # 1. CONTROLE DO MOUSE (MOVIMENTO, CLIQUES, ARRASTAR, ROLAGEM)
@@ -92,17 +102,25 @@ def get_mouse_position() -> Dict[str, Any]:
 
 
 def mouse_move(x: int, y: int, duration: float = 0.2) -> Dict[str, Any]:
-    """Move o cursor do mouse suavemente para (x, y)."""
+    """Move o cursor do mouse suavemente para (x, y) respeitando DPI e limites da tela."""
     cx, cy = _clamp_coordinates(x, y)
     try:
         if PYAUTOGUI_AVAILABLE:
             dur = max(0.0, float(duration))
-            pyautogui.moveTo(cx, cy, duration=dur)
+            if dur > 0:
+                pyautogui.moveTo(cx, cy, duration=dur, tween=pyautogui.easeInOutQuad)
+            else:
+                pyautogui.moveTo(cx, cy)
         else:
             user32.SetCursorPos(cx, cy)
+        time.sleep(0.02)
         return {"success": True, "action": "mouse_move", "x": cx, "y": cy}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        try:
+            user32.SetCursorPos(cx, cy)
+            return {"success": True, "action": "mouse_move", "x": cx, "y": cy, "fallback": "win32"}
+        except Exception as e2:
+            return {"success": False, "error": f"{e} (fallback: {e2})"}
 
 
 def mouse_move_rel(dx: int, dy: int, duration: float = 0.2) -> Dict[str, Any]:
@@ -119,7 +137,7 @@ def mouse_move_rel(dx: int, dy: int, duration: float = 0.2) -> Dict[str, Any]:
 def mouse_click(button: str = "left", clicks: int = 1, interval: float = 0.1, x: Optional[int] = None, y: Optional[int] = None) -> Dict[str, Any]:
     """
     Executa clique(s) do mouse (esquerdo, direito, meio, duplo, triplo).
-    Se x e y forem fornecidos, move antes de clicar.
+    Se x e y forem fornecidos, move antes de clicar com pausa suave de foco/hover.
     """
     btn = button.lower().strip()
     if btn in ["right", "direito"]:
@@ -137,7 +155,8 @@ def mouse_click(button: str = "left", clicks: int = 1, interval: float = 0.1, x:
 
     try:
         if x is not None and y is not None:
-            mouse_move(x, y, duration=0.1)
+            mouse_move(x, y, duration=0.15)
+            time.sleep(0.05)  # Pausa essencial para hover e foco da interface
 
         if PYAUTOGUI_AVAILABLE:
             pyautogui.click(button=btn, clicks=clicks, interval=interval)
@@ -155,7 +174,7 @@ def mouse_click(button: str = "left", clicks: int = 1, interval: float = 0.1, x:
                 if clicks > 1:
                     time.sleep(interval)
 
-        return {"success": True, "action": "mouse_click", "button": btn, "clicks": clicks}
+        return {"success": True, "action": "mouse_click", "button": btn, "clicks": clicks, "x": x, "y": y}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -231,43 +250,63 @@ KEY_NORM = {
 
 def keyboard_type(text: str, interval: float = 0.01) -> Dict[str, Any]:
     """
-    Digita um texto na janela ativa.
-    Para garantir acentuação perfeita em português brasileiro (á, é, ã, ç, etc.),
-    utiliza área de transferência com colagem Ctrl+V se contiver caracteres especiais.
+    Digita um texto na janela ativa com fidelidade total UTF-8 / ABNT2.
+    Utiliza área de transferência com colagem Ctrl+V como método primário
+    para evitar perda de caracteres ou desconfiguração de layout (ABNT2).
     """
     if not text:
         return {"success": True, "action": "keyboard_type", "chars": 0}
 
-    # Verifica se contém acentos ou caracteres especiais
-    has_special = any(ord(c) > 127 for c in text)
-
-    try:
-        if has_special and PYPERCLIP_AVAILABLE and PYAUTOGUI_AVAILABLE:
-            # Salva clipboard anterior
-            old_clip = ""
+    # Tenta via clipboard se pyperclip e pyautogui/win32 estiverem disponíveis
+    if PYPERCLIP_AVAILABLE:
+        try:
+            old_clip = None
             try:
                 old_clip = pyperclip.paste()
             except Exception:
                 pass
-            # Copia novo texto e cola instantaneamente
+
             pyperclip.copy(text)
-            pyautogui.hotkey("ctrl", "v")
+            time.sleep(0.03)
+
+            if PYAUTOGUI_AVAILABLE:
+                pyautogui.hotkey("ctrl", "v")
+            else:
+                VK_CONTROL = 0x11
+                VK_V = 0x56
+                KEYEVENTF_KEYUP = 0x0002
+                user32.keybd_event(VK_CONTROL, 0, 0, 0)
+                user32.keybd_event(VK_V, 0, 0, 0)
+                time.sleep(0.02)
+                user32.keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0)
+                user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+
             time.sleep(0.05)
             # Restaura clipboard se possível
-            if old_clip:
+            if old_clip is not None:
                 try:
                     pyperclip.copy(old_clip)
                 except Exception:
                     pass
-        elif PYAUTOGUI_AVAILABLE:
-            pyautogui.write(text, interval=interval)
-        else:
-            # Fallback direto via powershell
-            from .win_controls import run_powershell
-            escaped = text.replace("'", "''")
-            run_powershell(f"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{escaped}')")
 
-        return {"success": True, "action": "keyboard_type", "text": text, "length": len(text)}
+            return {"success": True, "action": "keyboard_type", "text": text, "length": len(text), "method": "clipboard"}
+        except Exception as e:
+            logger.warning(f"Falha ao colar via clipboard: {e}, tentando digitação direta...")
+
+    # Fallback via PyAutoGUI write
+    try:
+        if PYAUTOGUI_AVAILABLE:
+            pyautogui.write(text, interval=interval)
+            return {"success": True, "action": "keyboard_type", "text": text, "length": len(text), "method": "pyautogui"}
+    except Exception as e:
+        logger.warning(f"Falha no pyautogui.write: {e}")
+
+    # Fallback via PowerShell SendKeys
+    try:
+        from .win_controls import run_powershell
+        escaped = text.replace("'", "''")
+        run_powershell(f"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{escaped}')")
+        return {"success": True, "action": "keyboard_type", "text": text, "length": len(text), "method": "sendkeys"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -347,9 +386,62 @@ def clipboard_paste() -> Dict[str, Any]:
 # 4. CAPTURA DE TELA (SCREENSHOT) & VISÃO
 # ==============================================================================
 
-def take_screenshot(save_path: Optional[str] = None, return_base64: bool = False) -> Dict[str, Any]:
+def _capture_screen_win32() -> Optional[Any]:
+    """Captura robusta via Win32 GDI BitBlt que não falha no Windows com múltiplos monitores ou DPI escalonado."""
+    if not PIL_AVAILABLE:
+        return None
+    try:
+        from ctypes import wintypes
+        gdi32 = ctypes.windll.gdi32
+        w = user32.GetSystemMetrics(0)
+        h = user32.GetSystemMetrics(1)
+        hdc_screen = user32.GetDC(0)
+        hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+        hbm = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
+        gdi32.SelectObject(hdc_mem, hbm)
+
+        # SRCCOPY = 0x00CC0020
+        gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, 0, 0, 0x00CC0020)
+
+        class BITMAPINFOHEADER(ctypes.Structure):
+            _fields_ = [
+                ('biSize', wintypes.DWORD),
+                ('biWidth', wintypes.LONG),
+                ('biHeight', wintypes.LONG),
+                ('biPlanes', wintypes.WORD),
+                ('biBitCount', wintypes.WORD),
+                ('biCompression', wintypes.DWORD),
+                ('biSizeImage', wintypes.DWORD),
+                ('biXPelsPerMeter', wintypes.LONG),
+                ('biYPelsPerMeter', wintypes.LONG),
+                ('biClrUsed', wintypes.DWORD),
+                ('biClrImportant', wintypes.DWORD)
+            ]
+
+        bmi = BITMAPINFOHEADER()
+        bmi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        bmi.biWidth = w
+        bmi.biHeight = -h  # top-down
+        bmi.biPlanes = 1
+        bmi.biBitCount = 32
+        bmi.biCompression = 0
+
+        buf = ctypes.create_string_buffer(w * h * 4)
+        gdi32.GetDIBits(hdc_mem, hbm, 0, h, buf, ctypes.byref(bmi), 0)
+
+        gdi32.DeleteObject(hbm)
+        gdi32.DeleteDC(hdc_mem)
+        user32.ReleaseDC(0, hdc_screen)
+
+        return Image.frombuffer('RGB', (w, h), buf, 'raw', 'BGRX', 0, 1)
+    except Exception as e:
+        logger.warning(f"Win32 GDI BitBlt captura falhou: {e}")
+        return None
+
+
+def take_screenshot(save_path: Optional[str] = None, return_base64: bool = False, max_width: int = 1920) -> Dict[str, Any]:
     """
-    Captura a tela inteira do monitor principal.
+    Captura a tela inteira do monitor principal com alinhamento exato de DPI.
     Salva em save_path (ou arquivo temporário) e opcionalmente retorna em Base64.
     """
     if not save_path:
@@ -358,14 +450,31 @@ def take_screenshot(save_path: Optional[str] = None, return_base64: bool = False
         save_path = os.path.join(tmp_dir, f"screenshot_{int(time.time())}.png")
 
     try:
-        if PIL_AVAILABLE:
-            img = ImageGrab.grab(all_screens=False)
-            img.save(save_path, "PNG")
-        elif PYAUTOGUI_AVAILABLE:
-            img = pyautogui.screenshot()
-            img.save(save_path)
-        else:
-            return {"success": False, "error": "Nenhuma biblioteca gráfica disponível para captura"}
+        img = None
+        # 1. Tenta captura de alta performance via Win32 GDI BitBlt
+        try:
+            img = _capture_screen_win32()
+        except Exception:
+            pass
+
+        # 2. Fallback via Pillow ImageGrab
+        if img is None and PIL_AVAILABLE:
+            try:
+                img = ImageGrab.grab(all_screens=False)
+            except Exception:
+                pass
+
+        # 3. Fallback via PyAutoGUI
+        if img is None and PYAUTOGUI_AVAILABLE:
+            try:
+                img = pyautogui.screenshot()
+            except Exception:
+                pass
+
+        if img is None:
+            return {"success": False, "error": "Nenhum método gráfico conseguiu capturar a tela"}
+
+        img.save(save_path, "PNG")
 
         res = {
             "success": True,
@@ -376,8 +485,26 @@ def take_screenshot(save_path: Optional[str] = None, return_base64: bool = False
         }
 
         if return_base64:
-            with open(save_path, "rb") as f:
-                res["base64"] = base64.b64encode(f.read()).decode("utf-8")
+            # Otimização de envio para modelos multimodais de visão:
+            # Mantém proporção e limita largura máxima a 1920 para resposta rápida sem estourar tokens
+            try:
+                b64_img = img
+                if PIL_AVAILABLE and img.width > max_width:
+                    ratio = max_width / float(img.width)
+                    new_h = int(img.height * ratio)
+                    b64_img = img.resize((max_width, new_h), Image.Resampling.LANCZOS)
+
+                import io
+                buf = io.BytesIO()
+                b64_img.convert("RGB").save(buf, format="JPEG", quality=85)
+                b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
+                res["base64"] = b64_str
+                res["_image_b64"] = b64_str  # Alimenta o loop de visão de core_ai_brain
+            except Exception as e_b64:
+                with open(save_path, "rb") as f:
+                    b64_raw = base64.b64encode(f.read()).decode("utf-8")
+                    res["base64"] = b64_raw
+                    res["_image_b64"] = b64_raw
 
         return res
     except Exception as e:

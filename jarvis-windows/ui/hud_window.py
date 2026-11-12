@@ -22,7 +22,7 @@ except ImportError:
 
 def _log(msg):
     try:
-        log_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "jarvis_windows.log")
+        log_file = "C:/JARVIS/jarvis_windows.log"
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
     except Exception:
@@ -55,7 +55,7 @@ class JarvisHUDWindow(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.Window
         )
-        self.setStyleSheet("background-color: #010614;")
+        self.setStyleSheet("background-color: #000000;")
         self.setMouseTracking(True)
 
         # Garante foco no Monitor Principal (Primary Display - 2560x1440)
@@ -71,59 +71,49 @@ class JarvisHUDWindow(QMainWindow):
     def _init_ui(self):
         self.central_widget = QWidget(self)
         self.central_widget.setMouseTracking(True)
-        self.central_widget.setStyleSheet("background-color: #010614; margin: 0; padding: 0;")
+        self.central_widget.setStyleSheet("background-color: #000000; margin: 0; padding: 0;")
         self.central_layout = QVBoxLayout(self.central_widget)
         self.central_layout.setContentsMargins(0, 0, 0, 0)
         self.central_layout.setSpacing(0)
 
-        # 1. Barra de Controle Superior Stark Ultra-Discreta (Arrastável nativamente)
+        # 1. Barra de Controle Superior Minimalista Black Core (Arrastável nativamente)
         self.top_control_bar = QFrame(self.central_widget)
-        self.top_control_bar.setFixedHeight(28)
+        self.top_control_bar.setFixedHeight(26)
         self.top_control_bar.setMouseTracking(True)
         self.top_control_bar.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(1, 6, 20, 0.95), stop:0.5 rgba(3, 20, 56, 0.95), stop:1 rgba(1, 6, 20, 0.95));
-                border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+                background: #000000;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.07);
             }
             QLabel {
-                color: #00f0ff;
+                color: #64748b;
                 font-size: 10px;
-                font-weight: 800;
-                letter-spacing: 2px;
+                font-weight: 700;
+                letter-spacing: 3px;
                 font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
             }
             QPushButton {
                 background: transparent;
                 border: none;
-                color: #94a3b8;
+                color: #64748b;
                 font-size: 11px;
-                font-weight: bold;
-                padding: 2px 8px;
+                font-weight: normal;
+                padding: 1px 8px;
             }
             QPushButton:hover {
-                color: #00f0ff;
-                background: rgba(0, 240, 255, 0.15);
+                color: #38bdf8;
+                background: rgba(255, 255, 255, 0.05);
             }
         """)
 
         top_layout = QHBoxLayout(self.top_control_bar)
-        top_layout.setContentsMargins(12, 0, 8, 0)
-        top_layout.setSpacing(8)
+        top_layout.setContentsMargins(14, 0, 8, 0)
+        top_layout.setSpacing(6)
 
-        self.title_label = QLabel("⚡ J.A.R.V.I.S. STARK HUD OS • DESKTOP INDEPENDENTE", self.top_control_bar)
+        self.title_label = QLabel("J . A . R . V . I . S .", self.top_control_bar)
         self.title_label.setMouseTracking(True)
         top_layout.addWidget(self.title_label)
         top_layout.addStretch()
-
-        btn_reload = QPushButton("🔄 F5", self.top_control_bar)
-        btn_reload.setToolTip("Recarregar HUD (F5)")
-        btn_reload.clicked.connect(self.reload_hud)
-        top_layout.addWidget(btn_reload)
-
-        btn_mic = QPushButton("🎙 F2 Falar", self.top_control_bar)
-        btn_mic.setToolTip("Ativar/Desativar Microfone (F2)")
-        btn_mic.clicked.connect(self.trigger_mic)
-        top_layout.addWidget(btn_mic)
 
         btn_min = QPushButton("🗕", self.top_control_bar)
         btn_min.setToolTip("Minimizar na Bandeja")
@@ -137,11 +127,10 @@ class JarvisHUDWindow(QMainWindow):
 
         btn_close = QPushButton("✕", self.top_control_bar)
         btn_close.setToolTip("Ocultar HUD (Ctrl+Espaço para reabrir)")
-        btn_close.setStyleSheet("QPushButton:hover { color: #ff0055; background: rgba(255, 0, 85, 0.2); }")
+        btn_close.setStyleSheet("QPushButton:hover { color: #f43f5e; background: rgba(244, 63, 94, 0.15); }")
         btn_close.clicked.connect(self.hide)
         top_layout.addWidget(btn_close)
 
-        # Instala filtro de eventos na barra e no título para captura de arrasto DWM e duplo-clique
         self.top_control_bar.installEventFilter(self)
         self.title_label.installEventFilter(self)
 
@@ -155,9 +144,14 @@ class JarvisHUDWindow(QMainWindow):
         # Injeta script defensivo antes de qualquer código da página rodar
         bootstrap_script = QWebEngineScript()
         bootstrap_script.setSourceCode("""
-            /* speech recognition habilitado */
             window.__JARVIS_DESKTOP_STANDALONE = true;
             try {
+                Object.defineProperty(window, 'SpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+                Object.defineProperty(window, 'webkitSpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+                if (typeof Window !== 'undefined' && Window.prototype) {
+                    delete Window.prototype.SpeechRecognition;
+                    delete Window.prototype.webkitSpeechRecognition;
+                }
                 localStorage.setItem('jarvis_session_token', '8145760953033109');
                 localStorage.setItem('jarvis_client_id', 'desktop_windows_standalone');
             } catch(e) {}
@@ -186,12 +180,13 @@ class JarvisHUDWindow(QMainWindow):
         self.web_view.page().featurePermissionRequested.connect(_grant_permissions)
 
         # Fundo escuro imediato para zero flicker branco
-        self.web_view.page().setBackgroundColor(QColor("#010614"))
+        self.web_view.page().setBackgroundColor(QColor("#000000"))
 
         # Monitoramento de carregamento
         self.web_view.loadStarted.connect(lambda: _log("web_view loadStarted"))
         self.web_view.loadProgress.connect(lambda p: _log(f"web_view progresso: {p}%") if p in [25, 50, 75, 100] else None)
         self.web_view.loadFinished.connect(self._on_load_finished)
+        self.web_view.page().renderProcessTerminated.connect(self._on_render_terminated)
 
         target_url = QUrl(f"{CORE_URL}/?client=desktop_windows_standalone")
         _log(f"Carregando URL no WebEngine: {target_url.toString()}")
@@ -241,11 +236,22 @@ class JarvisHUDWindow(QMainWindow):
         else:
             self.hide()
 
+    def _on_render_terminated(self, termination_status, exit_code):
+        _log(f"[ALERTA CRITICO] Render process terminado: status={termination_status}, exit_code={exit_code}. Reiniciando HUD...")
+        QTimer.singleShot(1000, self.web_view.reload)
+
     def _on_load_finished(self, ok):
         _log(f"web_view loadFinished ok={ok}, url={self.web_view.url().toString()}")
         if not ok:
             _log("Falha ao carregar URL principal! Verifique conexão ou certificado.")
+            self._load_retries = getattr(self, '_load_retries', 0) + 1
+            if self._load_retries <= 5:
+                delay_ms = 800 * self._load_retries
+                _log(f"Tentativa automática #{self._load_retries} de reconectar HUD em {delay_ms}ms...")
+                QTimer.singleShot(delay_ms, self.web_view.reload)
             return
+
+        self._load_retries = 0
 
         js_bootstrap = """
         (function() {
@@ -312,13 +318,6 @@ class JarvisHUDWindow(QMainWindow):
 
     def moveEvent(self, event):
         super().moveEvent(event)
-        try:
-            if hasattr(self, 'web_view') and self.web_view:
-                self.web_view.page().runJavaScript(
-                    "if (typeof applyDynamicLayoutAdaptation === 'function') applyDynamicLayoutAdaptation();"
-                )
-        except Exception:
-            pass
 
     def _sync_window_state_ui(self):
         is_max = self.isMaximized() or self.isFullScreen()

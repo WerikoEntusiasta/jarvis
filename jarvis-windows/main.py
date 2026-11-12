@@ -73,10 +73,31 @@ def ensure_single_instance() -> bool:
         print("[SingleInstance] Outra instância detectada. Tentando contato via IPC...")
         contacted = _try_contact_existing_instance()
         if not contacted:
-            print("[SingleInstance] Instância anterior inativa ou sem IPC. Assumindo lock órfão e iniciando...")
-            return True
-        print("[SingleInstance] Instância ativa contatada com sucesso. Encerrando duplicata.")
-        return False
+            for _ in range(5):
+                time.sleep(0.4)
+                contacted = _try_contact_existing_instance()
+                if contacted:
+                    break
+        if contacted:
+            print("[SingleInstance] Instância ativa contatada com sucesso. Encerrando duplicata.")
+            return False
+
+        current_pid = os.getpid()
+        try:
+            import psutil
+            for p in psutil.process_iter(['pid', 'name']):
+                try:
+                    pname = (p.info.get('name') or '').upper()
+                    if p.info.get('pid') != current_pid and 'JARVIS' in pname:
+                        print(f"[SingleInstance] Processo {pname} (PID {p.info['pid']}) já está ativo no Windows. Abortando duplicata.")
+                        return False
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        print("[SingleInstance] Instância anterior inativa ou sem IPC. Assumindo lock órfão e iniciando...")
+        return True
     return True
 
 def release_mutex():
@@ -105,20 +126,10 @@ def create_hud_icon() -> QIcon:
 def force_window_to_front(hwnd: int):
     try:
         user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
         user32.AllowSetForegroundWindow(-1)
-        fore_hwnd = user32.GetForegroundWindow()
-        fore_thread = user32.GetWindowThreadProcessId(fore_hwnd, None)
-        app_thread = kernel32.GetCurrentThreadId()
-        if fore_thread and fore_thread != app_thread:
-            user32.AttachThreadInput(fore_thread, app_thread, True)
         user32.ShowWindow(hwnd, 9)
-        user32.SetWindowPos(hwnd, -1, 0, 0, 0, 0, 0x0001 | 0x0002)
-        user32.SetWindowPos(hwnd, -2, 0, 0, 0, 0, 0x0001 | 0x0002)
         user32.SetForegroundWindow(hwnd)
         user32.BringWindowToTop(hwnd)
-        if fore_thread and fore_thread != app_thread:
-            user32.AttachThreadInput(fore_thread, app_thread, False)
     except Exception as e:
         _log(f"force_window_to_front erro: {e}")
 
@@ -150,8 +161,11 @@ def start_ipc_server(hud_window: JarvisHUDWindow):
                             pass
                     QTimer.singleShot(0, _show_act)
                 elif b"RELOAD" in data:
-                    from PyQt6.QtCore import QTimer
-                    QTimer.singleShot(0, hud_window.web_view.reload)
+                    from PyQt6.QtCore import QTimer, QUrl
+                    import time
+                    def _force_reload():
+                        hud_window.web_view.setUrl(QUrl(f"http://127.0.0.1:{LOCAL_PORT}/?_t={int(time.time()*1000)}"))
+                    QTimer.singleShot(0, _force_reload)
                 conn.close()
         except Exception:
             pass
@@ -189,7 +203,9 @@ def main():
         "--use-fake-ui-for-media-stream "
         "--ignore-certificate-errors "
         "--allow-running-insecure-content "
-        "--disable-web-security"
+        "--disable-web-security "
+        "--disable-features=SpeechRecognition "
+        "--enable-gpu-rasterization"
     )
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     QGuiApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
@@ -276,7 +292,7 @@ def main():
         js = (
             f"if (window.showJarvisToast) window.showJarvisToast('Senhor: {safe}'); "
             f"const inp = document.getElementById('user-input'); if (inp) inp.value = '{safe}'; "
-            f"if (window.sendToOpenClaw) window.sendToOpenClaw('{safe}', {{fromVoice: true}});"
+            f"const sub = document.getElementById('live-subtitle'); if (sub) sub.innerText = '{safe[:95]}';"
         )
         QTimer.singleShot(0, lambda: hud.web_view.page().runJavaScript(js))
     if voice:
@@ -316,6 +332,31 @@ def main():
     tray_menu.addAction(action_telem)
 
     tray_menu.addSeparator()
+    def shutdown_all():
+        _log("Encerrando J.A.R.V.I.S. Windows e liberando recursos...")
+        try:
+            if voice:
+                voice.stop()
+        except Exception:
+            pass
+        try:
+            if network:
+                network.stop()
+        except Exception:
+            pass
+        try:
+            from vision import get_vision_engine
+            get_vision_engine().stop()
+        except Exception:
+            pass
+        try:
+            release_mutex()
+        except Exception:
+            pass
+        _log("Recursos liberados com sucesso.")
+
+    app.aboutToQuit.connect(shutdown_all)
+
     action_quit = QAction("Encerrar J.A.R.V.I.S.", tray_menu)
     action_quit.triggered.connect(app.quit)
     tray_menu.addAction(action_quit)
@@ -327,10 +368,7 @@ def main():
     primary = QGuiApplication.primaryScreen()
     if primary:
         hud.setScreen(primary)
-        geom = primary.availableGeometry()
-        hud.setGeometry(geom.x(), geom.y(), geom.width(), geom.height())
-
-    hud.show()
+    hud.showMaximized()
     hud.raise_()
     hud.activateWindow()
     try:

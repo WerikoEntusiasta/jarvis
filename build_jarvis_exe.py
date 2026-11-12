@@ -26,6 +26,16 @@ cmd = [
     "--paths", r"c:\JARVIS",
     "--add-data", r"c:\JARVIS\web;web",
     "--add-data", r"c:\JARVIS\config;config",
+    "--add-data", r"c:\JARVIS\jarvis-windows\system;system",
+    "--add-data", r"c:\JARVIS\jarvis-windows\core;core",
+    "--add-data", r"c:\JARVIS\jarvis-windows\ui;ui",
+    "--add-data", r"c:\JARVIS\jarvis-windows\voice;voice",
+    "--add-data", r"c:\JARVIS\mimo_tts.py;.",
+    "--add-binary", r"c:\JARVIS\ffmpeg.exe;.",
+    "--collect-all", "edge_tts",
+    "--hidden-import", "edge_tts",
+    "--hidden-import", "obsidian_manager",
+    "--hidden-import", "task_tracker",
     "--hidden-import", "PyQt6.QtWebEngineWidgets",
     "--hidden-import", "PyQt6.QtWebEngineCore",
     "--hidden-import", "PyQt6.QtWidgets",
@@ -37,10 +47,15 @@ cmd = [
     "--hidden-import", "sounddevice",
     "--hidden-import", "numpy",
     "--hidden-import", "services.tuya_service",
+    "--hidden-import", "requests",
+    "--hidden-import", "unified_memory",
+    "--hidden-import", "mimo_brain",
     "--hidden-import", "core_ai_brain",
     "--hidden-import", "session_manager",
     "--hidden-import", "mimo_tools",
     "--hidden-import", "laya_screen_subagent",
+    "--hidden-import", "dynamic_presentation_engine",
+    "--hidden-import", "lg_tv_manager",
     "--hidden-import", "mimo_tts",
     "--hidden-import", "stt_engine",
     "--hidden-import", "services.device_api",
@@ -57,8 +72,23 @@ cmd = [
     "--hidden-import", "core.local_server",
     "--hidden-import", "core.network_client",
     "--hidden-import", "voice.voice_engine",
+    "--collect-all", "openwakeword",
+    "--collect-all", "onnxruntime",
+    "--hidden-import", "openwakeword",
+    "--hidden-import", "openwakeword.model",
+    "--hidden-import", "openwakeword.utils",
+    "--hidden-import", "onnxruntime",
+    "--add-data", r"C:\Users\werik\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages\openwakeword\resources;openwakeword\resources",
     "--hidden-import", "ui.hud_window",
     "--hidden-import", "config.settings",
+    "--hidden-import", "vision",
+    "--hidden-import", "vision.engine",
+    "--hidden-import", "vision.camera",
+    "--hidden-import", "vision.gestures",
+    "--hidden-import", "vision.actions",
+    "--hidden-import", "vision.events",
+    "--hidden-import", "vision.config",
+    "--hidden-import", "vision.auth",
     SRC_MAIN
 ]
 
@@ -67,38 +97,51 @@ res = subprocess.run(cmd)
 
 if res.returncode == 0:
     exe_path = os.path.join(DIST_DIR, "JARVIS", "JARVIS.exe")
-    if not os.path.exists(exe_path):
-        exe_path = os.path.join(DIST_DIR, "JARVIS.exe")
-    print("\n[SUCESSO] JARVIS.exe gerado com sucesso!")
+    print(f"\n[SUCESSO] JARVIS.exe gerado com sucesso!")
     print(f"Caminho do executavel: {exe_path}")
 
-    # Criar atalhos no Desktop e Inicializacao do Windows
-    print("\nInstalando atalhos no Windows...")
-    ps_shortcut = f'''
-$WshShell = New-Object -ComObject WScript.Shell
+    # Cria ou atualiza os atalhos no Windows
+    print("\nInstalando atalhos oficiais no Windows...")
+    try:
+        import win32com.client
+        shell = win32com.client.Dispatch("WScript.Shell")
 
-# 1. Atalho na Area de Trabalho (Desktop)
-$DesktopPath = [Environment]::GetFolderPath('Desktop')
-$Shortcut = $WshShell.CreateShortcut("$DesktopPath\\J.A.R.V.I.S..lnk")
-$Shortcut.TargetPath = "{exe_path}"
-$Shortcut.WorkingDirectory = "{os.path.dirname(exe_path)}"
-$Shortcut.IconLocation = "{ICON_PATH}"
-$Shortcut.Description = "J.A.R.V.I.S. Artificial Intelligence System"
-$Shortcut.Save()
-Write-Host "Atalho Desktop criado com sucesso!"
+        # 1. Desktop do Usuário
+        desktop_user = shell.SpecialFolders("Desktop")
+        lnk_user = os.path.join(desktop_user, "JARVIS.lnk")
+        s = shell.CreateShortcut(lnk_user)
+        s.TargetPath = exe_path
+        s.WorkingDirectory = os.path.dirname(exe_path)
+        s.IconLocation = ICON_PATH
+        s.Description = "J.A.R.V.I.S. Mark VII - Stark Sovereign AI"
+        s.Save()
+        print("Atalho Desktop criado com sucesso!")
 
-# 2. Atalho na Inicializacao Automatica (Startup)
-$StartupPath = [Environment]::GetFolderPath('Startup')
-$StartupShortcut = $WshShell.CreateShortcut("$StartupPath\\J.A.R.V.I.S..lnk")
-$StartupShortcut.TargetPath = "{exe_path}"
-$StartupShortcut.WorkingDirectory = "{os.path.dirname(exe_path)}"
-$StartupShortcut.IconLocation = "{ICON_PATH}"
-$StartupShortcut.Description = "J.A.R.V.I.S. Auto-Start"
-$StartupShortcut.Save()
-Write-Host "Atalho Inicializacao criado com sucesso!"
-'''
-    subprocess.run(["powershell", "-NoProfile", "-Command", ps_shortcut])
-    print("[INSTALACAO CONCLUIDA] J.A.R.V.I.S. instalado no Desktop e na Inicializacao do Windows!")
+        # 2. Menu Iniciar
+        programs_dir = shell.SpecialFolders("Programs")
+        lnk_start = os.path.join(programs_dir, "JARVIS.lnk")
+        s2 = shell.CreateShortcut(lnk_start)
+        s2.TargetPath = exe_path
+        s2.WorkingDirectory = os.path.dirname(exe_path)
+        s2.IconLocation = ICON_PATH
+        s2.Description = "J.A.R.V.I.S. Mark VII - Stark Sovereign AI"
+        s2.Save()
+        print("Atalho no Menu Iniciar criado com sucesso!")
+
+        # 3. Startup (Inicialização do Windows)
+        startup_dir = shell.SpecialFolders("Startup")
+        lnk_startup = os.path.join(startup_dir, "JARVIS.lnk")
+        s3 = shell.CreateShortcut(lnk_startup)
+        s3.TargetPath = exe_path
+        s3.WorkingDirectory = os.path.dirname(exe_path)
+        s3.IconLocation = ICON_PATH
+        s3.Description = "J.A.R.V.I.S. Mark VII - Inicializacao Automatica"
+        s3.Save()
+        print("Atalho Inicializacao criado com sucesso!")
+
+        print("\n[INSTALACAO CONCLUIDA] J.A.R.V.I.S. instalado no Desktop, Menu Iniciar e Inicializacao do Windows!")
+    except Exception as e:
+        print(f"[Aviso] Nao foi possivel registrar os atalhos automaticamente: {e}")
 else:
-    print(f"\n[ERRO] PyInstaller falhou com codigo {res.returncode}")
+    print(f"\n[ERRO] Falha na compilacao PyInstaller (Codigo {res.returncode})")
     sys.exit(res.returncode)

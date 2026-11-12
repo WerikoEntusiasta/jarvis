@@ -3,7 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>J.A.R.V.I.S. High-Tech Interface - Stark HUD</title>
+    <title>J.A.R.V.I.S. High-Tech Interface - Stark HUD</title>
+  
+  <!-- DESKTOP STANDALONE SHIELD: Neutraliza Web Speech API no QtWebEngine para prevenir crash do Chromium Mojo -->
+  <script>
+    (function() {
+      const isDesktop = (
+        navigator.userAgent.includes('QtWebEngine') || 
+        window.__JARVIS_DESKTOP_STANDALONE === true || 
+        location.search.includes('desktop') || 
+        location.hostname === '127.0.0.1' || 
+        location.hostname === 'localhost'
+      );
+      if (isDesktop) {
+        window.__JARVIS_DESKTOP_STANDALONE = true;
+        try {
+          Object.defineProperty(window, 'SpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+          Object.defineProperty(window, 'webkitSpeechRecognition', { get: () => undefined, set: () => {}, configurable: true });
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            delete Window.prototype.SpeechRecognition;
+            delete Window.prototype.webkitSpeechRecognition;
+          }
+        } catch(e) {}
+      }
+    })();
+  </script>
   
   <!-- PWA & Mobile Web App Meta Tags -->
   <meta name="theme-color" content="#00f0ff">
@@ -36,6 +60,10 @@
   </script>
   <script src="/models/face-api/face-api.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';"></script>
   <script src="/jarvis_ui_engine.js"></script>
+  <script src="/echarts.min.js"></script>
+  <script src="/three.min.js"></script>
+  <script src="/jarvis_presentation_engine.js"></script>
+<script src="/qwen_live_voice.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -410,421 +438,220 @@
       display: flex !important;
     }
 
+  
+    /* =========================================================================
+       BLACK CORE INTERFACE DESIGN SYSTEM (STARK AI CORE)
+       ========================================================================= */
+    body {
+      background-color: #000000 !important;
+    }
+    
+    .glass-card-stark {
+      background: rgba(6, 10, 22, 0.88) !important;
+      border: 1px solid rgba(255, 255, 255, 0.07) !important;
+      backdrop-filter: blur(28px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.85) !important;
+      position: relative;
+    }
+    .glass-card-stark::before {
+      display: none !important;
+    }
+    
+    /* Icon Rail Buttons */
+    .rail-icon-btn {
+      color: #64748b;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      border-radius: 0.85rem;
+    }
+    .rail-icon-btn:hover {
+      color: #38bdf8;
+      background: rgba(0, 240, 255, 0.08);
+      transform: scale(1.05);
+    }
+    .rail-icon-btn.rail-btn-active {
+      color: #00f0ff !important;
+      background: rgba(0, 240, 255, 0.15) !important;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.3) !important;
+    }
+    
+    /* Flyout Panel Glass */
+    #left-dock {
+      background: rgba(4, 7, 16, 0.96) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 140, 255, 0.10) !important;
+    }
+
   </style>
 </head>
-<body class="bg-[#01091d] text-slate-100 select-none overflow-x-hidden overflow-y-auto lg:overflow-hidden h-screen w-screen relative flex flex-col justify-between">
+<body class="bg-black text-slate-100 select-none overflow-hidden h-screen w-screen relative flex flex-col justify-between">
 
   <!-- Ambient Top Lightbar Glow -->
   <div class="w-full flex justify-center pt-1 z-50 pointer-events-none">
     <div class="w-2/3 h-[3.5px] top-lightbar rounded-full"></div>
   </div>
 
-  <!-- Background Grids & Vignette -->
-  <div class="absolute inset-0 blueprint-grid-vibrant pointer-events-none z-0"></div>
-  <div class="absolute inset-0 vignette-radial-deep pointer-events-none z-0"></div>
+  <!-- Background Deep Black Canvas Atmosphere -->
+  <div class="absolute inset-0 pointer-events-none z-0" style="background: radial-gradient(circle at 50% 50%, rgba(0, 50, 160, 0.08) 0%, #000000 70%);"></div>
 
   <!-- Organic Fluid Plasma Energy Vortex Canvas (Fundo idêntico aos prints) -->
   <canvas id="organicVortexCanvas" class="absolute inset-0 pointer-events-none z-10 m-auto"></canvas>
 
   <!-- TOP HEADER HUD -->
-  <header class="w-full flex flex-col items-center pt-1 pb-1 z-40 relative pointer-events-auto safe-top stark-draggable-header">
-    <!-- PWA Install Banners (Mobile) -->
-    <div id="pwa-install-banner" class="hidden w-full max-w-md mx-auto mb-2 px-3 py-2 rounded-2xl bg-cyan-950/95 border border-cyan-400 shadow-[0_0_30px_rgba(0,210,255,0.45)] backdrop-blur-xl flex items-center justify-between space-x-3 spring-trans">
-      <div class="flex items-center space-x-2.5">
-        <img src="/icon-192.png" alt="JARVIS" class="w-8 h-8 rounded-xl border border-cyan-400/60 shadow-[0_0_10px_rgba(0,210,255,0.5)]">
-        <div>
-          <div class="text-[11px] font-bold text-white font-hud tracking-wide">J.A.R.V.I.S. OS MOBILE</div>
-          <div class="text-[9px] text-cyan-300 font-mono-code">Instalar como App PWA no celular</div>
-        </div>
-      </div>
-      <div class="flex items-center space-x-1.5">
-        <button onclick="installPWA()" class="px-2.5 py-1 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 text-slate-950 font-extrabold text-[9px] tracking-wider shadow-[0_0_12px_rgba(0,210,255,0.7)] active:scale-95">
-          INSTALAR
-        </button>
-        <button onclick="document.getElementById('pwa-install-banner').classList.add('hidden')" class="p-1 text-slate-400 hover:text-white text-xs">✕</button>
+  <header class="w-full flex items-center justify-between px-8 py-3 z-40 relative pointer-events-auto safe-top stark-draggable-header select-none">
+    <!-- Esquerda: Branding Minimalista Stark -->
+    <div class="flex items-center space-x-3">
+      <div class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_12px_#00f0ff]"></div>
+      <div class="flex items-baseline space-x-2">
+        <span class="text-xs font-extrabold tracking-[0.25em] text-white font-hud">J.A.R.V.I.S.</span>
+        <span class="text-[10px] font-mono-code text-cyan-400 font-semibold">//</span>
+        <span id="jarvis-state-text" class="text-[10px] font-mono-code font-bold text-cyan-300 tracking-widest">ONLINE</span>
       </div>
     </div>
 
-    <div id="pwa-ios-banner" class="hidden w-full max-w-md mx-auto mb-2 px-3 py-2 rounded-2xl bg-slate-900/95 border border-sky-400/70 shadow-[0_0_30px_rgba(0,180,255,0.4)] backdrop-blur-xl flex items-center justify-between space-x-3 spring-trans">
-      <div class="flex items-center space-x-2.5">
-        <img src="/apple-touch-icon.png" alt="JARVIS" class="w-8 h-8 rounded-xl border border-sky-400/60">
-        <div>
-          <div class="text-[11px] font-bold text-white font-hud">INSTALAR NO IPHONE</div>
-          <div class="text-[9px] text-sky-200">Toque em <strong class="text-cyan-300">Compartilhar ⎋</strong> e <strong class="text-cyan-300">Adicionar à Tela de Início ➕</strong></div>
-        </div>
-      </div>
-      <button onclick="dismissIosPwaBanner()" class="p-1 text-slate-400 hover:text-white text-xs">✕</button>
-    </div>
+    <!-- Centro: Equalizador Sutil de Voz -->
+    <div id="eq-container" class="flex items-center space-x-[3px] h-3.5 opacity-80"></div>
 
-    <!-- Top Pill Controls (Rolável no celular) -->
-    <div class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#031c4c]/90 border border-sky-400/60 text-[9px] sm:text-[10px] tracking-wider text-sky-200 font-semibold shadow-[0_0_25px_rgba(0,180,255,0.4)] backdrop-blur-md max-w-[96vw] overflow-x-auto no-scrollbar whitespace-nowrap">
-      <span class="flex items-center shrink-0">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block mr-1.5 animate-pulse"></span>
-        <span id="pill-status">PERSONALIZADO</span>
-      </span>
-      <span class="text-sky-500 font-bold shrink-0">•</span>
-      <span class="shrink-0">SINCRONIZADO</span>
-      <span class="text-sky-500 font-bold shrink-0">•</span>
-      <button id="vision-top-pill" onclick="toggleVisionWebcam()" class="hover:text-cyan-300 transition-colors cursor-pointer flex items-center space-x-1 font-mono-code group shrink-0" title="Ligar/Desligar Visão Computacional (Webcam)">
-        <span id="vision-top-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500 inline-block mr-1"></span>
+    <!-- Direita: Indicadores de Status Compactos e Ações Rápidas -->
+    <div class="flex items-center space-x-2.5 text-[10px] font-mono-code">
+      <!-- Pills Preservadas (para compatibilidade total com o runtime JS) -->
+      <span id="pill-status" class="px-2 py-0.5 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400">SOBERANO</span>
+      
+      <!-- Visão Computacional Toggle -->
+      <button id="vision-top-pill" onclick="toggleVisionWebcam()" class="px-2.5 py-1 rounded-xl bg-slate-900/70 hover:bg-cyan-950/80 border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 transition-all flex items-center space-x-1.5 cursor-pointer">
+        <span id="vision-top-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
         <span id="vision-top-label">VISÃO: OFF</span>
       </button>
-      <span class="text-sky-500 font-bold shrink-0">•</span>
-      <button onclick="openFlightRadar3D()" class="px-2.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-400 text-cyan-300 hover:bg-cyan-900 transition-all cursor-pointer flex items-center space-x-1 font-mono-code group shadow-[0_0_12px_rgba(0,240,255,0.35)] shrink-0" title="Abrir Radar 3D da Terra Real com Voos em Tempo Real (ADS-B)">
-        <span class="text-xs">🌍</span>
-        <span class="font-bold">RADAR AÉREO 3D</span>
-      </button>
-      <span class="text-sky-500 font-bold shrink-0">•</span>
-      <button id="face-id-pill" onclick="openBiometricModal()" class="hover:text-cyan-300 transition-colors cursor-pointer flex items-center space-x-1 font-mono-code group shrink-0" title="Autenticação Biométrica Facial (Face ID Stark)">
-        <span id="face-id-pill-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block animate-pulse"></span>
-        <span id="face-id-pill-label">FACE ID: BLOQUEADO</span>
-      </button>
-      <span class="text-sky-500 font-bold shrink-0">•</span>
-      <button onclick="nextDemoStage()" class="hover:text-cyan-300 transition-colors cursor-pointer flex items-center group shrink-0">
-        <span>GERENCIAR HUD</span>
-        <svg class="w-3 h-3 ml-1 text-sky-400 group-hover:translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-      </button>
-    </div>
 
-    <!-- Status Indicator & Equalizer (FALANDO / OUVINDO) -->
-    <div class="mt-2.5 flex flex-col items-center">
-      <div id="status-tag" class="text-xs font-bold tracking-[0.35em] text-cyan-300 drop-shadow-[0_0_15px_rgba(0,240,255,0.9)] flex items-center space-x-2 font-hud">
-        <span id="jarvis-state-text">O N L I N E</span>
-      </div>
-      <div id="eq-container" class="flex items-center space-x-[3px] h-4 mt-1"></div>
+      <!-- Face ID -->
+      <button id="face-id-pill" onclick="openBiometricModal()" class="px-2.5 py-1 rounded-xl bg-slate-900/70 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center space-x-1.5 cursor-pointer">
+        <span id="face-id-pill-dot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+        <span id="face-id-pill-label">FACE ID</span>
+      </button>
+
+      <!-- Radar 3D -->
+      <button onclick="openFlightRadar3D()" class="px-2.5 py-1 rounded-xl bg-slate-900/70 hover:bg-cyan-950/80 border border-slate-800 text-slate-300 hover:text-cyan-300 flex items-center space-x-1 cursor-pointer" title="Radar Aéreo 3D">
+        <span>🌍</span>
+      </button>
     </div>
   </header>
 
   <!-- LEFT SIDE FLOATING DOCK (TELEMETRIA ZIMAOS E CLIMA FIXOS NA ESQUERDA) -->
-  <aside id="left-dock" class="fixed left-3 lg:left-6 top-1/2 -translate-y-1/2 z-40 w-72 lg:w-80 max-h-[96vh] flex flex-col items-stretch space-y-2.5 overflow-y-auto overflow-x-hidden no-scrollbar pointer-events-auto">
+    <!-- MINIMALIST ICON RAIL (LEFT NAVIGATION) -->
+  <nav id="icon-rail" class="fixed left-4 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center py-3.5 px-1.5 space-y-2 rounded-2xl bg-[#04060f]/85 backdrop-blur-2xl border border-white/[0.08] shadow-[0_15px_45px_rgba(0,0,0,0.9)]">
+    <!-- Spatial Intelligence / Apresentações -->
+    <button onclick="toggleFlyoutTab('spatial')" data-tab="spatial" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Spatial Workspace & Apresentações">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" stroke-width="1.8"/><line x1="8" y1="21" x2="16" y2="21" stroke-width="1.8"/><line x1="12" y1="17" x2="12" y2="21" stroke-width="1.8"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Spatial Workspace</span>
+    </button>
 
-    <!-- WIDGET FIXO: TELEMETRIA ZIMAOS CLOUD (CPU, TEMP, MEMÓRIA, DISCO, CONTAINERS) -->
-    <div id="card-zima-fixed" onclick="triggerZimaInspect()" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-emerald-400/60 transition-all group" title="Clique para abrir a telemetria detalhada no Painel Lateral">
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-emerald-500/25 border border-emerald-300/50 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path></svg>
-          </div>
-          <div>
-            <div class="text-[9px] tracking-widest text-emerald-400 font-semibold uppercase">INFRAESTRUTURA • CLOUD</div>
-            <div class="text-xs font-bold text-white tracking-wide">SERVIDOR ZIMAOS</div>
-          </div>
-        </div>
-        <div class="flex items-center space-x-1.5">
-          <span id="zima-live-badge" class="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-400/50 text-[9px] font-bold text-emerald-300 font-mono-code flex items-center">
-            <span id="zima-live-indicator" class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] mr-1.5 animate-pulse"></span>
-            <span id="zima-status-pill">ONLINE • 39 CTNS</span>
-          </span>
-        </div>
+    <!-- Sistema & Hardware -->
+    <button onclick="toggleFlyoutTab('hardware')" data-tab="hardware" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Sistema & Hardware">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" stroke-width="1.8"/><rect x="9" y="9" width="6" height="6" stroke-width="1.8"/><path stroke-width="1.8" d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Hardware & GPU</span>
+    </button>
+
+    <!-- Infraestrutura & ZimaOS -->
+    <button onclick="toggleFlyoutTab('infra')" data-tab="infra" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Infraestrutura ZimaOS & Clima">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" stroke-width="1.8"/><rect x="2" y="14" width="20" height="8" rx="2" stroke-width="1.8"/><line x1="6" y1="6" x2="6.01" y2="6" stroke-width="2"/><line x1="6" y1="18" x2="6.01" y2="18" stroke-width="2"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">ZimaOS & Cloud</span>
+    </button>
+
+    <!-- Visão Computacional -->
+    <button onclick="toggleFlyoutTab('vision')" data-tab="vision" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Percepção Visual & Webcam">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3" stroke-width="1.8"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Visão Computacional</span>
+    </button>
+
+    <!-- Memória & Inteligência -->
+    <button onclick="toggleFlyoutTab('memory')" data-tab="memory" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Cérebro Soberano & Memória">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="1.8" d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Núcleo & Ferramentas</span>
+    </button>
+
+    <!-- Missões & Histórico -->
+    <button onclick="toggleFlyoutTab('history')" data-tab="history" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Missões & Telemetria em Tempo Real">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" stroke-width="1.8"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Missões & Tarefas</span>
+    </button>
+
+    <!-- Configurações & TV -->
+    <button onclick="toggleFlyoutTab('settings')" data-tab="settings" class="rail-icon-btn group relative p-2.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all cursor-pointer" title="Configurações & Smart TV LG">
+      <span class="rail-active-pill absolute left-0 top-2 bottom-2 w-1 bg-cyan-400 rounded-r-full opacity-0 transition-opacity"></span>
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="1.8"/><path stroke-width="1.8" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="rail-tooltip pointer-events-none absolute left-14 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[10px] font-mono-code text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">Configurações & TV</span>
+    </button>
+  </nav>
+
+  <!-- CONTEXT FLYOUT PANEL (PAINEL CONTEXTUAL DESLIZANTE SOB DEMANDA) -->
+  <aside id="left-dock" class="fixed left-20 lg:left-24 top-14 bottom-24 w-[380px] lg:w-[410px] z-40 rounded-3xl bg-[#040714]/95 backdrop-blur-3xl border border-white/[0.08] shadow-[0_25px_80px_rgba(0,0,0,0.95)] flex flex-col overflow-hidden transition-all duration-300 ease-out hidden opacity-0 -translate-x-4 pointer-events-none">
+    <!-- Flyout Header -->
+    <div class="px-5 py-3.5 border-b border-white/[0.06] bg-slate-950/60 flex items-center justify-between shrink-0">
+      <div>
+        <div id="flyout-panel-subtitle" class="text-[9px] font-mono-code font-bold text-cyan-400 tracking-widest uppercase">PAINEL CONTEXTUAL</div>
+        <h3 id="flyout-panel-title" class="text-sm font-bold text-white tracking-wide font-hud">SISTEMA & HARDWARE</h3>
       </div>
-
-      <!-- Barras de telemetria em tempo real -->
-      <div class="space-y-1.5 my-2">
-        <!-- CPU & Temperatura -->
-        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-emerald-500/30 flex items-center justify-between text-[10px] font-mono-code">
-          <div class="flex items-center space-x-1.5">
-            <span class="text-emerald-400">🌡️ CPU:</span>
-            <span id="zima-temp-display" class="font-bold text-white transition-colors duration-500">43.0°C</span>
-          </div>
-          <div class="flex items-center space-x-1.5">
-            <span id="zima-cpu-display" class="font-bold text-cyan-300">22.9%</span>
-            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
-              <div id="zima-cpu-bar" class="bg-cyan-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 23%;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Memória RAM -->
-        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-sky-500/30 flex items-center justify-between text-[10px] font-mono-code">
-          <div class="flex items-center space-x-1.5">
-            <span class="text-sky-300">🧠 RAM:</span>
-            <span id="zima-ram-display" class="font-bold text-white">6.2 / 15.5 GB</span>
-          </div>
-          <div class="flex items-center space-x-1.5">
-            <span id="zima-ram-pct" class="font-bold text-sky-300">39.4%</span>
-            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
-              <div id="zima-ram-bar" class="bg-sky-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 39%;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Disco /DATA -->
-        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-amber-500/30 flex items-center justify-between text-[10px] font-mono-code">
-          <div class="flex items-center space-x-1.5">
-            <span class="text-amber-300">💾 /DATA:</span>
-            <span id="zima-disk-display" class="font-bold text-white">23.6 GB Livres</span>
-          </div>
-          <div class="flex items-center space-x-1.5">
-            <span id="zima-disk-pct" class="font-bold text-amber-300">89.4%</span>
-            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
-              <div id="zima-disk-bar" class="bg-amber-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 89%;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[9px] text-sky-400 font-mono-code">
-        <span id="zima-ip-display">HOST: 127.0.0.1</span>
-        <span id="zima-uptime-display" class="text-emerald-400 font-semibold">UPTIME: 15h 24m</span>
-      </div>
+      <button onclick="closeFlyoutPanel()" class="p-1.5 rounded-lg bg-slate-900/80 hover:bg-rose-950/80 border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-200 text-xs transition-colors" title="Fechar Painel (Esc)">✕</button>
     </div>
 
-    <!-- WIDGET 2: CLIMA (Catanduva / SP) -->
-    <div id="card-weather" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl">
-      <div class="flex items-center space-x-2 mb-1.5">
-        <div class="w-6 h-6 rounded-md bg-sky-500/25 border border-sky-300/50 flex items-center justify-center text-cyan-300">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-        </div>
-        <div>
-          <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PANORAMA • CLIMA</div>
-          <div class="text-xs font-bold text-white tracking-wide" id="weather-city">Catanduva / SP</div>
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between my-1.5">
-        <div class="flex items-center space-x-2">
-          <span class="text-2xl text-amber-300" id="weather-icon">--</span>
-          <div>
-            <div class="text-2xl font-bold text-white tracking-tight" id="weather-temp">--°</div>
-            <div class="text-[10px] text-cyan-300" id="weather-desc">Consultando...</div>
+    <!-- Flyout Scrollable Body (Categorizado em Tabs) -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
+      <!-- TAB 1: SPATIAL WORKSPACE -->
+      <div id="flyout-tab-spatial" class="flyout-tab-body space-y-3 hidden">
+        <div class="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 text-xs text-slate-300 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-cyan-400 font-bold font-mono-code">STATUS DO WORKSPACE:</span>
+            <span class="px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-400/50 text-[9px] font-mono-code text-cyan-300">ATIVO</span>
           </div>
-        </div>
-        <div class="text-right text-[10px] text-sky-400 space-y-1">
-          <div>💧 <strong class="text-sky-200" id="weather-hum">--%</strong></div>
-          <div>💨 <strong class="text-sky-200" id="weather-wind">-- km/h</strong></div>
-        </div>
-      </div>
-
-      <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[10px] text-sky-400">
-        <span>MÍNIMA <strong class="text-cyan-300 font-mono-code" id="weather-min">--°</strong></span>
-        <span>MÉDIA <strong class="text-cyan-300 font-mono-code" id="weather-avg">--°</strong></span>
-        <span>MÁXIMA <strong class="text-cyan-300 font-mono-code" id="weather-max">--°</strong></span>
-      </div>
-    </div>
-
-    <!-- WIDGET 3: OPENCLAW NÚCLEO AUTÔNOMO (Agente J.A.R.V.I.S.) -->
-    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-purple-400/80 transition-all group" onclick="triggerOpenClawInspect()">
-      <div class="flex items-center justify-between mb-1.5">
-        <div class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-purple-500/25 border border-purple-400/50 flex items-center justify-center text-purple-300">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <p class="text-slate-400 leading-relaxed text-[11px]">O Spatial Intelligence Workspace é o palco persistente e dinâmico onde o J.A.R.V.I.S. constrói gráficos Apache ECharts 5.5, modelos Three.js, mapas de relação e telemetria viva sem recriação do DOM.</p>
+          
+          <div class="space-y-2 pt-1">
+            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.createWorkspace()" class="w-full py-2.5 rounded-xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-xs font-mono-code font-bold transition-all shadow-[0_0_15px_rgba(0,240,255,0.2)] flex items-center justify-center space-x-2">
+              <span>✨</span>
+              <span>INICIALIZAR PALCO ESPACIAL</span>
+            </button>
+            <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.clearWorkspace()" class="w-full py-2 rounded-xl bg-slate-900 hover:bg-rose-950 border border-slate-800 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 text-xs font-mono-code transition-colors flex items-center justify-center space-x-2">
+              <span>🧹</span>
+              <span>LIMPAR COMPONENTES</span>
+            </button>
           </div>
-          <div>
-            <div class="text-[9px] tracking-widest text-purple-400 font-semibold uppercase">AGENTE • COGNITIVO</div>
-            <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
-              <span>OPENCLAW CORE</span>
-              <span id="openclaw-live-indicator" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            </div>
-          </div>
-        </div>
-        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-purple-300 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-400/40">ONLINE</span>
-      </div>
 
-      <div class="grid grid-cols-2 gap-2 my-1.5 text-[10px] font-mono-code">
-        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-purple-500/25">
-          <div class="text-slate-400 text-[8px] uppercase">MODELO ATIVO</div>
-          <div class="text-purple-300 font-bold text-[11px] truncate">Gemini 3.8 Flash</div>
-        </div>
-        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25">
-          <div class="text-slate-400 text-[8px] uppercase">MCP PROTOCOL</div>
-          <div class="text-cyan-300 font-bold text-[11px] truncate">8 TOOLS ATIVAS</div>
-        </div>
-      </div>
-
-      <div class="pt-1.5 border-t border-purple-900/60 flex items-center justify-between text-[10px] text-slate-400 font-mono-code">
-        <span class="text-slate-400">CONTAINER: <strong id="openclaw-container-display" class="text-emerald-300">openclaw</strong></span>
-        <span class="text-purple-400 group-hover:text-purple-200 transition-colors flex items-center space-x-1">
-          <span>INSPECIONAR</span>
-          <span>↗</span>
-        </span>
-      </div>
-    </div>
-
-    <!-- WIDGET 4: VISÃO COMPUTACIONAL WEBCAM (Detecção de Gestos e Movimentos) -->
-    <div id="card-vision-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl transition-all border border-cyan-500/40 hover:border-cyan-400/80">
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center space-x-2">
-          <div class="w-6 h-6 rounded-md bg-cyan-500/25 border border-cyan-400/50 flex items-center justify-center text-cyan-300">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-          </div>
-          <div>
-            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PERCEPÇÃO • WEBCAM</div>
-            <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
-              <span>VISÃO COMPUTACIONAL</span>
-              <span id="vision-live-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-            </div>
-          </div>
-        </div>
-        <button id="vision-switch-btn" onclick="toggleVisionWebcam()" class="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700 hover:border-cyan-400">
-          LIGAR
-        </button>
-      </div>
-
-      <!-- Status e FPS em tempo real -->
-      <div class="grid grid-cols-2 gap-1.5 my-1.5 text-[10px] font-mono-code">
-        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25 flex flex-col justify-between">
-          <div class="text-slate-400 text-[8px] uppercase">STATUS MOTOR</div>
-          <div id="vision-engine-status" class="text-slate-300 font-bold truncate">STANDBY</div>
-        </div>
-        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25 flex flex-col justify-between">
-          <div class="text-slate-400 text-[8px] uppercase">TAXA DE QUADROS</div>
-          <div id="vision-fps-display" class="text-cyan-300 font-bold">0.0 FPS</div>
-        </div>
-      </div>
-
-      <!-- Gesto Detectado e Confiança -->
-      <div class="p-1.5 rounded-xl bg-slate-950/80 border border-cyan-500/30 my-1.5">
-        <div class="flex items-center justify-between text-[9px] font-mono-code mb-1">
-          <span class="text-slate-400 uppercase">GESTO ATUAL</span>
-          <span id="vision-hand-display" class="text-cyan-400 font-bold">MÃO: NENHUMA</span>
-        </div>
-        <div class="flex items-center space-x-2 my-1">
-          <span id="vision-gesture-emoji" class="text-xl transition-transform">🖐️</span>
-          <div class="flex-1">
-            <div class="flex items-center justify-between">
-              <span id="vision-gesture-name" class="text-xs font-bold text-white font-mono-code">Aguardando...</span>
-              <span id="vision-confidence-val" class="text-[11px] font-mono-code font-bold text-cyan-300">0%</span>
-            </div>
-            <div id="vision-action-name" class="text-[9px] text-emerald-400 font-mono-code font-semibold truncate">Nenhuma ação</div>
-            <!-- Barra de Confiança -->
-            <div class="w-full bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
-              <div id="vision-confidence-bar" class="bg-cyan-400 h-1 rounded-full transition-all duration-300 ease-out" style="width: 0%;"></div>
+          <div class="pt-2 border-t border-cyan-500/20 space-y-2">
+            <div class="text-[9px] font-mono-code text-cyan-400 uppercase font-bold">CENÁRIOS DE DEMONSTRAÇÃO RÁPIDA:</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="executeCanvasAction('spatial_demo_powers', '', this)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-[10px] font-mono-code transition-all text-center">
+                🏛️ Três Poderes
+              </button>
+              <button onclick="executeCanvasAction('spatial_demo_echarts', '', this)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-cyan-300 text-[10px] font-mono-code transition-all text-center">
+                📊 ECharts Bar
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Presença, OpenClaw e Último Evento -->
-      <div class="space-y-1 text-[9px] font-mono-code text-slate-300 border-t border-cyan-900/50 pt-1.5">
-        <div class="flex justify-between items-center">
-          <span class="text-slate-400">PRESENÇA:</span>
-          <span id="vision-presence-badge" class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">AUSENTE</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-slate-400">OPENCLAW BRIDGE:</span>
-          <span id="vision-openclaw-status" class="text-emerald-400 flex items-center space-x-1">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span>CONECTADO</span>
-          </span>
-        </div>
-        <div class="flex justify-between items-center truncate">
-          <span class="text-slate-400">ÚLTIMO:</span>
-          <span id="vision-last-event" class="text-cyan-300 truncate max-w-[190px]">Nenhum gesto</span>
-        </div>
-      </div>
-
-      <!-- Botão de Abertura do Stream Ao Vivo -->
-      <div class="mt-2 pt-1.5 border-t border-cyan-900/60 flex items-center justify-between">
-        <button onclick="openVisionStreamModal()" class="w-full py-1 rounded-lg bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono-code font-bold flex items-center justify-center space-x-1.5 transition-colors">
-          <span>🎥</span>
-          <span>EXPANDIR PREVIEW HUD</span>
-          <span>↗</span>
-        </button>
-      </div>
-    </div>
-
-  </aside>
-
-  <!-- MAIN INTERACTIVE WORKSPACE (DYNAMIC CARDS STACK) -->
-  <main class="relative flex-1 w-full max-w-5xl mx-auto flex flex-col items-center justify-center z-30 px-4">
-    
-    <!-- TOP FEATURED ROW -->
-    <div id="top-card-container" class="w-full flex flex-col items-center justify-center mb-4 spring-trans">
-      
-      <!-- BANNER DE ALERTA DO HUD (Acionado por MCP/Jarvis) -->
-      <div id="hud-alert-banner" class="w-full max-w-xl mb-3 px-4 py-3 rounded-xl bg-rose-950/85 border border-rose-500/70 shadow-[0_0_25px_rgba(244,63,94,0.35)] flex items-center justify-between spring-trans hidden opacity-0 -translate-y-2">
-        <div class="flex items-center space-x-3">
-          <div class="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-400 flex items-center justify-center text-rose-300 animate-pulse">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-          </div>
-          <div>
-            <div id="hud-alert-title" class="text-[10px] font-bold tracking-widest text-rose-300 font-mono-code">ALERTA PRIORITÁRIO</div>
-            <div id="hud-alert-msg" class="text-xs font-semibold text-white">Mensagem de alerta do Jarvis</div>
-          </div>
-        </div>
-        <button onclick="document.getElementById('hud-alert-banner').classList.add('hidden')" class="text-rose-300/80 hover:text-white text-xs px-2 py-1">DISMISS</button>
-      </div>
-
-      <!-- JARVIS DYNAMIC VISUAL OS STAGE (Cards, Dashboards, Charts, Weather, Flows, Checklists) -->
-      <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
-
-      <!-- WIDGET CARD CUSTOMIZADO DINÂMICO (Acionado por MCP/Jarvis) -->
-      <div id="card-custom" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full max-w-xl spring-trans hidden opacity-0 scale-95 mb-3 shadow-[0_0_35px_rgba(0,210,255,0.4)] border border-cyan-400/60">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center space-x-2">
-            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
-            <span id="custom-card-subtitle" class="text-[10px] tracking-widest text-cyan-400 font-semibold uppercase">PROJEÇÃO MCP DINÂMICA</span>
-          </div>
-          <div class="flex items-center space-x-2">
-            <span class="text-[9px] font-mono-code text-sky-400 px-2 py-0.5 rounded bg-sky-950/80 border border-sky-400/40">JARVIS VIRTUAL HUD</span>
-            <button onclick="closeCustomCard()" class="text-sky-400/80 hover:text-white text-xs px-2 py-0.5 rounded bg-sky-950/60 hover:bg-sky-800/40 border border-sky-500/30 transition-colors">✕ FECHAR</button>
-          </div>
-        </div>
-
-        <div id="custom-card-title" class="text-lg font-bold text-white mb-2 tracking-wide">Título do Card</div>
-
-        <!-- TIMER / CRONÔMETRO WIDGET (Ativado dinamicamente quando tipo='timer') -->
-        <div id="custom-timer-widget" class="my-3 p-4 rounded-xl bg-slate-950/90 border border-cyan-500/50 flex flex-col items-center justify-center hidden">
-          <div class="text-[10px] font-mono-code tracking-widest text-cyan-400 mb-1">CONTAGEM REGRESSIVA ATIVA</div>
-          <div id="timer-digital-display" class="text-4xl md:text-5xl font-extrabold text-cyan-300 font-mono-code tracking-wider drop-shadow-[0_0_20px_rgba(0,240,255,0.9)] my-1">
-            05:00
-          </div>
-          <div class="w-full bg-slate-800/90 rounded-full h-2.5 mt-2.5 overflow-hidden border border-cyan-400/40">
-            <div id="timer-progress-bar" class="bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-1000 ease-linear" style="width: 100%"></div>
-          </div>
-        </div>
-
-        <div id="custom-card-content" class="text-xs text-slate-200 leading-relaxed font-normal whitespace-pre-wrap">Conteúdo gerado dinamicamente pelo Jarvis...</div>
-      </div>
-
-      <!-- WIDGET YOUTUBE CYBER PLAYER (Zero Contas / Embutido) -->
-      <div id="card-youtube" class="glass-card-stark glass-card-featured rounded-2xl p-4 w-full max-w-2xl spring-trans hidden opacity-0 scale-95 shadow-[0_0_40px_rgba(239,68,68,0.35)] border border-rose-500/50 mb-3">
-        <div class="flex items-center justify-between mb-2.5">
-          <div class="flex items-center space-x-2.5">
-            <div class="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-400/60 flex items-center justify-center text-rose-400">
-              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-            </div>
-            <div>
-              <div class="text-[9px] tracking-widest text-rose-400 font-semibold uppercase">// TERMINAL MULTIMÍDIA • YOUTUBE</div>
-              <div id="youtube-title" class="text-xs md:text-sm font-bold text-white tracking-wide truncate max-w-md">Vídeo YouTube</div>
-            </div>
-          </div>
-          <div class="flex items-center space-x-2">
-            <span class="px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-400/40 text-[9px] font-bold text-rose-300">STREAMING ATIVO</span>
-            <button onclick="closeYoutubeCard()" class="text-rose-300 hover:text-white text-xs px-2 py-0.5 rounded bg-rose-950/60 hover:bg-rose-900/60 border border-rose-500/40 transition-colors">✕ FECHAR</button>
-          </div>
-        </div>
-
-        <!-- 16:9 Responsive Player Container -->
-        <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black/90 border border-rose-500/30 shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]">
-          <iframe id="youtube-iframe" class="w-full h-full" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </div>
-
-        <!-- Controls Footer -->
-        <div class="mt-2.5 pt-2 border-t border-rose-950/80 flex items-center justify-between text-[10px] text-slate-300 font-mono-code">
-          <div class="flex items-center space-x-2">
-            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-            <span id="youtube-status-text">REPRODUZINDO NO STARK HUD</span>
-          </div>
-          <a id="youtube-external-link" href="#" target="_blank" class="text-rose-400 hover:text-rose-200 underline">ABRIR NO NAVEGADOR ↗</a>
-        </div>
-      </div>
-
-      <!-- WIDGET TELEMETRIA DE HARDWARE LOCAL (NVIDIA GTX 1660 Ti, CPU, RAM, SSD) -->
-      <div id="card-hardware" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full max-w-xl spring-trans hidden opacity-0 scale-95 shadow-[0_0_40px_rgba(16,185,129,0.35)] border border-emerald-500/50 mb-3">
+      <!-- TAB 2: HARDWARE & PC -->
+      <div id="flyout-tab-hardware" class="flyout-tab-body space-y-3 hidden">
+      <div id="card-hardware" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full w-full spring-trans  shadow-[0_0_40px_rgba(16,185,129,0.35)] border border-emerald-500/50 mb-3">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center space-x-2.5">
             <div class="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/60 flex items-center justify-center text-emerald-400">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
             </div>
             <div>
-              <div class="text-[9px] tracking-widest text-emerald-400 font-semibold uppercase">// TELEMETRIA LOCAL • WINDOWS 11</div>
+              <div class="text-[9px] tracking-widest text-emerald-400 font-semibold uppercase">// TELEMETRIA LOCAL ÔÇó WINDOWS 11</div>
               <div class="text-sm font-bold text-white tracking-wide font-hud">NVIDIA GEFORCE GTX 1660 Ti</div>
             </div>
           </div>
           <div class="flex items-center space-x-2">
             <span id="hw-status-pill" class="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-400/40 text-[9px] font-bold text-emerald-300">ONLINE</span>
-            <button onclick="closeHardwareCard()" class="text-emerald-300 hover:text-white text-xs px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 transition-colors">✕ FECHAR</button>
+            <button onclick="closeHardwareCard()" class="text-emerald-300 hover:text-white text-xs px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 transition-colors">Ô£ò FECHAR</button>
           </div>
         </div>
 
@@ -834,7 +661,7 @@
           <div class="p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30">
             <div class="flex justify-between items-center text-[10px] text-emerald-300 font-mono-code mb-1">
               <span>GPU LOAD & TEMP</span>
-              <span id="hw-gpu-temp" class="font-bold text-white">--°C</span>
+              <span id="hw-gpu-temp" class="font-bold text-white">--┬░C</span>
             </div>
             <div class="text-lg font-bold text-white font-mono-code mb-1.5" id="hw-gpu-load">--%</div>
             <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
@@ -859,7 +686,7 @@
           <!-- RAM Telemetry Box -->
           <div class="p-3 rounded-xl bg-slate-900/80 border border-sky-500/30">
             <div class="flex justify-between items-center text-[10px] text-sky-300 font-mono-code mb-1">
-              <span>MEMÓRIA RAM</span>
+              <span>MEM├ôRIA RAM</span>
               <span id="hw-ram-pct" class="font-bold text-white">--%</span>
             </div>
             <div class="text-lg font-bold text-white font-mono-code mb-1.5" id="hw-ram-used">-- GB</div>
@@ -879,7 +706,7 @@
             <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
               <div id="hw-disk-bar" class="bg-gradient-to-r from-amber-400 to-emerald-400 h-1.5 rounded-full" style="width: 0%"></div>
             </div>
-            <div class="text-[9px] text-slate-400 mt-1 font-mono-code" id="hw-disk-total">Espaço Livre Disponível</div>
+            <div class="text-[9px] text-slate-400 mt-1 font-mono-code" id="hw-disk-total">Espa├ºo Livre Dispon├¡vel</div>
           </div>
         </div>
 
@@ -888,7 +715,7 @@
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center space-x-1.5 text-[10px] font-mono-code font-bold text-emerald-300">
               <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span>⚡ ECONOMIA LOCAL • INTELLIGENCE PER WATT (OPENJARVIS)</span>
+              <span>ÔÜí ECONOMIA LOCAL ÔÇó INTELLIGENCE PER WATT (OPENJARVIS)</span>
             </div>
             <span class="text-[9px] text-emerald-400 font-mono-code font-semibold">100% OFFLINE</span>
           </div>
@@ -909,207 +736,286 @@
               <div class="text-[8px] text-amber-400">vs APIs de Nuvem</div>
             </div>
           </div>
-        <!-- Painel de Controles Rápidos: Canvas & Energia do Windows -->
+        <!-- Painel de Controles R├ípidos: Canvas & Energia do Windows -->
         <div class="mt-3 flex flex-wrap gap-2 pt-2 border-t border-sky-900/60 font-mono-code text-[10px]">
           <button onclick="executeCanvasAction('refresh_hardware_charts', 'sidebar', this)" class="px-2.5 py-1.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/60 text-cyan-200 font-bold transition-all hover:scale-105 active:scale-95 flex items-center space-x-1">
-            <span>📈 ABRIR GRÁFICO NO CANVAS</span>
+            <span>­ƒôê ABRIR GR├üFICO NO CANVAS</span>
           </button>
           <button onclick="executeCanvasAction('open_desktop_canvas', 'charts', this)" class="px-2.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400/60 text-emerald-200 font-bold transition-all hover:scale-105 active:scale-95 flex items-center space-x-1">
-            <span>🖥️ CANVAS DESKTOP</span>
+            <span>­ƒûÑ´©Å CANVAS DESKTOP</span>
           </button>
           <button onclick="executeCanvasAction('shutdown_pc', '30', this)" class="px-2.5 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/60 text-rose-200 font-bold transition-all hover:scale-105 active:scale-95 flex items-center space-x-1">
-            <span>⛔ DESLIGAR PC (30S)</span>
+            <span>Ôøö DESLIGAR PC (30S)</span>
           </button>
           <button onclick="executeCanvasAction('abort_shutdown', '', this)" class="px-2.5 py-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-500/60 text-amber-200 font-bold transition-all hover:scale-105 active:scale-95 flex items-center space-x-1">
-            <span>🛑 CANCELAR DESLIGAMENTO</span>
+            <span>­ƒøæ CANCELAR DESLIGAMENTO</span>
           </button>
         </div>
 
         <!-- Telemetry Footer -->
         <div class="mt-2 pt-2 border-t border-emerald-950/80 flex items-center justify-between text-[10px] text-slate-300 font-mono-code">
-          <span class="text-emerald-400">NVIDIA DRIVER 566.14 • CUDA 12.7</span>
+          <span class="text-emerald-400">NVIDIA DRIVER 566.14 ÔÇó CUDA 12.7</span>
           <span id="hw-timestamp" class="text-slate-400">SINCRO: 00:00:00</span>
         </div>
       </div>
 
-      <!-- WIDGET NOTÍCIAS (Stage 3 - Featured Dinâmico com Auto-Scroll e Extração Real) -->
-      <div id="card-news" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full max-w-xl spring-trans hidden opacity-0 scale-95 shadow-[0_0_40px_rgba(0,210,255,0.35)] relative overflow-hidden">
-        <!-- Auto-Dismiss Progress Bar no Topo -->
-        <div class="absolute top-0 left-0 right-0 h-1 bg-sky-950 overflow-hidden">
-          <div id="card-news-dismiss-bar" class="h-full bg-gradient-to-r from-cyan-400 to-sky-400 transition-all ease-linear" style="width: 100%;"></div>
-        </div>
+      <!-- WIDGET NOT├ìCIAS (Stage 3 - Featured Din├ómico com Auto-Scroll e Extra├º├úo Real) -->
 
-        <div class="flex items-center justify-between mb-3 pt-1">
-          <div class="flex items-center space-x-2.5">
-            <div class="w-7 h-7 rounded-lg bg-sky-500/25 border border-sky-300/60 flex items-center justify-center text-cyan-300">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path></svg>
-            </div>
-            <div>
-              <div class="text-[10px] tracking-widest text-cyan-400 font-semibold uppercase">// RADAR • INFORMAÇÃO & NOTÍCIAS</div>
-              <div id="news-category" class="text-sm font-bold text-white tracking-wide uppercase font-hud">CATANDUVA & REGIÃO</div>
-            </div>
-          </div>
-          <div class="flex items-center space-x-2">
-            <span id="news-badge" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-[9px] font-bold text-cyan-300 tracking-wider">AO VIVO</span>
-            <button onclick="closeNewsCard()" class="text-cyan-300 hover:text-white text-xs px-2 py-0.5 rounded bg-sky-950/60 hover:bg-rose-950/60 border border-cyan-500/40 hover:border-rose-500/40 transition-colors">✕ FECHAR</button>
-          </div>
-        </div>
-
-        <!-- Banner com Imagem Real Extraída do Artigo -->
-        <div id="news-img-box" class="relative w-full h-44 rounded-xl overflow-hidden mb-3 border border-sky-400/40 group bg-slate-950">
-          <img id="news-img" src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop" alt="News Radar" class="w-full h-full object-cover brightness-95 group-hover:scale-105 transition-transform duration-700" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop';">
-          <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
-          <div class="absolute top-2.5 left-3 flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-black/70 border border-cyan-400/50 text-[10px] font-mono-code text-cyan-300 backdrop-blur-sm">
-            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-            <span id="news-source-tag">FEED REGIONAL J.A.R.V.I.S.</span>
-          </div>
-          <div id="news-teleprompter-badge" class="absolute bottom-2.5 right-3 hidden items-center space-x-1.5 px-2 py-0.5 rounded bg-cyan-950/90 border border-cyan-400/60 text-[9px] font-mono-code text-cyan-200">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>TELEPROMPTER ATIVO</span>
-          </div>
-        </div>
-
-        <!-- Título da Matéria -->
-        <h4 id="news-headline" class="text-sm font-bold text-white mb-2 leading-snug tracking-wide">
-          Manchete Principal
-        </h4>
-
-        <!-- Container Rolável da Matéria (Teleprompter Automático durante a Fala do Jarvis) -->
-        <div id="news-scroll-container" class="max-h-36 overflow-y-auto pr-1 space-y-2 text-xs text-slate-200 leading-relaxed font-normal custom-scrollbar rounded-lg p-2 bg-slate-950/40 border border-sky-900/40 transition-all duration-300">
-          <p id="news-body">Carregando detalhes da notícia em tempo real...</p>
-        </div>
-
-        <!-- Ações do Card: Expandir & Link Original -->
-        <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-sky-900/60 text-[11px]">
-          <div class="flex items-center space-x-2">
-            <button id="news-expand-btn" onclick="toggleNewsExpand()" class="px-2.5 py-1 rounded-lg bg-sky-900/40 hover:bg-sky-800/60 border border-sky-500/40 text-cyan-300 font-mono-code text-[10px] flex items-center space-x-1 transition-colors">
-              <span>↕ EXPANDIR MATÉRIA</span>
-            </button>
-            <a id="news-source-link" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-200 underline font-mono-code text-[10px] flex items-center space-x-1">
-              <span>PORTAL OFICIAL ↗</span>
-            </a>
-          </div>
-          <div class="flex items-center space-x-1.5 text-slate-300 text-[10px] font-mono-code">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            <span id="news-source">FONTE VERIFICADA</span>
-          </div>
-        </div>
       </div>
 
-
-      <!-- WIDGET E-MAIL E FINANÇAS REAIS (Stage 2 - Featured) -->
-      <div id="card-email-featured" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full max-w-xl spring-trans opacity-0 scale-95 hidden">
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center space-x-2.5">
-            <div class="w-7 h-7 rounded-lg bg-sky-500/25 border border-sky-300/60 flex items-center justify-center text-cyan-300">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </div>
-            <div>
-              <div class="text-[10px] tracking-widest text-cyan-400 font-semibold uppercase">PLUGGY OPEN FINANCE • CONTAS REAIS</div>
-              <div class="text-sm font-bold text-white tracking-wide">Panorama Financeiro do Senhor Werik</div>
-            </div>
-          </div>
-          <div class="flex items-center space-x-1.5">
-            <span class="px-2.5 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-[10px] font-bold text-emerald-300">CONECTADO</span>
-            <span class="px-2.5 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/50 text-[10px] font-bold text-sky-300">2 CONTAS</span>
-          </div>
-        </div>
-
-        <div class="space-y-2.5">
-          <!-- Item 01: Banco Inter Real -->
-          <div class="p-3.5 rounded-xl bg-slate-900/70 border border-sky-800/70 hover:border-cyan-400/60 transition-colors flex items-center justify-between">
-            <div>
-              <div class="flex items-center space-x-1.5 mb-0.5">
-                <span class="text-[10px] font-mono-code text-cyan-400 font-bold">01</span>
-                <span class="text-xs font-bold text-white tracking-wide">BANCO INTER • CONTA CORRENTE</span>
-              </div>
-              <p class="text-[11px] text-slate-300">
-                Conta 29786805-5 • CNPJ 51.141.601/0001-55
-              </p>
-            </div>
-            <div class="text-right">
-              <span class="text-sm font-bold text-slate-200 font-mono-code" id="val-inter-feat">R$ 0,00</span>
-              <div class="text-[9px] text-cyan-400 font-semibold">SALDO DISPONÍVEL</div>
-            </div>
-          </div>
-
-          <!-- Item 02: Banco Inter Cartão MEI Real -->
-          <div class="p-3.5 rounded-xl bg-slate-900/70 border border-sky-800/70 hover:border-cyan-400/60 transition-colors flex items-center justify-between">
-            <div>
-              <div class="flex items-center space-x-1.5 mb-0.5">
-                <span class="text-[10px] font-mono-code text-rose-400 font-bold">02</span>
-                <span class="text-xs font-bold text-white tracking-wide">BANCO INTER • CARTÃO MEI MASTERCARD</span>
-              </div>
-              <p class="text-[11px] text-slate-300" id="desc-mei-feat">
-                Cartão MEI • Sincronizando limites...
-              </p>
-            </div>
-            <div class="text-right">
-              <span class="text-sm font-bold text-rose-400 font-mono-code" id="val-mei-feat">--</span>
-              <div class="text-[9px] text-rose-300 font-semibold">FATURA UTILIZADA</div>
-            </div>
-          </div>
-
-          <!-- Item 03: Parecer do Jarvis em Tempo Real -->
-          <div class="p-3 rounded-xl bg-sky-950/40 border border-sky-500/30">
-            <div class="flex items-center space-x-1.5 mb-1 text-[10px] text-cyan-300 font-bold tracking-wider">
-              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span>PARECER DO AGENTE JARVIS</span>
-            </div>
-            <p id="live-agent-finance-notes" class="text-xs text-slate-200 leading-relaxed font-normal">
-              Aguardando sincronização dos dados bancários via Open Finance...
-            </p>
-          </div>
-        </div>
-
-        <div class="mt-3 pt-2.5 border-t border-sky-900/60 text-[10px] text-sky-400 flex justify-between font-mono-code">
-          <span id="pluggy-updated-at">PLUGGY LIVE SYNC</span>
-          <span class="text-emerald-400 font-bold">VERIFICADO VIA API</span>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- BOTTOM ROW WIDGETS -->
-    <div id="bottom-cards-row" class="w-full flex items-center justify-center gap-4 spring-trans flex-wrap">
-
-      <!-- WIDGET 2: AGENDA -->
-
-
-
-      <!-- WIDGET 2: AGENDA -->
-      <div id="card-agenda" class="glass-card-stark rounded-2xl p-4 w-72 spring-trans shadow-2xl hidden opacity-0">
-        <div class="flex items-center space-x-2 mb-2">
-          <div class="w-6 h-6 rounded-md bg-sky-500/25 border border-sky-300/50 flex items-center justify-center text-cyan-300">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+      <!-- TAB 3: INFRAESTRUTURA & ZIMAOS -->
+      <div id="flyout-tab-infra" class="flyout-tab-body space-y-3 hidden">
+    <div id="card-zima-fixed" onclick="triggerZimaInspect()" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-emerald-400/60 transition-all group" title="Clique para abrir a telemetria detalhada no Painel Lateral">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-emerald-500/25 border border-emerald-300/50 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path></svg>
           </div>
           <div>
-            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">AGENDA • HOJE</div>
-            <div class="text-xs font-bold text-white tracking-wide">Agenda livre</div>
+            <div class="text-[9px] tracking-widest text-emerald-400 font-semibold uppercase">INFRAESTRUTURA ÔÇó CLOUD</div>
+            <div class="text-xs font-bold text-white tracking-wide">SERVIDOR ZIMAOS</div>
           </div>
         </div>
-
-        <div class="my-3 text-center py-2.5 bg-slate-900/60 rounded-xl border border-sky-800/50">
-          <svg class="w-5 h-5 mx-auto text-cyan-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-          <div class="text-xs font-bold text-slate-200">Aguardando solicitação</div>
-          <div class="text-[10px] text-sky-400 mt-0.5">Diga ao Jarvis para consultar compromissos.</div>
-        </div>
-
-        <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[9px] text-sky-400 font-mono-code">
-          <span>GOOGLE AGENDA</span>
-          <span class="text-emerald-400 font-semibold">LEITURA ATUAL</span>
+        <div class="flex items-center space-x-1.5">
+          <span id="zima-live-badge" class="px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-400/50 text-[9px] font-bold text-emerald-300 font-mono-code flex items-center">
+            <span id="zima-live-indicator" class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399] mr-1.5 animate-pulse"></span>
+            <span id="zima-status-pill">ONLINE ÔÇó 39 CTNS</span>
+          </span>
         </div>
       </div>
 
-      <!-- WIDGET 3: COMUNICAÇÕES & CONTAS COMPACTO -->
-      <div id="card-email-compact" class="glass-card-stark rounded-2xl p-4 w-72 spring-trans shadow-2xl hidden opacity-0">
+      <!-- Barras de telemetria em tempo real -->
+      <div class="space-y-1.5 my-2">
+        <!-- CPU & Temperatura -->
+        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-emerald-500/30 flex items-center justify-between text-[10px] font-mono-code">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-emerald-400">­ƒîí´©Å CPU:</span>
+            <span id="zima-temp-display" class="font-bold text-white transition-colors duration-500">43.0┬░C</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="zima-cpu-display" class="font-bold text-cyan-300">22.9%</span>
+            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
+              <div id="zima-cpu-bar" class="bg-cyan-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 23%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mem├│ria RAM -->
+        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-sky-500/30 flex items-center justify-between text-[10px] font-mono-code">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-sky-300">­ƒºá RAM:</span>
+            <span id="zima-ram-display" class="font-bold text-white">6.2 / 15.5 GB</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="zima-ram-pct" class="font-bold text-sky-300">39.4%</span>
+            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
+              <div id="zima-ram-bar" class="bg-sky-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 39%;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Disco /DATA -->
+        <div class="p-1.5 rounded-lg bg-slate-900/70 border border-amber-500/30 flex items-center justify-between text-[10px] font-mono-code">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-amber-300">­ƒÆ¥ /DATA:</span>
+            <span id="zima-disk-display" class="font-bold text-white">23.6 GB Livres</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="zima-disk-pct" class="font-bold text-amber-300">89.4%</span>
+            <div class="w-12 bg-slate-800 rounded-full h-1 overflow-hidden">
+              <div id="zima-disk-bar" class="bg-amber-400 h-1 rounded-full transition-all duration-700 ease-out" style="width: 89%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[9px] text-sky-400 font-mono-code">
+        <span id="zima-ip-display">HOST: 127.0.0.1</span>
+        <span id="zima-uptime-display" class="text-emerald-400 font-semibold">UPTIME: 15h 24m</span>
+      </div>
+    </div>
+
+    <!-- WIDGET 2: CLIMA (Catanduva / SP) -->
+
+    <div id="card-weather" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl">
+      <div class="flex items-center space-x-2 mb-1.5">
+        <div class="w-6 h-6 rounded-md bg-sky-500/25 border border-sky-300/50 flex items-center justify-center text-cyan-300">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+        </div>
+        <div>
+          <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PANORAMA ÔÇó CLIMA</div>
+          <div class="text-xs font-bold text-white tracking-wide" id="weather-city">Catanduva / SP</div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between my-1.5">
+        <div class="flex items-center space-x-2">
+          <span class="text-2xl text-amber-300" id="weather-icon">--</span>
+          <div>
+            <div class="text-2xl font-bold text-white tracking-tight" id="weather-temp">--┬░</div>
+            <div class="text-[10px] text-cyan-300" id="weather-desc">Consultando...</div>
+          </div>
+        </div>
+        <div class="text-right text-[10px] text-sky-400 space-y-1">
+          <div>­ƒÆº <strong class="text-sky-200" id="weather-hum">--%</strong></div>
+          <div>­ƒÆ¿ <strong class="text-sky-200" id="weather-wind">-- km/h</strong></div>
+        </div>
+      </div>
+
+      <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[10px] text-sky-400">
+        <span>M├ìNIMA <strong class="text-cyan-300 font-mono-code" id="weather-min">--┬░</strong></span>
+        <span>M├ëDIA <strong class="text-cyan-300 font-mono-code" id="weather-avg">--┬░</strong></span>
+        <span>M├üXIMA <strong class="text-cyan-300 font-mono-code" id="weather-max">--┬░</strong></span>
+      </div>
+    </div>
+
+    <!-- WIDGET 3: N├ÜCLEO COGNITIVO SOBERANO J.A.R.V.I.S. (IA NATIVA DIRETA) -->
+
+      </div>
+
+      <!-- TAB 4: VISÃO COMPUTACIONAL -->
+      <div id="flyout-tab-vision" class="flyout-tab-body space-y-3 hidden">
+    <div id="card-vision-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl transition-all border border-cyan-500/40 hover:border-cyan-400/80">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-cyan-500/25 border border-cyan-400/50 flex items-center justify-center text-cyan-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+          </div>
+          <div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PERCEP├ç├âO ÔÇó WEBCAM</div>
+            <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
+              <span>VIS├âO COMPUTACIONAL</span>
+              <span id="vision-live-dot" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            </div>
+          </div>
+        </div>
+        <button id="vision-switch-btn" onclick="toggleVisionWebcam()" class="px-2 py-0.5 rounded text-[9px] font-mono-code font-bold transition-all bg-slate-800 text-slate-400 border border-slate-700 hover:border-cyan-400">
+          LIGAR
+        </button>
+      </div>
+
+      <!-- Status e FPS em tempo real -->
+      <div class="grid grid-cols-2 gap-1.5 my-1.5 text-[10px] font-mono-code">
+        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25 flex flex-col justify-between">
+          <div class="text-slate-400 text-[8px] uppercase">STATUS MOTOR</div>
+          <div id="vision-engine-status" class="text-slate-300 font-bold truncate">STANDBY</div>
+        </div>
+        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25 flex flex-col justify-between">
+          <div class="text-slate-400 text-[8px] uppercase">TAXA DE QUADROS</div>
+          <div id="vision-fps-display" class="text-cyan-300 font-bold">0.0 FPS</div>
+        </div>
+      </div>
+
+      <!-- Gesto Detectado e Confian├ºa -->
+      <div class="p-1.5 rounded-xl bg-slate-950/80 border border-cyan-500/30 my-1.5">
+        <div class="flex items-center justify-between text-[9px] font-mono-code mb-1">
+          <span class="text-slate-400 uppercase">GESTO ATUAL</span>
+          <span id="vision-hand-display" class="text-cyan-400 font-bold">M├âO: NENHUMA</span>
+        </div>
+        <div class="flex items-center space-x-2 my-1">
+          <span id="vision-gesture-emoji" class="text-xl transition-transform">­ƒûÉ´©Å</span>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <span id="vision-gesture-name" class="text-xs font-bold text-white font-mono-code">Aguardando...</span>
+              <span id="vision-confidence-val" class="text-[11px] font-mono-code font-bold text-cyan-300">0%</span>
+            </div>
+            <div id="vision-action-name" class="text-[9px] text-emerald-400 font-mono-code font-semibold truncate">Nenhuma a├º├úo</div>
+            <!-- Barra de Confian├ºa -->
+            <div class="w-full bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
+              <div id="vision-confidence-bar" class="bg-cyan-400 h-1 rounded-full transition-all duration-300 ease-out" style="width: 0%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Presen├ºa, OpenClaw e ├Ültimo Evento -->
+      <div class="space-y-1 text-[9px] font-mono-code text-slate-300 border-t border-cyan-900/50 pt-1.5">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400">PRESEN├çA:</span>
+          <span id="vision-presence-badge" class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">AUSENTE</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400">N├ÜCLEO BRIDGE:</span>
+          <span id="vision-openclaw-status" class="text-emerald-400 flex items-center space-x-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>CONECTADO</span>
+          </span>
+        </div>
+        <div class="flex justify-between items-center truncate">
+          <span class="text-slate-400">├ÜLTIMO:</span>
+          <span id="vision-last-event" class="text-cyan-300 truncate max-w-[190px]">Nenhum gesto</span>
+        </div>
+      </div>
+
+      <!-- Bot├úo de Abertura do Stream Ao Vivo -->
+      <div class="mt-2 pt-1.5 border-t border-cyan-900/60 flex items-center justify-between">
+        <button onclick="openVisionStreamModal()" class="w-full py-1 rounded-lg bg-cyan-950/70 hover:bg-cyan-900/80 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono-code font-bold flex items-center justify-center space-x-1.5 transition-colors">
+          <span>­ƒÄÑ</span>
+          <span>EXPANDIR PREVIEW HUD</span>
+          <span>Ôåù</span>
+        </button>
+      </div>
+    </div>
+
+
+        <div class="p-3 rounded-xl bg-slate-900/60 border border-cyan-500/30 text-xs space-y-2">
+          <div class="text-[9px] font-mono-code text-cyan-400 uppercase font-bold">BIOMETRIA FACIAL STARK</div>
+          <p class="text-[10px] text-slate-400">Verificação facial local de Senhor Werik com modelos face-api soberanos.</p>
+          <button onclick="openBiometricModal()" class="w-full py-2 rounded-xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-xs font-mono-code font-bold transition-all">
+            👁️ ABRIR SENSOR BIOMÉTRICO
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 5: MEMÓRIA & COGNIÇÃO -->
+      <div id="flyout-tab-memory" class="flyout-tab-body space-y-3 hidden">
+    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-cyan-400/80 transition-all group" onclick="triggerJarvisCoreInspect()">
+      <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center space-x-2">
+          <div class="w-6 h-6 rounded-md bg-cyan-500/25 border border-cyan-400/50 flex items-center justify-center text-cyan-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          </div>
+          <div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">N├ÜCLEO ÔÇó COGNITIVO</div>
+            <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
+              <span>STARK CORE AI</span>
+              <span id="openclaw-live-indicator" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            </div>
+          </div>
+        </div>
+        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/40">SOBERANO</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 my-1.5 text-[10px] font-mono-code">
+        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-cyan-500/25">
+          <div class="text-slate-400 text-[8px] uppercase">MOTOR DE IA</div>
+          <div class="text-cyan-300 font-bold text-[11px] truncate">Multi-Model Direct</div>
+        </div>
+        <div class="p-1.5 rounded-lg bg-slate-900/60 border border-emerald-500/25">
+          <div class="text-slate-400 text-[8px] uppercase">FERRAMENTAS</div>
+          <div class="text-emerald-300 font-bold text-[11px] truncate">49 TOOLS ATIVAS</div>
+        </div>
+      </div>
+
+      <div class="pt-1.5 border-t border-cyan-900/60 flex items-center justify-between text-[10px] text-slate-400 font-mono-code">
+        <span class="text-slate-400">ARQUITETURA: <strong id="openclaw-container-display" class="text-cyan-300">direto_no_nucleo</strong></span>
+        <span class="text-cyan-400 group-hover:text-cyan-200 transition-colors flex items-center space-x-1">
+          <span>INSPECIONAR</span>
+          <span>Ôåù</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- WIDGET 4: VIS├âO COMPUTACIONAL WEBCAM (Detec├º├úo de Gestos e Movimentos) -->
+
+      <div id="card-email-compact" class="glass-card-stark rounded-2xl p-4 w-full spring-trans shadow-2xl ">
         <div class="flex items-center space-x-2 mb-2">
           <div class="w-6 h-6 rounded-md bg-sky-500/25 border border-sky-300/50 flex items-center justify-center text-cyan-300">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           </div>
           <div>
-            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PLUGGY • CONTAS REAIS</div>
-            <div class="text-xs font-bold text-white tracking-wide">Resumo Bancário</div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">PLUGGY ÔÇó CONTAS REAIS</div>
+            <div class="text-xs font-bold text-white tracking-wide">Resumo Banc├írio</div>
           </div>
         </div>
 
@@ -1123,7 +1029,7 @@
           </div>
           <div class="p-2 rounded bg-slate-900/70 border border-sky-800/60 text-[10px] flex items-center justify-between">
             <div>
-              <span class="font-bold text-rose-300">02 INTER MEI CARTÃO</span>
+              <span class="font-bold text-rose-300">02 INTER MEI CART├âO</span>
               <p class="text-slate-300 text-[9px]">Fatura Atual</p>
             </div>
             <span class="font-bold font-mono-code text-rose-400">--</span>
@@ -1138,39 +1044,401 @@
 
     </div>
 
+
+      <div id="card-agenda" class="glass-card-stark rounded-2xl p-4 w-full spring-trans shadow-2xl ">
+        <div class="flex items-center space-x-2 mb-2">
+          <div class="w-6 h-6 rounded-md bg-sky-500/25 border border-sky-300/50 flex items-center justify-center text-cyan-300">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          </div>
+          <div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">AGENDA ÔÇó HOJE</div>
+            <div class="text-xs font-bold text-white tracking-wide">Agenda livre</div>
+          </div>
+        </div>
+
+        <div class="my-3 text-center py-2.5 bg-slate-900/60 rounded-xl border border-sky-800/50">
+          <svg class="w-5 h-5 mx-auto text-cyan-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+          <div class="text-xs font-bold text-slate-200">Aguardando solicita├º├úo</div>
+          <div class="text-[10px] text-sky-400 mt-0.5">Diga ao Jarvis para consultar compromissos.</div>
+        </div>
+
+        <div class="pt-1.5 border-t border-sky-900/60 flex justify-between text-[9px] text-sky-400 font-mono-code">
+          <span>GOOGLE AGENDA</span>
+          <span class="text-emerald-400 font-semibold">LEITURA ATUAL</span>
+        </div>
+      </div>
+
+      <!-- WIDGET 3: COMUNICA├ç├òES & CONTAS COMPACTO -->
+
+      </div>
+
+      <!-- TAB 6: MISSÕES & HISTÓRICO -->
+      <div id="flyout-tab-history" class="flyout-tab-body space-y-3 hidden">
+    <div id="card-live-task" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl transition-all border border-cyan-500/40 hover:border-cyan-400 relative overflow-hidden group">
+      <!-- Brilho de atividade superior neon -->
+      <div id="task-glow-line" class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80 shadow-[0_0_8px_rgba(0,240,255,0.8)]"></div>
+
+      <!-- Header com ├ìcone, T├¡tulo e Badge -->
+      <div class="flex items-center justify-between mb-1.5 cursor-pointer" onclick="toggleTaskCardCollapse()">
+        <div class="flex items-center space-x-2">
+          <div id="task-icon-container" class="w-6 h-6 rounded-md bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="text-[9px] tracking-widest text-amber-400 font-semibold uppercase flex items-center space-x-1.5">
+              <span>MISS├âO ÔÇó ATIVIDADE AO VIVO</span>
+              <span id="task-live-dot" class="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#00f0ff]"></span>
+            </div>
+            <div class="text-xs font-bold text-white tracking-wide truncate max-w-[170px]" id="task-title-display">
+              Aguardando Instru├º├úo
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex items-center space-x-1">
+          <span id="task-status-badge" class="text-[9px] font-mono-code text-amber-300 px-2 py-0.5 rounded bg-amber-950/80 border border-amber-400/40">
+            STANDBY
+          </span>
+          <span id="task-collapse-icon" class="text-slate-400 hover:text-cyan-300 text-xs px-0.5 transition-transform">Ôû¥</span>
+        </div>
+      </div>
+
+      <!-- Bloco de Detalhes da Tarefa: Como est├í sendo feita, Etapa e Terminal de Logs -->
+      <div id="task-body-container" class="space-y-1.5 my-1.5 transition-all">
+        <!-- M├®todo / Como est├í sendo feita -->
+        <div class="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700/60 flex items-center justify-between text-[10px] font-mono-code">
+          <span class="text-slate-400 text-[9px]">COMO EST├ü SENDO FEITA:</span>
+          <span id="task-method-display" class="font-bold text-cyan-300 truncate max-w-[160px]">
+            Aguardando ativa├º├úo
+          </span>
+        </div>
+
+        <!-- Etapa Atual & Barra de Progresso Neon -->
+        <div class="p-1.5 rounded-lg bg-slate-900/80 border border-cyan-500/30 text-[10px] font-mono-code">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-slate-400 text-[9px]">ETAPA ATUAL:</span>
+            <span id="task-step-counter" class="text-cyan-400 font-bold text-[9px]">0/0 (0%)</span>
+          </div>
+          <div id="task-step-name" class="text-white font-bold truncate text-[11px] mb-1.5">
+            Sistema em repouso
+          </div>
+          <!-- Barra de Progresso Neon -->
+          <div class="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-cyan-900/60 p-[1px]">
+            <div id="task-progress-bar" class="bg-gradient-to-r from-cyan-500 via-sky-400 to-emerald-400 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_8px_rgba(0,240,255,0.8)]" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Terminal de Logs em Tempo Real (Live Step Feed) -->
+        <div class="rounded-lg bg-slate-950/95 border border-cyan-500/25 p-2 font-mono-code">
+          <div class="flex items-center justify-between text-[8px] text-slate-400 border-b border-cyan-950 pb-1 mb-1.5">
+            <span class="text-cyan-400 font-bold tracking-wider">LOG DE EXECU├ç├âO EM TEMPO REAL</span>
+            <span id="task-elapsed-timer" class="text-slate-300 font-bold">ÔÅ▒´©Å 0.0s</span>
+          </div>
+          <div id="task-live-logs" class="space-y-1 max-h-28 overflow-y-auto overflow-x-hidden text-[9px] no-scrollbar">
+            <div class="text-slate-500 italic flex items-center space-x-1.5">
+              <span>­ƒƒó</span>
+              <span>J.A.R.V.I.S. pronto para registrar etapas ao vivo...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<!-- WIDGET FIXO: TELEMETRIA ZIMAOS CLOUD (CPU, TEMP, MEM├ôRIA, DISCO, CONTAINERS) -->
+
+      <div id="card-news" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full w-full spring-trans  shadow-[0_0_40px_rgba(0,210,255,0.35)] relative overflow-hidden">
+        <!-- Auto-Dismiss Progress Bar no Topo -->
+        <div class="absolute top-0 left-0 right-0 h-1 bg-sky-950 overflow-hidden">
+          <div id="card-news-dismiss-bar" class="h-full bg-gradient-to-r from-cyan-400 to-sky-400 transition-all ease-linear" style="width: 100%;"></div>
+        </div>
+
+        <div class="flex items-center justify-between mb-3 pt-1">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-7 h-7 rounded-lg bg-sky-500/25 border border-sky-300/60 flex items-center justify-center text-cyan-300">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path></svg>
+            </div>
+            <div>
+              <div class="text-[10px] tracking-widest text-cyan-400 font-semibold uppercase">// RADAR ÔÇó INFORMA├ç├âO & NOT├ìCIAS</div>
+              <div id="news-category" class="text-sm font-bold text-white tracking-wide uppercase font-hud">CATANDUVA & REGI├âO</div>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span id="news-badge" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-[9px] font-bold text-cyan-300 tracking-wider">AO VIVO</span>
+            <button onclick="closeNewsCard()" class="text-cyan-300 hover:text-white text-xs px-2 py-0.5 rounded bg-sky-950/60 hover:bg-rose-950/60 border border-cyan-500/40 hover:border-rose-500/40 transition-colors">Ô£ò FECHAR</button>
+          </div>
+        </div>
+
+        <!-- Banner com Imagem Real Extra├¡da do Artigo -->
+        <div id="news-img-box" class="relative w-full h-44 rounded-xl overflow-hidden mb-3 border border-sky-400/40 group bg-slate-950">
+          <img id="news-img" src="https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop" alt="News Radar" class="w-full h-full object-cover brightness-95 group-hover:scale-105 transition-transform duration-700" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000&auto=format&fit=crop';">
+          <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent"></div>
+          <div class="absolute top-2.5 left-3 flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-black/70 border border-cyan-400/50 text-[10px] font-mono-code text-cyan-300 backdrop-blur-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span id="news-source-tag">FEED REGIONAL J.A.R.V.I.S.</span>
+          </div>
+          <div id="news-teleprompter-badge" class="absolute bottom-2.5 right-3 hidden items-center space-x-1.5 px-2 py-0.5 rounded bg-cyan-950/90 border border-cyan-400/60 text-[9px] font-mono-code text-cyan-200">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>TELEPROMPTER ATIVO</span>
+          </div>
+        </div>
+
+        <!-- T├¡tulo da Mat├®ria -->
+        <h4 id="news-headline" class="text-sm font-bold text-white mb-2 leading-snug tracking-wide">
+          Manchete Principal
+        </h4>
+
+        <!-- Container Rol├ível da Mat├®ria (Teleprompter Autom├ítico durante a Fala do Jarvis) -->
+        <div id="news-scroll-container" class="max-h-36 overflow-y-auto pr-1 space-y-2 text-xs text-slate-200 leading-relaxed font-normal custom-scrollbar rounded-lg p-2 bg-slate-950/40 border border-sky-900/40 transition-all duration-300">
+          <p id="news-body">Carregando detalhes da not├¡cia em tempo real...</p>
+        </div>
+
+        <!-- A├º├Áes do Card: Expandir & Link Original -->
+        <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-sky-900/60 text-[11px]">
+          <div class="flex items-center space-x-2">
+            <button id="news-expand-btn" onclick="toggleNewsExpand()" class="px-2.5 py-1 rounded-lg bg-sky-900/40 hover:bg-sky-800/60 border border-sky-500/40 text-cyan-300 font-mono-code text-[10px] flex items-center space-x-1 transition-colors">
+              <span>Ôåò EXPANDIR MAT├ëRIA</span>
+            </button>
+            <a id="news-source-link" href="#" target="_blank" class="text-cyan-400 hover:text-cyan-200 underline font-mono-code text-[10px] flex items-center space-x-1">
+              <span>PORTAL OFICIAL Ôåù</span>
+            </a>
+          </div>
+          <div class="flex items-center space-x-1.5 text-slate-300 text-[10px] font-mono-code">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span id="news-source">FONTE VERIFICADA</span>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- WIDGET E-MAIL E FINAN├çAS REAIS (Stage 2 - Featured) -->
+
+      </div>
+
+      <!-- TAB 7: CONFIGURAÇÕES & SMART TV -->
+      <div id="flyout-tab-settings" class="flyout-tab-body space-y-3 hidden">
+        <div class="glass-card-stark rounded-xl p-3 w-full space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">📺</span>
+            <div>
+              <div class="text-[9px] font-mono-code text-cyan-400 uppercase font-bold">SMART TV LG WEBOS</div>
+              <div class="text-xs font-bold text-white">Painel da Sala de Estar</div>
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-400">IP: 192.168.3.9 | MAC: 78:dd:12:38:4f:8e | Porta 9922</p>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button onclick="executeCanvasAction('power_on_tv', '', this)" class="py-2 px-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-[10px] font-mono-code font-bold transition-all text-center">
+              ⚡ LIGAR TV (WoL)
+            </button>
+            <button onclick="executeCanvasAction('launch_tv_app', '', this)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">
+              🚀 ABRIR APP TV
+            </button>
+          </div>
+          <button onclick="executeCanvasAction('test_tv_projection', '', this)" class="w-full py-1.5 rounded-xl bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 text-sky-200 text-[10px] font-mono-code transition-all">
+            📡 PROJETAR TELA DE TESTE
+          </button>
+        </div>
+
+        <div class="glass-card-stark rounded-xl p-3 w-full space-y-2">
+          <div class="text-[9px] font-mono-code text-cyan-400 uppercase font-bold">CONTROLE DE VOZ & HUD</div>
+          <div class="flex items-center justify-between text-xs text-slate-300 pt-1">
+            <span>Sensibilidade VAD (Microfone)</span>
+            <span class="font-mono-code text-cyan-300 font-bold">NOMINAL</span>
+          </div>
+          <div class="flex items-center justify-between text-xs text-slate-300 pt-1">
+            <span>Áudio TTS Piper Neural</span>
+            <span class="font-mono-code text-emerald-400 font-bold">ATIVO</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN INTERACTIVE WORKSPACE (DYNAMIC CARDS STACK) -->
+    <!-- MAIN INTERACTIVE WORKSPACE (LIVRE PARA O BLACK CORE EM IDLE) -->
+  <main class="relative flex-1 w-full max-w-5xl mx-auto flex flex-col items-center justify-center z-30 px-4 pointer-events-none">
+    
+    <!-- TOP FEATURED ROW -->
+    <div id="top-card-container" class="w-full flex flex-col items-center justify-center mb-4 spring-trans pointer-events-auto">
+      
+      <!-- BANNER DE ALERTA DO HUD -->
+      <div id="hud-alert-banner" class="w-full max-w-xl mb-3 px-4 py-3 rounded-xl bg-rose-950/85 border border-rose-500/70 shadow-[0_0_25px_rgba(244,63,94,0.35)] flex items-center justify-between spring-trans hidden opacity-0 -translate-y-2">
+        <div class="flex items-center space-x-3">
+          <div class="w-8 h-8 rounded-lg bg-rose-500/20 border border-rose-400 flex items-center justify-center text-rose-300 animate-pulse">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          </div>
+          <div>
+            <div id="hud-alert-title" class="text-[10px] font-bold tracking-widest text-rose-300 font-mono-code">ALERTA PRIORITÁRIO</div>
+            <div id="hud-alert-msg" class="text-xs font-semibold text-white">Mensagem de alerta do Jarvis</div>
+          </div>
+        </div>
+        <button onclick="document.getElementById('hud-alert-banner').classList.add('hidden')" class="text-rose-300/80 hover:text-white text-xs px-2 py-1">DISMISS</button>
+      </div>
+
+      
+
+      <!-- JARVIS PRESENTATION DECK (CARDS EM CIMA DA TELA PADRÃO, SOBRE O VÓRTICE) -->
+      <div id="jarvis-presentation-deck" class="w-full max-w-4xl mx-auto mb-4 hidden opacity-0 scale-95 spring-trans z-30 pointer-events-auto"></div>
+
+      <div id="jarvis-visual-stage" class="w-full max-w-2xl mx-auto mb-4 hidden opacity-0 transition-all duration-300 z-30"></div>
+
+      <!-- WIDGET CARD CUSTOMIZADO DINÂMICO -->
+      <div id="card-custom" class="glass-card-stark glass-card-featured rounded-2xl p-5 w-full max-w-xl spring-trans hidden opacity-0 scale-95 mb-3 shadow-[0_0_35px_rgba(0,210,255,0.4)] border border-cyan-400/60">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+            <span id="custom-card-subtitle" class="text-[10px] tracking-widest text-cyan-400 font-semibold uppercase">PROJEÇÃO MCP DINÂMICA</span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span class="text-[9px] font-mono-code text-sky-400 px-2 py-0.5 rounded bg-sky-950/80 border border-sky-400/40">JARVIS VIRTUAL HUD</span>
+            <button onclick="closeCustomCard()" class="text-sky-400/80 hover:text-white text-xs px-2 py-0.5 rounded bg-sky-950/60 hover:bg-sky-800/40 border border-sky-500/30 transition-colors">✕ FECHAR</button>
+          </div>
+        </div>
+
+        <div id="custom-card-title" class="text-lg font-bold text-white mb-2 tracking-wide">Título do Card</div>
+
+        <div id="custom-timer-widget" class="my-3 p-4 rounded-xl bg-slate-950/90 border border-cyan-500/50 flex flex-col items-center justify-center hidden">
+          <div class="text-[10px] font-mono-code tracking-widest text-cyan-400 mb-1">CONTAGEM REGRESSIVA ATIVA</div>
+          <div id="timer-digital-display" class="text-4xl md:text-5xl font-extrabold text-cyan-300 font-mono-code tracking-wider drop-shadow-[0_0_20px_rgba(0,240,255,0.9)] my-1">
+            05:00
+          </div>
+          <div class="w-full bg-slate-800/90 rounded-full h-2.5 mt-2.5 overflow-hidden border border-cyan-400/40">
+            <div id="timer-progress-bar" class="bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400 h-2.5 rounded-full transition-all duration-1000 ease-linear" style="width: 100%"></div>
+          </div>
+        </div>
+
+        <div id="custom-card-content" class="text-xs text-slate-200 leading-relaxed font-normal whitespace-pre-wrap">Conteúdo gerado dinamicamente pelo Jarvis...</div>
+      </div>
+
+      <!-- WIDGET YOUTUBE CYBER PLAYER -->
+      <div id="card-youtube" class="glass-card-stark glass-card-featured rounded-2xl p-4 w-full max-w-2xl spring-trans hidden opacity-0 scale-95 shadow-[0_0_40px_rgba(239,68,68,0.35)] border border-rose-500/50 mb-3">
+        <div class="flex items-center justify-between mb-2.5">
+          <div class="flex items-center space-x-2.5">
+            <div class="w-7 h-7 rounded-lg bg-rose-500/20 border border-rose-400/60 flex items-center justify-center text-rose-400">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </div>
+            <div>
+              <div class="text-[9px] tracking-widest text-rose-400 font-semibold uppercase">// TERMINAL MULTIMÍDIA • YOUTUBE</div>
+              <div id="youtube-title" class="text-xs md:text-sm font-bold text-white tracking-wide truncate max-w-md">Vídeo YouTube</div>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span class="px-2 py-0.5 rounded-full bg-rose-950/80 border border-rose-400/40 text-[9px] font-bold text-rose-300">STREAMING ATIVO</span>
+            <button onclick="closeYoutubeCard()" class="text-rose-300 hover:text-white text-xs px-2 py-0.5 rounded bg-rose-950/60 hover:bg-rose-900/60 border border-rose-500/40 transition-colors">✕ FECHAR</button>
+          </div>
+        </div>
+
+        <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black/90 border border-rose-500/30 shadow-[inset_0_0_20px_rgba(0,0,0,0.9)]">
+          <iframe id="youtube-iframe" class="w-full h-full" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </div>
+
+        <div class="mt-2.5 pt-2 border-t border-rose-950/80 flex items-center justify-between text-[10px] text-slate-300 font-mono-code">
+          <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span id="youtube-status-text">REPRODUZINDO NO STARK HUD</span>
+          </div>
+          <a id="youtube-external-link" href="#" target="_blank" class="text-rose-400 hover:text-rose-200 underline">ABRIR NO NAVEGADOR ↗</a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Container Oculto para Preservação de Seletores Legados -->
+    <div id="bottom-cards-row" class="hidden">
+      <div id="card-email-featured" class="hidden"></div>
+    </div>
   </main>
 
+  <!-- ORGANIC SPATIAL WORKSPACE CANVAS (CARDS LIVRES E CUMULATIVOS SOBRE A TELA PADRÃO) -->
+  <div id="jarvis-spatial-canvas" class="fixed left-20 right-6 top-14 bottom-24 z-30 pointer-events-none select-none">
+    <!-- Global Clear Action Badge (visível apenas quando houver cards ativos) -->
+    <div id="spatial-canvas-actions" class="absolute right-4 top-2 pointer-events-auto hidden transition-opacity duration-300">
+      <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.clearSpatialWorkspace()" class="px-3.5 py-1 rounded-full bg-zinc-950/85 hover:bg-zinc-900 border border-zinc-700/80 hover:border-zinc-500 text-zinc-300 hover:text-white text-[10px] font-mono-code font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-lg active:scale-95">
+        <span>✕</span>
+        <span>LIMPAR PALCO (ESC)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SEAMLESS SPATIAL WORKSPACE STAGE (OCUPA O ESPAÇO CENTRAL SEM JANELA EXTRA) -->
+  <div id="presentation-stage" class="hidden pointer-events-none opacity-0 select-none">
+    <!-- Discrete Top Spatial Bar - Kuro Black Style -->
+    <div id="presentation-stage-bar" class="w-full flex items-center justify-between pb-2 mb-1 border-b border-white/10 pointer-events-auto shrink-0 select-none">
+      <div class="flex items-center space-x-2.5">
+        <span class="w-2 h-2 rounded-full bg-white/80 animate-ping"></span>
+        <span id="presentation-header-title" class="text-[11px] font-bold text-zinc-100 font-mono-code tracking-widest uppercase">J.A.R.V.I.S. // INTELIGÊNCIA ESPACIAL</span>
+      </div>
+      <button onclick="window.JarvisPresentationEngine && window.JarvisPresentationEngine.close()" title="Concluir e Voltar ao Núcleo (Esc)" class="px-3.5 py-1 rounded-full bg-zinc-950/90 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 hover:text-white text-[10px] font-mono-code font-bold transition-all flex items-center space-x-1.5 cursor-pointer shadow-lg active:scale-95">
+        <span>✕</span>
+        <span>VOLTAR AO NÚCLEO (ESC)</span>
+      </button>
+    </div>
+    <!-- Direct In-Place Components Area -->
+    <div id="presentation-content-area" class="flex-1 w-full h-full relative overflow-hidden pointer-events-auto"></div>
+  </div>
+
+
   <!-- BOTTOM FOOTER (SUBTITLES & INTERACTION) -->
-  <footer class="w-full flex flex-col items-center pb-[max(4.5rem,calc(env(safe-area-inset-bottom)+4.2rem))] lg:pb-5 pt-1 z-40 relative">
+  <footer class="w-full flex flex-col items-center pb-5 pt-1 z-40 relative select-none">
     
     <!-- Realtime Live Subtitles (Sincronizado com a fala) -->
-    <div class="text-center px-4 max-w-3xl mb-2.5 min-h-[48px] flex items-center justify-center">
-      <h2 id="live-subtitle" class="text-lg md:text-xl font-bold tracking-tight text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.95)] spring-trans">
+    <div class="text-center px-4 max-w-3xl mb-2 min-h-[36px] flex items-center justify-center">
+      <h2 id="live-subtitle" class="text-base md:text-lg font-medium tracking-wide text-slate-200 drop-shadow-[0_2px_15px_rgba(0,0,0,0.95)] spring-trans">
         "J.A.R.V.I.S. online. Aguardando comando do Senhor Werik."
       </h2>
     </div>
 
-    <!-- Live Interactive Command Bar & Voice Trigger -->
-    <div class="w-full max-w-xl px-4 flex items-center space-x-2.5 mb-2">
-      <!-- Glowing Blue Orb / Mic Trigger (Com Wake Word "Jarvis") -->
-      <button id="mic-btn" onclick="manualMicToggle()" class="relative p-3.5 sm:p-3 bg-[#021844] hover:bg-[#032a78] border border-cyan-400/80 rounded-full text-cyan-200 transition-all shadow-[0_0_25px_rgba(0,210,255,0.7)] group hover:scale-110 active:scale-95 shrink-0" title="Acionar Microfone">
-        <div id="mic-halo" class="absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md group-hover:bg-cyan-300/40 animate-pulse"></div>
-        <svg class="w-5 h-5 relative z-10 text-cyan-300" fill="currentColor" viewBox="0 0 24 24">
+    <!-- Attachment Preview Bar (Surge quando houver arquivo selecionado) -->
+    <div id="chat-attachment-bar" class="w-full max-w-xl px-2 mb-1.5 hidden items-center justify-between">
+      <div id="chat-attachment-chip" class="flex items-center space-x-2 px-3 py-1 rounded-xl bg-[#091124]/90 border border-cyan-500/40 text-cyan-200 text-[10px] font-mono-code shadow-lg backdrop-blur-md">
+        <span>📎</span>
+        <span id="chat-attachment-name" class="font-bold truncate max-w-[260px]">documento.pdf</span>
+        <span id="chat-attachment-size" class="text-slate-400 text-[9px]">-- KB</span>
+        <button onclick="removeChatAttachment()" class="text-slate-400 hover:text-rose-400 font-bold ml-1.5 cursor-pointer transition-colors" title="Remover Anexo">✕</button>
+      </div>
+      <span class="text-[9px] font-mono-code text-cyan-400/80">PRONTO PARA ENVIO</span>
+    </div>
+
+    <!-- Hidden Native File Input -->
+    <input type="file" id="chat-file-input" class="hidden" onchange="handleChatFileUpload(event)" accept="*/*">
+
+    <!-- Minimalist Conversation Bar -->
+    <div id="conversation-bar" class="w-full max-w-xl px-2.5 py-1.5 bg-[#060914]/90 backdrop-blur-2xl border border-white/[0.08] focus-within:border-cyan-500/50 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] flex items-center space-x-2 transition-all">
+      <!-- Mic Trigger Button -->
+      <button id="mic-btn" onclick="manualMicToggle()" class="relative p-2 rounded-xl bg-slate-900/80 hover:bg-cyan-950/80 border border-slate-800 hover:border-cyan-400/60 text-cyan-300 transition-all cursor-pointer group shrink-0" title="Acionar Microfone">
+        <div id="mic-halo" class="absolute -inset-1 rounded-xl bg-cyan-400/20 blur-sm group-hover:bg-cyan-300/30"></div>
+        <svg class="w-4 h-4 relative z-10" fill="currentColor" viewBox="0 0 24 24">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
           <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
         </svg>
       </button>
 
-      <input id="user-input" type="text" placeholder='Fale "Jarvis..." ou digite sua instrução...' onkeydown="if(event.key==='Enter') sendToOpenClaw()" class="flex-1 bg-slate-950/90 border border-sky-600/70 rounded-xl px-4 py-2.5 text-sm sm:text-xs text-sky-100 placeholder-sky-500 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 shadow-[inset_0_2px_8px_rgba(0,0,0,0.8)]">
+      <!-- Botão Anexar Arquivo -->
+      <button onclick="document.getElementById('chat-file-input').click()" class="p-2 rounded-xl bg-slate-900/80 hover:bg-cyan-950/80 border border-slate-800 hover:border-cyan-500/50 text-slate-400 hover:text-cyan-300 transition-all cursor-pointer shrink-0" title="Anexar Arquivo ou Imagem">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+        </svg>
+      </button>
 
-      <button onclick="sendToOpenClaw()" class="px-4 sm:px-5 py-2.5 bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-[0_0_25px_rgba(0,210,255,0.6)] active:scale-95 shrink-0">
+      <!-- Text Input -->
+      <input id="user-input" type="text" placeholder='Fale "Jarvis..." ou digite sua instrução...' onkeydown="if(event.key==='Enter') sendToJarvisCore()" class="flex-1 bg-transparent border-0 outline-none px-2 text-xs text-white placeholder-slate-500 font-sans">
+
+      <!-- Botão Stop Speech (Surge quando Jarvis estiver falando) -->
+      <button id="btn-stop-speech" onclick="stopJarvisSpeech()" class="px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 text-[10px] font-mono-code font-bold transition-all hidden cursor-pointer" title="Interromper Fala">
+        PARAR FALA
+      </button>
+
+      <!-- Botão Enviar -->
+      <button onclick="sendToJarvisCore()" class="px-4 py-1.5 rounded-xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-400/60 text-cyan-200 font-mono-code font-bold text-xs tracking-wider transition-all shadow-[0_0_15px_rgba(0,240,255,0.25)] active:scale-95 cursor-pointer shrink-0">
         ENVIAR
       </button>
     </div>
 
-    <div class="text-[9px] text-cyan-400/80 font-mono-code tracking-widest flex items-center space-x-2">
-      <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-      <span class="truncate">ESCUTA CONTÍNUA ATIVA: DIGA "JARVIS" PARA COMANDAR POR VOZ</span>
+    <!-- Indicador Discreto Inferior -->
+    <div class="mt-1.5 text-[8.5px] text-slate-500 font-mono-code tracking-widest flex items-center space-x-1.5">
+      <span class="w-1 h-1 rounded-full bg-cyan-400/80"></span>
+      <span class="truncate">SISTEMA COGNITIVO PRONTO • DIGA "JARVIS" OU DIGITE</span>
     </div>
   </footer>
 
@@ -1713,7 +1981,7 @@
   </div>
 
   <!-- BOTÃO FLUTUANTE DE REABRIR O MENU LATERAL (DESKTOP) -->
-  <button id="sidebar-open-btn" onclick="openRightSidebar()" class="hidden lg:flex fixed right-3 top-20 z-40 px-3.5 py-2.5 rounded-xl bg-[#021844]/90 hover:bg-[#032a78] border border-cyan-400/80 text-cyan-200 font-mono-code text-[11px] items-center space-x-2 shadow-[0_0_25px_rgba(0,210,255,0.4)] backdrop-blur-md transition-all hover:scale-105 active:scale-95 group">
+  <button id="sidebar-open-btn" class="hidden" style="display: none !important; px-3.5 py-2.5 rounded-xl bg-[#021844]/90 hover:bg-[#032a78] border border-cyan-400/80 text-cyan-200 font-mono-code text-[11px] items-center space-x-2 shadow-[0_0_25px_rgba(0,210,255,0.4)] backdrop-blur-md transition-all hover:scale-105 active:scale-95 group">
     <svg class="w-3.5 h-3.5 text-cyan-300 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
     <span class="tracking-wider font-bold">PAINEL LATERAL</span>
     <span id="sidebar-unread-dot" class="w-2 h-2 rounded-full bg-cyan-400 animate-ping hidden"></span>
@@ -1750,7 +2018,190 @@
       eqContainer.appendChild(bar);
     }
 
-    // ORGANIC FLUID ELECTRIC PLASMA VORTEX (Canvas Procedural)
+    
+    
+    // =========================================================================
+    // SUPORTE A UPLOAD DE ARQUIVOS VIA CHAT (ANEXOS & DRAG AND DROP)
+    // =========================================================================
+    let activeChatAttachment = null;
+
+    function handleChatFileUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const isText = file.type.startsWith('text/') || 
+                     file.name.endsWith('.py') || 
+                     file.name.endsWith('.js') || 
+                     file.name.endsWith('.json') || 
+                     file.name.endsWith('.md') || 
+                     file.name.endsWith('.txt') || 
+                     file.name.endsWith('.csv') ||
+                     file.name.endsWith('.html');
+
+      const isImage = file.type.startsWith('image/');
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const result = e.target.result;
+        activeChatAttachment = {
+          name: file.name,
+          size: (file.size / 1024).toFixed(1) + ' KB',
+          type: file.type || 'application/octet-stream',
+          isImage: isImage,
+          data: result,
+          textContent: isText ? result : null
+        };
+
+        const bar = document.getElementById('chat-attachment-bar');
+        const nameEl = document.getElementById('chat-attachment-name');
+        const sizeEl = document.getElementById('chat-attachment-size');
+        if (bar && nameEl && sizeEl) {
+          nameEl.innerText = activeChatAttachment.name;
+          sizeEl.innerText = activeChatAttachment.size;
+          bar.classList.remove('hidden');
+          bar.classList.add('flex');
+        }
+      };
+
+      if (isText) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function removeChatAttachment() {
+      activeChatAttachment = null;
+      const fileInput = document.getElementById('chat-file-input');
+      if (fileInput) fileInput.value = '';
+      const bar = document.getElementById('chat-attachment-bar');
+      if (bar) {
+        bar.classList.add('hidden');
+        bar.classList.remove('flex');
+      }
+    }
+
+    // Suporte a Drag and Drop de arquivos na janela
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const bar = document.getElementById('conversation-bar');
+      if (bar) bar.classList.add('border-cyan-400');
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      const bar = document.getElementById('conversation-bar');
+      if (bar) bar.classList.remove('border-cyan-400');
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const bar = document.getElementById('conversation-bar');
+      if (bar) bar.classList.remove('border-cyan-400');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        handleChatFileUpload({ target: { files: e.dataTransfer.files } });
+      }
+    });
+
+    // =========================================================================
+    // BLACK CORE INTERFACE — JAVASCRIPT CONTROLLER & PROCEDURAL CANVAS ENGINE
+    // =========================================================================
+    let activeFlyoutTab = null;
+
+    function toggleFlyoutTab(tabId) {
+      if (activeFlyoutTab === tabId) {
+        closeFlyoutPanel();
+        return;
+      }
+      openFlyoutTab(tabId);
+    }
+
+    function openFlyoutTab(tabId) {
+      activeFlyoutTab = tabId;
+      const dock = document.getElementById('left-dock');
+      if (!dock) return;
+
+      const tabMetadata = {
+        'spatial': { title: 'SPATIAL INTELLIGENCE', subtitle: 'WORKSPACE & PALCO EXECUTIVO' },
+        'hardware': { title: 'SISTEMA & HARDWARE', subtitle: 'NVIDIA GPU, CPU, RAM & SSD' },
+        'infra': { title: 'INFRAESTRUTURA CLOUD', subtitle: 'SERVIDOR ZIMAOS & CLIMA' },
+        'vision': { title: 'PERCEPÇÃO VISUAL', subtitle: 'WEBCAM, GESTOS & BIOMETRIA' },
+        'memory': { title: 'NÚCLEO & MEMÓRIA', subtitle: 'STARK CORE AI & FERRAMENTAS' },
+        'history': { title: 'MISSÕES & HISTÓRICO', subtitle: 'LOG DE EXECUÇÃO EM TEMPO REAL' },
+        'settings': { title: 'SISTEMA & SMART TV', subtitle: 'CONTROLES, WOL & REDE' }
+      };
+
+      const meta = tabMetadata[tabId] || { title: 'PAINEL TÁTICO', subtitle: 'J.A.R.V.I.S.' };
+      const titleEl = document.getElementById('flyout-panel-title');
+      const subEl = document.getElementById('flyout-panel-subtitle');
+      if (titleEl) titleEl.innerText = meta.title;
+      if (subEl) subEl.innerText = meta.subtitle;
+
+      // Oculta todas as tabs e exibe a selecionada
+      document.querySelectorAll('.flyout-tab-body').forEach(el => el.classList.add('hidden'));
+      const activeEl = document.getElementById(`flyout-tab-${tabId}`);
+      if (activeEl) {
+        activeEl.classList.remove('hidden');
+        // Se for hardware, força atualização visual
+        const hwCard = document.getElementById('card-hardware');
+        if (hwCard && tabId === 'hardware') {
+          hwCard.classList.remove('hidden', 'opacity-0');
+          hwCard.classList.add('opacity-100');
+        }
+      }
+
+      // Atualiza botões no rail
+      document.querySelectorAll('.rail-icon-btn').forEach(btn => {
+        const isMatch = btn.dataset.tab === tabId;
+        btn.classList.toggle('rail-btn-active', isMatch);
+        const pill = btn.querySelector('.rail-active-pill');
+        if (pill) pill.classList.toggle('opacity-100', isMatch);
+      });
+
+      // Abre dock
+      dock.classList.remove('hidden', 'opacity-0', '-translate-x-4', 'pointer-events-none');
+      dock.classList.add('opacity-100', 'translate-x-0', 'pointer-events-auto');
+    }
+
+    function closeFlyoutPanel() {
+      activeFlyoutTab = null;
+      const dock = document.getElementById('left-dock');
+      if (!dock) return;
+
+      dock.classList.add('opacity-0', '-translate-x-4', 'pointer-events-none');
+      dock.classList.remove('opacity-100', 'translate-x-0', 'pointer-events-auto');
+      setTimeout(() => {
+        if (!activeFlyoutTab) dock.classList.add('hidden');
+      }, 300);
+
+      document.querySelectorAll('.rail-icon-btn').forEach(btn => {
+        btn.classList.remove('rail-btn-active');
+        const pill = btn.querySelector('.rail-active-pill');
+        if (pill) pill.classList.remove('opacity-100');
+      });
+    }
+
+    // Tecla ESC fecha o flyout
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && activeFlyoutTab) {
+        closeFlyoutPanel();
+      }
+    });
+
+    // Função de interrupção de fala
+    function stopJarvisSpeech() {
+      if (jarvisAudioEl) {
+        jarvisAudioEl.pause();
+        jarvisAudioEl.currentTime = 0;
+      }
+      isJarvisSpeaking = false;
+      const stopBtn = document.getElementById('btn-stop-speech');
+      if (stopBtn) stopBtn.classList.add('hidden');
+      window.setJarvisVisualCoreState('idle');
+    }
+
+    // =========================================================================
+    // BLACK CORE — PROCEDURAL QUANTUM RING ENGINE (Canvas 2D)
+    // =========================================================================
     const canvas = document.getElementById('organicVortexCanvas');
     const ctx = canvas.getContext('2d');
     let width, height;
@@ -1768,6 +2219,35 @@
     let liveMicLevel = 0.0;
     let liveOutputAudioLevel = 0.0;
     let isJarvisSpeaking = false;
+
+    // Estado Visual Central
+    window.jarvisVisualState = 'idle'; // 'idle', 'thinking', 'deep_thinking', 'speaking', 'executing', 'success', 'error', 'attention'
+    window.setJarvisVisualCoreState = function(state) {
+      window.jarvisVisualState = state;
+      const stopBtn = document.getElementById('btn-stop-speech');
+      if (stopBtn) {
+        if (state === 'speaking') stopBtn.classList.remove('hidden');
+        else stopBtn.classList.add('hidden');
+      }
+    };
+
+    // Posição e Escala Suaves (Lerp)
+    let currentCx = window.innerWidth / 2;
+    let currentCy = window.innerHeight / 2 - 15;
+    let currentScale = 1.0;
+    let currentAuraAlpha = 1.0;
+
+    // Partículas Orbitais do Núcleo
+    const coreSparks = [];
+    for (let i = 0; i < 48; i++) {
+      coreSparks.push({
+        angle: Math.random() * Math.PI * 2,
+        distRatio: 0.88 + Math.random() * 0.42,
+        speed: (0.003 + Math.random() * 0.007) * (Math.random() > 0.5 ? 1 : -1),
+        size: 1.0 + Math.random() * 2.0,
+        alpha: 0.25 + Math.random() * 0.65
+      });
+    }
 
     // Analisador do Áudio do Jarvis (Voz Sintetizada)
     const jarvisAudioEl = document.getElementById('jarvis-audio-player');
@@ -1796,21 +2276,56 @@
       }
     }
 
-    // Camadas da Aura Orgânica (calibradas com o print enviado)
-    const layers = [
-      { baseRadius: 280, waves: 6, idleAmp: 3.5, speakAmp: 25, speed: 0.005, color: 'rgba(0, 140, 255, 0.40)', width: 1.5 },
-      { baseRadius: 245, waves: 8, idleAmp: 4.5, speakAmp: 28, speed: -0.007, color: 'rgba(0, 210, 255, 0.65)', width: 2.0 },
-      { baseRadius: 215, waves: 5, idleAmp: 3.8, speakAmp: 23, speed: 0.008, color: 'rgba(0, 240, 255, 0.85)', width: 2.5 },
-      { baseRadius: 180, waves: 7, idleAmp: 3.0, speakAmp: 18, speed: -0.006, color: 'rgba(56, 189, 248, 0.70)', width: 1.8 },
-      { baseRadius: 150, waves: 4, idleAmp: 2.2, speakAmp: 14, speed: 0.010, color: 'rgba(125, 211, 252, 0.90)', width: 1.5 }
+    // Camadas Harmônicas do Anel de Plasma
+    const coreLayers = [
+      { baseRadius: 260, waves: 6, idleAmp: 3.5, speakAmp: 22, speed: 0.005, color: 'rgba(0, 130, 255, 0.45)', width: 1.8 },
+      { baseRadius: 225, waves: 8, idleAmp: 4.2, speakAmp: 26, speed: -0.007, color: 'rgba(0, 210, 255, 0.70)', width: 2.2 },
+      { baseRadius: 195, waves: 5, idleAmp: 3.8, speakAmp: 20, speed: 0.009, color: 'rgba(0, 240, 255, 0.88)', width: 2.6 },
+      { baseRadius: 165, waves: 7, idleAmp: 2.8, speakAmp: 16, speed: -0.006, color: 'rgba(56, 189, 248, 0.72)', width: 1.8 },
+      { baseRadius: 135, waves: 4, idleAmp: 2.0, speakAmp: 12, speed: 0.011, color: 'rgba(125, 211, 252, 0.92)', width: 1.5 }
     ];
 
+    // =========================================================================
+    // BLACK CORE — PROCEDURAL QUANTUM RING ENGINE (KURO AI / ARC REACTOR STYLE)
+    // =========================================================================
     function drawOrganicVortex() {
-      ctx.clearRect(0, 0, width, height);
-      const cx = width / 2;
-      const cy = height / 2 - 25;
+      // 1. Cálculo de Posição e Equilíbrio (Sempre ativo no loop)
+      const dockEl = document.getElementById('left-dock');
+      const isDockOpen = dockEl && !dockEl.classList.contains('hidden') && !dockEl.classList.contains('pointer-events-none');
+      const presEl = document.getElementById('jarvis-presentation-overlay');
+      const isPresOpen = presEl && !presEl.classList.contains('hidden');
 
-      // Medição da voz de saída do Jarvis (quando ele está falando)
+      let targetCx = width / 2;
+      let targetCy = height / 2 - 20;
+      let targetScale = 1.0;
+      let targetAlpha = 1.0;
+      if (isPresOpen) {
+        targetCx = width - 180;
+        targetCy = 85;
+        targetScale = 0.35;
+      } else if (isDockOpen && width >= 1200) {
+        targetCx = (width + 390) / 2;
+        targetScale = 0.90;
+      }
+
+      // Interpolação contínua (nunca interrompida)
+      currentCx += (targetCx - currentCx) * 0.08;
+      currentCy += (targetCy - currentCy) * 0.08;
+      currentScale += (targetScale - currentScale) * 0.08;
+      currentAuraAlpha += (targetAlpha - currentAuraAlpha) * 0.08;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Se invisível durante apresentação, continua agendando frames para voltar quando fechar
+      if (currentAuraAlpha < 0.01) {
+        requestAnimationFrame(drawOrganicVortex);
+        return;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, currentAuraAlpha));
+
+      // Medição de Áudio da Fala do Jarvis
       if (isJarvisSpeaking && outputAnalyser && outputDataArray) {
         outputAnalyser.getByteFrequencyData(outputDataArray);
         let sum = 0;
@@ -1820,86 +2335,156 @@
         liveOutputAudioLevel = 0.0;
       }
 
-      // REGRA ABSOLUTA: A AURA SÓ REAGE À INTENSIDADE REAL DO SOM DA VOZ!
-      // NÃO REAGE SÓ PORQUE O MICROFONE ESTÁ ABERTO!
+      // Intensidade Sonora Real
       let targetIntensity = 0.0;
-
-      if (isJarvisSpeaking && liveOutputAudioLevel > 0.035) {
-        // Voz do Jarvis falando (intensidade direta do áudio reproduzido)
-        targetIntensity = Math.min(2.0, (liveOutputAudioLevel - 0.035) * 5.2);
-      } else if (liveMicLevel > 0.045) {
-        // Voz real do usuário no microfone (volume real da fala acima do ruído de sala)
-        targetIntensity = Math.min(2.2, (liveMicLevel - 0.045) * 5.5);
+      if (isJarvisSpeaking && liveOutputAudioLevel > 0.030) {
+        targetIntensity = Math.min(2.5, (liveOutputAudioLevel - 0.030) * 6.0);
+      } else if (liveMicLevel > 0.040) {
+        targetIntensity = Math.min(2.0, (liveMicLevel - 0.040) * 5.0);
       } else {
-        // Silêncio / Repouso (MESMO QUE O MICROFONE ESTEJA ABERTO OUVINDO)
-        // A aura se mantém 100% no movimento suave, calmo e orgânico de repouso!
         targetIntensity = 0.0;
       }
+      speechIntensity += (targetIntensity - speechIntensity) * 0.15;
 
-      // Transição orgânica entre calmaria e intensidade de fala
-      speechIntensity += (targetIntensity - speechIntensity) * 0.16;
+      // Estado Visual
+      const st = window.jarvisVisualState || 'idle';
+      let speedMult = 1.0;
+      let ampMult = 1.0;
+      let pulseBreath = Math.sin(time * 0.025) * 4;
 
-      // CÁLCULO DE ESCALA DINÂMICA INTELIGENTE (ADAPTAÇÃO A QUALQUER TAMANHO DE JANELA)
-      const availW = width;
-      const availH = height;
-      const leftDockEl = document.getElementById('left-dock');
-      const isDockOpen = leftDockEl && !leftDockEl.classList.contains('hidden') && !leftDockEl.classList.contains('dock-collapsed') && window.innerWidth >= 1150;
-      
-      // Espaço vertical livre entre header e footer
-      const vertFree = Math.max(260, availH - 220);
-      // Espaço horizontal livre considerando o dock lateral
-      const horizFree = isDockOpen ? Math.max(300, availW - 330) : Math.max(300, availW - 60);
+      // Paletas de Cor por Estado
+      let auraColor1 = 'rgba(0, 100, 255, 0.28)';
+      let auraColor2 = 'rgba(0, 50, 200, 0.12)';
+      let ringOuter = 'rgba(0, 140, 255, 0.50)';
+      let ringMain = 'rgba(0, 210, 255, 0.95)';
+      let ringInner = 'rgba(210, 250, 255, 1.0)';
+      let neonShadow = '#00d2ff';
 
-      // Escala contínua que nunca deixa a aura colidir ou cortar
-      const scaleFactor = Math.min(1.20, Math.max(0.38, Math.min(vertFree / 560, horizFree / 620)));
+      if (st === 'thinking') {
+        speedMult = 2.2;
+        ampMult = 1.6;
+        pulseBreath = Math.sin(time * 0.08) * 8;
+        ringMain = 'rgba(0, 240, 255, 1.0)';
+        neonShadow = '#00f0ff';
+      } else if (st === 'deep_thinking') {
+        speedMult = 3.0;
+        ampMult = 2.2;
+        pulseBreath = Math.sin(time * 0.12) * 12;
+        auraColor1 = 'rgba(99, 102, 241, 0.35)';
+        ringMain = 'rgba(129, 140, 248, 1.0)';
+        neonShadow = '#818cf8';
+      } else if (st === 'speaking') {
+        speedMult = 1.5 + speechIntensity * 1.8;
+        ampMult = 1.0 + speechIntensity * 3.5;
+        pulseBreath = speechIntensity * 14;
+        ringMain = 'rgba(56, 189, 248, 1.0)';
+        neonShadow = '#38bdf8';
+      } else if (st === 'executing') {
+        speedMult = 2.4;
+        ringMain = 'rgba(52, 211, 153, 1.0)';
+        neonShadow = '#10b981';
+      } else if (st === 'success') {
+        ringMain = 'rgba(52, 211, 153, 1.0)';
+        neonShadow = '#34d399';
+      } else if (st === 'error') {
+        ringMain = 'rgba(244, 63, 94, 1.0)';
+        neonShadow = '#f43f5e';
+      }
 
-      // Centro dinâmico: centralizado no espaço visual livre
-      const activeCx = isDockOpen ? ((availW + 310) / 2) : (availW / 2);
-      const activeCy = Math.max(100, Math.min(availH - 120, availH / 2 - 12));
+      const ringBaseR = (210 + pulseBreath) * currentScale;
 
-      // Glow Central proporcional
-      const coreGlow = ctx.createRadialGradient(activeCx, activeCy, 30 * scaleFactor, activeCx, activeCy, 380 * scaleFactor);
-      coreGlow.addColorStop(0, `rgba(0, 140, 255, ${0.15 + speechIntensity * 0.25})`);
-      coreGlow.addColorStop(0.4, `rgba(0, 80, 220, ${0.05 + speechIntensity * 0.12})`);
-      coreGlow.addColorStop(1, 'transparent');
-      ctx.fillStyle = coreGlow;
+      // 1. AURA EXTERNA DIFUSA PROFUNDA (SOFT VOLUMETRIC GLOW)
+      const outerAuraR = ringBaseR * 1.85;
+      const auraGrad = ctx.createRadialGradient(currentCx, currentCy, ringBaseR * 0.65, currentCx, currentCy, outerAuraR);
+      auraGrad.addColorStop(0, auraColor1);
+      auraGrad.addColorStop(0.5, auraColor2);
+      auraGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = auraGrad;
       ctx.beginPath();
-      ctx.arc(activeCx, activeCy, 380 * scaleFactor, 0, Math.PI * 2);
+      ctx.arc(currentCx, currentCy, outerAuraR, 0, Math.PI * 2);
       ctx.fill();
 
-      // Desenha cada anel orgânico proporcional à tela
-      layers.forEach((layer) => {
+      // 2. CAMADA EXTERNA SUAVE (GLOW EXPANDIDO)
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = ringOuter;
+      ctx.lineWidth = 26 * currentScale;
+      ctx.shadowColor = neonShadow;
+      ctx.shadowBlur = (35 + speechIntensity * 20) * currentScale;
+      ctx.arc(currentCx, currentCy, ringBaseR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. ANEL ORGÂNICO PRINCIPAL (LIVING FLUID OUTLINE)
+      const points = 180;
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = ringMain;
+      ctx.lineWidth = (8 + speechIntensity * 6) * currentScale;
+      ctx.shadowColor = neonShadow;
+      ctx.shadowBlur = (20 + speechIntensity * 15) * currentScale;
+
+      for (let i = 0; i <= points; i++) {
+        const theta = (i / points) * Math.PI * 2;
+        // Variação orgânica fluida sutil no contorno
+        const wave1 = Math.sin(theta * 6 + time * 0.008 * speedMult) * (3.5 * ampMult * currentScale);
+        const wave2 = Math.cos(theta * 3 - time * 0.012 * speedMult) * (2.0 * ampMult * currentScale);
+        const r = ringBaseR + wave1 + wave2;
+        const x = currentCx + Math.cos(theta) * r;
+        const y = currentCy + Math.sin(theta) * r;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      // 4. NÚCLEO FILAMENTO BRANCO-AZUL BRILHANTE (CORE LIGHT)
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = ringInner;
+      ctx.lineWidth = 2.5 * currentScale;
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 10 * currentScale;
+      for (let i = 0; i <= points; i++) {
+        const theta = (i / points) * Math.PI * 2;
+        const wave = Math.sin(theta * 8 + time * 0.015 * speedMult) * (1.8 * ampMult * currentScale);
+        const r = ringBaseR + wave;
+        const x = currentCx + Math.cos(theta) * r;
+        const y = currentCy + Math.sin(theta) * r;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+
+      // 5. FAÍSCAS E MICRO-ORBITAIS DE PLASMA
+      coreSparks.forEach(spark => {
+        spark.angle += spark.speed * speedMult;
+        const sparkDist = ringBaseR * spark.distRatio;
+        const sx = currentCx + Math.cos(spark.angle) * sparkDist;
+        const sy = currentCy + Math.sin(spark.angle) * sparkDist;
+
         ctx.save();
         ctx.beginPath();
-        ctx.strokeStyle = layer.color;
-        ctx.lineWidth = (layer.width + speechIntensity * 0.8) * Math.max(0.75, scaleFactor);
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = (12 + speechIntensity * 18) * scaleFactor;
-
-        // Amplitude: suave no repouso, expressiva estritamente proporcional à força da voz
-        const currentAmp = (layer.idleAmp + speechIntensity * (layer.speakAmp + Math.sin(time * 0.15) * 5)) * scaleFactor;
-        const currentSpeed = layer.speed * (1.0 + speechIntensity * 2.5);
-
-        const points = 180;
-        for (let i = 0; i <= points; i++) {
-          const theta = (i / points) * Math.PI * 2;
-          const offset = Math.sin(theta * layer.waves + time * currentSpeed * 60) * currentAmp
-                       + Math.cos(theta * 3 - time * currentSpeed * 30) * (currentAmp * 0.4);
-          const r = (layer.baseRadius * scaleFactor) + offset;
-          const x = activeCx + Math.cos(theta) * r;
-          const y = activeCy + Math.sin(theta) * r;
-
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.stroke();
+        ctx.fillStyle = neonShadow;
+        ctx.shadowColor = neonShadow;
+        ctx.shadowBlur = 6 * currentScale;
+        ctx.arc(sx, sy, spark.size * currentScale, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       });
 
+      // 6. O interior do núcleo é 100% contínuo e idêntico ao fundo preto puro (sem disco desenhado)
+
       time += 1;
+      ctx.restore();
       requestAnimationFrame(drawOrganicVortex);
     }
+
     drawOrganicVortex();
 
     // Áudio & Controle de Fala com Analisador Espectral Real
@@ -1920,6 +2505,7 @@
       jarvisAudioEl.onplay = () => {
         isJarvisSpeaking = true;
         isSpeakingOrListening = true;
+        if (window.setJarvisVisualCoreState) window.setJarvisVisualCoreState('speaking');
         document.getElementById('jarvis-state-text').innerText = 'F A L A N D O';
         document.getElementById('mic-halo').className = 'absolute -inset-1.5 rounded-full bg-cyan-400/40 blur-md animate-ping';
         if (voiceStatusActive === 'success' && voiceStatusTimer) {
@@ -1930,6 +2516,7 @@
 
       jarvisAudioEl.onended = () => {
         liveOutputAudioLevel = 0.0;
+        if (window.setJarvisVisualCoreState) window.setJarvisVisualCoreState('idle');
         document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
         document.getElementById('mic-halo').className = 'absolute -inset-1.5 rounded-full bg-cyan-400/30 blur-md animate-pulse';
         try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none'; } catch (e) {}
@@ -1963,6 +2550,8 @@
     function cleanSpeechText(text) {
       if (!text) return "";
       return text
+        .replace(/<toolcall[\s\S]*?(?:<\/toolcall>|$)/gi, "")
+        .replace(/<[^>]+>/g, "")
         .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1')
         .replace(/_{1,3}([^_]+)_{1,3}/g, '$1')
         .replace(/[*#~`]/g, '')
@@ -2317,6 +2906,12 @@
       }
     }
 
+        // Alias e funções do Núcleo JARVIS Direto (Zero OpenClaw)
+    function triggerJarvisCoreInspect() {
+      sendToOpenClaw("Jarvis, telemetria completa do ecossistema");
+    }
+    const sendToOpenClaw = (text, opts) => sendToJarvisCore(text, opts);
+
     function triggerOpenClawInspect() {
       executeCanvasAction('refresh_openclaw', '');
     }
@@ -2383,16 +2978,242 @@
 
     // CONEXÃO SSE EM TEMPO REAL COM O SERVIDOR MCP E HUD
 
+    // ==========================================
+    // L.A.Y.A. DYNAMIC SCREEN & PANEL RENDERER
+    // ==========================================
+    let currentLayaScreenData = null;
+
+    function renderLayaScreen(screenData) {
+      if (!screenData) return;
+      currentLayaScreenData = screenData;
+      console.log("[L.A.Y.A.] Projetando interface sob demanda:", screenData.title);
+      const stage = document.getElementById('jarvis-visual-stage');
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
+      const leftDock = document.getElementById('left-dock');
+
+      if (screenData.hide_vortex && vortex) {
+        vortex.classList.add('opacity-10', 'scale-75');
+      }
+      if (screenData.hide_cards && leftDock) {
+        leftDock.classList.add('opacity-0', 'pointer-events-none');
+      }
+
+      if (stage) {
+        stage.innerHTML = `
+          <div class="relative w-full rounded-2xl glass-card-stark p-5 border border-cyan-400/60 shadow-[0_0_40px_rgba(0,210,255,0.35)] backdrop-blur-2xl transition-all">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-cyan-500/20">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span class="text-xs font-mono-code font-bold tracking-widest text-cyan-300 uppercase">${screenData.title || 'INTERFACE DINÂMICA'}</span>
+                <span class="text-[10px] text-slate-400 font-mono-code">${screenData.subtitle || '// L.A.Y.A. PROJECTION'}</span>
+              </div>
+              <button onclick="closeLayaScreen()" class="px-2.5 py-1 text-[11px] font-mono-code text-cyan-400 hover:text-white rounded bg-cyan-950/60 hover:bg-cyan-900/80 border border-cyan-500/30 transition-all flex items-center space-x-1">
+                <span>✕</span> <span>FECHAR</span>
+              </button>
+            </div>
+            <div class="laya-screen-content w-full overflow-y-auto max-h-[70vh]">
+              ${screenData.html || ''}
+            </div>
+          </div>
+        `;
+        stage.classList.remove('hidden');
+        setTimeout(() => {
+          stage.classList.remove('opacity-0');
+          stage.classList.add('opacity-100');
+        }, 20);
+
+        // Delegação de cliques em botões/opções geradas na tela LAYA
+        const layaContent = stage.querySelector('.laya-screen-content');
+        if (layaContent) {
+          layaContent.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('button, [data-action], .laya-btn, .laya-option');
+            if (btn && !btn.getAttribute('onclick')) {
+              const val = btn.getAttribute('data-value') || btn.innerText.trim();
+              if (val) {
+                console.log("[L.A.Y.A.] Opção selecionada pelo usuário:", val);
+                sendToOpenClaw(val, { fromScreen: true, screenTitle: screenData.title });
+                closeLayaScreen();
+              }
+            }
+          });
+        }
+
+        const cardCustom = document.getElementById('card-custom');
+        if (cardCustom) cardCustom.classList.add('hidden');
+      }
+    }
+
+    function closeLayaScreen() {
+      currentLayaScreenData = null;
+      const stage = document.getElementById('jarvis-visual-stage');
+      const vortex = document.getElementById('plasma-core') || document.querySelector('.vortex-container');
+      const leftDock = document.getElementById('left-dock');
+
+      if (vortex) {
+        vortex.classList.remove('opacity-10', 'scale-75');
+      }
+      if (leftDock) {
+        leftDock.classList.remove('opacity-0', 'pointer-events-none');
+      }
+      if (stage) {
+        stage.classList.add('opacity-0');
+        setTimeout(() => {
+          stage.classList.add('hidden');
+          stage.innerHTML = '';
+        }, 300);
+      }
+    }
+
     function connectHudEvents() {
       if (!window.EventSource) return;
       try {
         const evtSource = new EventSource('/api/hud/events');
+
+        evtSource.addEventListener('task_event', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            updateLiveTaskCard(data);
+            if (window.setJarvisVisualCoreState) {
+              if (data.status === 'running' || data.status === 'in_progress') window.setJarvisVisualCoreState('executing');
+              else if (data.status === 'completed') { window.setJarvisVisualCoreState('success'); setTimeout(() => window.setJarvisVisualCoreState('idle'), 3500); }
+              else if (data.status === 'failed') { window.setJarvisVisualCoreState('error'); setTimeout(() => window.setJarvisVisualCoreState('idle'), 3500); }
+            }
+          } catch(err) {
+            console.warn('[TaskCard SSE] Erro ao atualizar tarefa:', err);
+          }
+        });
+
+        evtSource.addEventListener('laya_screen', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            renderLayaScreen(data);
+          } catch(err) {
+            console.warn("[LAYA SSE] Erro ao renderizar:", err);
+          }
+        });
+
+        evtSource.addEventListener('close_laya_screen', () => {
+          closeLayaScreen();
+        });
+
+        evtSource.addEventListener('presentation_start', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.start(data);
+          } catch(err) {
+            console.warn("[Presentation SSE] Erro ao iniciar:", err);
+          }
+        });
+
+        evtSource.addEventListener('presentation_scene', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.renderCurrentScene(data);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('presentation_control', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) {
+              const act = data.action;
+              if (act === 'pause' || act === 'resume') window.JarvisPresentationEngine.togglePlayPause();
+              else if (act === 'next') window.JarvisPresentationEngine.next();
+              else if (act === 'prev') window.JarvisPresentationEngine.prev();
+              else if (act === 'close' || act === 'stop') window.JarvisPresentationEngine.close();
+              else if (act === 'jump' && data.params && data.params.index !== undefined) {
+                window.JarvisPresentationEngine.jumpTo(parseInt(data.params.index));
+              }
+            }
+          } catch(err) {}
+        });
+
+        // SPATIAL WORKSPACE LIVE SSE LISTENERS
+        evtSource.addEventListener('spatial_workspace_created', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.initSpatialWorkspace(data);
+          } catch(err) { console.warn('[Spatial SSE] Erro ao criar workspace:', err); }
+        });
+
+        evtSource.addEventListener('spatial_component_added', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.addSpatialComponent(data);
+          } catch(err) { console.warn('[Spatial SSE] Erro ao adicionar componente:', err); }
+        });
+
+        evtSource.addEventListener('spatial_component_updated', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.updateSpatialComponent(data.component_id, data.updates, data.animate);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_component_highlighted', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.highlightSpatialComponent(data.component_id, data.duration);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_component_removed', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.removeSpatialComponent(data.component_id);
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('spatial_workspace_cleared', () => {
+          try {
+            if (window.JarvisPresentationEngine) window.JarvisPresentationEngine.clearSpatialWorkspace();
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('project_screen', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (window.JarvisPresentationEngine) {
+              window.JarvisPresentationEngine.start({
+                title: data.title || "PROJEÇÃO HOLOGRÁFICA",
+                scenes: [{
+                  title: data.title || "PROJEÇÃO",
+                  component_type: "hologram_card",
+                  content: data.html || data.content || ""
+                }]
+              });
+            }
+          } catch(err) {}
+        });
+
+
+        evtSource.addEventListener('toast', (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (window.showJarvisToast) showJarvisToast(d.message || d.text || 'Notificação');
+          } catch(err) {}
+        });
+
+        evtSource.addEventListener('command', (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (d.action) tryNativeCommand(d.action);
+          } catch(err) {}
+        });
 
         evtSource.onmessage = (e) => {
           try {
             const event = JSON.parse(e.data);
 
             // Stream em tempo real contínuo (ZimaOS & Hardware & Visão)
+            if (event.action === "laya_screen") {
+              renderLayaScreen(event);
+              return;
+            }
+            if (event.action === "close_laya_screen") {
+              closeLayaScreen();
+              return;
+            }
             if (event.action === "vision_telemetry" && event.vision) {
               updateVisionWidget(event.vision);
               return;
@@ -2510,6 +3331,8 @@
     // ==========================================
     // CONTROLES DE VISÃO COMPUTACIONAL (WEBCAM DO NAVEGADOR)
     // ==========================================
+    let isFlightRadarOpen = false;
+    let isHolo3DLabOpen = false;
     let browserVideoStream = null;
     let isBrowserCameraStreaming = false;
     let isFrameProcessing = false;
@@ -2861,7 +3684,7 @@
     // ==========================================
     // RADAR AÉREO 3D • COBE WEBGL ENGINE (~5kB SHUDING / VERCEL)
     // ==========================================
-    let isFlightRadarOpen = false;
+    isFlightRadarOpen = false;
     let cobeGlobe = null;
     let cobeAnimId = null;
     let flightRadarRegion = 'sa'; // 'sa' = Brasil / América do Sul, 'all' = Global
@@ -4409,6 +5232,12 @@
       };
       const stateText = document.getElementById('jarvis-state-text');
       if (stateText) stateText.innerText = labels[status] || labels.standby;
+      if (window.setJarvisVisualCoreState) {
+        if (status === 'thinking' || status === 'sending') window.setJarvisVisualCoreState('thinking');
+        else if (status === 'listening') window.setJarvisVisualCoreState('thinking');
+        else if (status === 'standby' && !isJarvisSpeaking) window.setJarvisVisualCoreState('idle');
+        else if (status === 'error') window.setJarvisVisualCoreState('error');
+      }
       if (message) {
         const subtitle = document.getElementById('live-subtitle');
         if (subtitle) subtitle.innerText = `"${message}"`;
@@ -4431,7 +5260,7 @@
       setTimeout(() => sendToOpenClaw(nextCommand, {fromVoice: true}), 0);
     }
 
-    async function sendToOpenClaw(textToSend = null, options = {}) {
+    async function sendToJarvisCore(textToSend = null, options = {}) {
       const fromVoice = !!options.fromVoice;
       const input = document.getElementById('user-input');
       const val = textToSend || input.value.trim();
@@ -4469,16 +5298,53 @@
         document.getElementById('live-subtitle').innerText = `"Aguardando envio..."`;
       }
 
-      // Pequena pausa para o visor mostrar o envio sem atrasar a fala.
-      await new Promise(resolve => setTimeout(resolve, fromVoice ? 300 : 1500));
+      // Resposta ágil sem pausas desnecessárias
+      if (fromVoice) {
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
       if (fromVoice) setVoiceStatus('thinking', 'O núcleo recebeu sua fala e está preparando a resposta...');
       else document.getElementById('live-subtitle').innerText = `"Processando instrução com o núcleo Jarvis..."`;
 
       try {
+        const reqPayload = {
+          message: val,
+          active_screen: currentLayaScreenData ? {
+            title: currentLayaScreenData.title,
+            subtitle: currentLayaScreenData.subtitle,
+            preview: (currentLayaScreenData.html || '').replace(/<[^>]+>/g, ' ').substring(0, 300)
+          } : null
+        };
+        // Auto-fecha a tela de pergunta anterior ao responder
+        if (currentLayaScreenData && !options.keepScreenOpen) {
+          closeLayaScreen();
+        }
+              let attachmentContext = '';
+      let fileAttachmentData = null;
+      if (activeChatAttachment) {
+        if (activeChatAttachment.isImage) {
+          attachmentContext = `[Imagem Anexada: ${activeChatAttachment.name} (${activeChatAttachment.size})]\n`;
+          fileAttachmentData = {
+            name: activeChatAttachment.name,
+            type: activeChatAttachment.type,
+            base64: activeChatAttachment.data
+          };
+        } else {
+          attachmentContext = `[Arquivo Anexado: ${activeChatAttachment.name} (${activeChatAttachment.size})]\n` +
+            (activeChatAttachment.textContent ? `Conteúdo:\n${activeChatAttachment.textContent.substring(0, 4000)}\n\n` : '');
+          fileAttachmentData = {
+            name: activeChatAttachment.name,
+            type: activeChatAttachment.type
+          };
+        }
+        removeChatAttachment();
+      }
+      const finalMessage = attachmentContext + val;
+        reqPayload.message = finalMessage;
+        if (fileAttachmentData) reqPayload.attachment = fileAttachmentData;
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: jarvisSessionHeaders(),
-          body: JSON.stringify({message: val})
+          body: JSON.stringify(reqPayload)
         });
         const data = await res.json();
         if (!res.ok || !data || !data.reply || data.target_widget === 'system') {
@@ -4500,14 +5366,29 @@
             subtitleText = subtitleText.substring(0, 95).trim() + '...';
           }
         }
-        document.getElementById('live-subtitle').innerText = `"${subtitleText}"`;
+        let cleanSub = String(subtitleText || '').replace(/<toolcall[\s\S]*?<\/toolcall>/gi, '').replace(/<[^>]+>/g, '').trim();
+        if (!cleanSub || cleanSub.length < 3) cleanSub = "J.A.R.V.I.S. online. Aguardando comando do Senhor Werik.";
+        document.getElementById('live-subtitle').innerText = `"${cleanSub}"`;
         
         // ABRE O MENU LATERAL DIREITO COM O TEXTO COMPLETO E FORMATADO!
-        openRightSidebarWithContent(val, data.reply);
+        // Atualiza o sidebar com os dados completos sem forçar abertura automática intrusiva
+        if (data.open_sidebar || (data.reply && data.reply.length > 280)) {
+          openRightSidebarWithContent(val, data.reply);
+        }
 
         // JARVIS DYNAMIC VISUAL OS ENGINE RENDERER (Renderização de UI Estruturada)
         const visualStage = document.getElementById('jarvis-visual-stage');
         let renderedVisual = false;
+        if (data.presentation || data.presentation_script) {
+          if (window.JarvisPresentationEngine) {
+            window.JarvisPresentationEngine.start(data.presentation || data.presentation_script);
+            renderedVisual = true;
+          }
+        } else if (data.laya_screen || data._screen_data) {
+          renderLayaScreen(data.laya_screen || data._screen_data);
+          renderedVisual = true;
+        }
+
         if (window.JarvisUI && visualStage) {
           if (data.visual) {
             JarvisUI.render(data.visual, visualStage, val);
@@ -4591,7 +5472,7 @@
           if (fromVoice && !input.value.trim()) input.value = val;
           if (fromVoice) setVoiceStatus('error', 'Não consegui confirmar o envio ao núcleo. Tente novamente.');
           else {
-            document.getElementById('live-subtitle').innerText = `"Erro na comunicação com o OpenClaw, Senhor Werik."`;
+            document.getElementById('live-subtitle').innerText = `"Erro na comunicação com o Núcleo JARVIS, Senhor Werik."`;
             document.getElementById('jarvis-state-text').innerText = 'O N L I N E';
           }
         }
@@ -4843,6 +5724,10 @@
     }
 
     function initSpeechEngine() {
+      if (window.__JARVIS_DESKTOP_STANDALONE || navigator.userAgent.includes('QtWebEngine') || location.search.includes('desktop') || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+        console.log("[J.A.R.V.I.S. Desktop] Motor de Voz Nativo ativo via Python + Whisper. Web Speech API suprimida para estabilidade.");
+        return;
+      }
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
 
@@ -4942,6 +5827,22 @@
     // Botão de clique manual no microfone
     function manualMicToggle() {
       closeAnyOpenCard(true);
+      // CONVERSA AO VIVO (Qwen-Audio realtime): quando disponivel, o microfone
+      // fica aberto e a resposta chega falada em pt-BR (fala->fala). Sem ponte
+      // ou sem chave no .env, cai para o fluxo classico (gravar -> STT -> texto).
+      if (window.QwenLiveVoice && QwenLiveVoice.isActive()) {
+        QwenLiveVoice.stop();
+        return;
+      }
+      if (window.QwenLiveVoice && !isRecordingAudio) {
+        QwenLiveVoice.toggle().then(function (ok) {
+          if (!ok && !isRecordingAudio) {
+            isAwake = true;
+            startAudioRecording();
+          }
+        });
+        return;
+      }
       if (isRecordingAudio) {
         stopAudioRecordingAndSend();
       } else {
@@ -6095,14 +6996,26 @@
 
     async function detectNativeMode() {
       try {
-        if (window.pywebview) {
+        if (window.pywebview && window.pywebview.api) {
           if (window.pywebview.ready) await window.pywebview.ready;
-          jarvisNativeApi = window.pywebview.api || null;
-          if (jarvisNativeApi) {
-            showHudAlert("MODO NATIVO ATIVADO", "Controle total do PC Windows liberado para o J.A.R.V.I.S. neste app.", "sucesso");
-          }
+          jarvisNativeApi = window.pywebview.api;
+          showHudAlert("MODO NATIVO ATIVADO", "Controle total do PC liberado via pywebview.", "sucesso");
+        } else if (window.__JARVIS_DESKTOP_STANDALONE || location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+          jarvisNativeApi = {
+            execute: async function(action, params = {}) {
+              const res = await fetch('/api/system/control', {
+                method: 'POST',
+                headers: jarvisSessionHeaders(),
+                body: JSON.stringify({ action: action, params: params })
+              });
+              return await res.json();
+            }
+          };
+          console.log("[J.A.R.V.I.S.] Modo Nativo Local Bridge ativo via /api/system/control.");
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("[J.A.R.V.I.S.] Erro ao inicializar Modo Nativo:", e);
+      }
     }
 
     function nativeReply(msg) {
@@ -6258,7 +7171,132 @@
     window.addEventListener('orientationchange', applyDynamicLayoutAdaptation);
     setTimeout(applyDynamicLayoutAdaptation, 100);
 
-  </script>
+  
+    // ==============================================================================
+    // LIVE TASK EXECUTION CARD (RASTREAMENTO DE TAREFA EM TEMPO REAL)
+    // ==============================================================================
+    let isTaskCardCollapsed = false;
+
+    function toggleTaskCardCollapse() {
+      const body = document.getElementById('task-body-container');
+      const icon = document.getElementById('task-collapse-icon');
+      if (!body) return;
+      isTaskCardCollapsed = !isTaskCardCollapsed;
+      if (isTaskCardCollapsed) {
+        body.classList.add('hidden');
+        if (icon) icon.innerText = '▸';
+      } else {
+        body.classList.remove('hidden');
+        if (icon) icon.innerText = '▾';
+      }
+    }
+
+    function updateLiveTaskCard(task) {
+      if (!task) return;
+      const titleEl = document.getElementById('task-title-display');
+      const badgeEl = document.getElementById('task-status-badge');
+      const methodEl = document.getElementById('task-method-display');
+      const stepNameEl = document.getElementById('task-step-name');
+      const stepCounterEl = document.getElementById('task-step-counter');
+      const progressBar = document.getElementById('task-progress-bar');
+      const timerEl = document.getElementById('task-elapsed-timer');
+      const logsContainer = document.getElementById('task-live-logs');
+      const liveDot = document.getElementById('task-live-dot');
+      const glowLine = document.getElementById('task-glow-line');
+      const iconBox = document.getElementById('task-icon-container');
+
+      if (titleEl && task.title) titleEl.innerText = task.title;
+      if (methodEl && task.method) methodEl.innerText = task.method;
+      if (stepNameEl && task.step_name) stepNameEl.innerText = task.step_name;
+
+      const currentStep = task.current_step || 0;
+      const totalSteps = task.total_steps || 1;
+      const progressPct = task.progress_percent || 0;
+      if (stepCounterEl) {
+        stepCounterEl.innerText = `${currentStep}/${totalSteps} (${progressPct}%)`;
+      }
+      if (progressBar) {
+        progressBar.style.width = `${progressPct}%`;
+      }
+      if (timerEl && task.elapsed_seconds !== undefined) {
+        timerEl.innerText = `⏱️ ${task.elapsed_seconds}s`;
+      }
+
+      const status = (task.status || 'idle').toLowerCase();
+      if (badgeEl) {
+        badgeEl.innerText = task.status_label || status.toUpperCase();
+        if (status === 'executing' || status === 'verifying' || status === 'thinking') {
+          badgeEl.className = "text-[9px] font-mono-code text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/50 animate-pulse";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-100 animate-pulse";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300";
+        } else if (status === 'completed') {
+          badgeEl.className = "text-[9px] font-mono-code text-emerald-300 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-400/50";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-80";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300";
+        } else if (status === 'error') {
+          badgeEl.className = "text-[9px] font-mono-code text-rose-300 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-400/50 animate-pulse";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-rose-500 to-transparent opacity-100";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-300";
+        } else {
+          badgeEl.className = "text-[9px] font-mono-code text-slate-400 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/50";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-slate-500";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-transparent";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400";
+        }
+      }
+
+      if (logsContainer && Array.isArray(task.logs)) {
+        logsContainer.innerHTML = task.logs.map(l => {
+          let colorClass = "text-slate-300";
+          if (l.type === "action") colorClass = "text-sky-300";
+          else if (l.type === "vision") colorClass = "text-amber-300 font-semibold";
+          else if (l.type === "memory") colorClass = "text-purple-300 font-semibold";
+          else if (l.type === "success") colorClass = "text-emerald-300 font-bold";
+          else if (l.type === "error" || l.type === "warn") colorClass = "text-rose-300 font-bold";
+
+          const safeMsg = (l.message || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return `<div class="flex items-start space-x-1.5 leading-tight py-0.5 border-b border-slate-900/60">
+            <span class="text-[8px] text-slate-500 select-none">${l.time || ''}</span>
+            <span class="text-[10px] select-none">${l.icon || '⚡'}</span>
+            <span class="${colorClass} break-all flex-1 text-[9px]">${safeMsg}</span>
+          </div>`;
+        }).join('');
+        // Rola automaticamente para o fim (mensagens mais recentes)
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+    }
+
+    async function loadInitialTaskState() {
+      try {
+        const res = await fetch('/api/task/current');
+        if (res.ok) {
+          const data = await res.json();
+          updateLiveTaskCard(data);
+        }
+      } catch(e) {}
+    }
+
+    setTimeout(loadInitialTaskState, 1000);
+    async function loadInitialPresentationState() {
+      try {
+        const res = await fetch('/api/presentation/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.is_active && data.presentation && window.JarvisPresentationEngine) {
+            console.log('[Presentation] Recuperando apresentacao ativa:', data.presentation.title);
+            window.JarvisPresentationEngine.start(data.presentation);
+          }
+        }
+      } catch(e) {}
+    }
+    setTimeout(loadInitialPresentationState, 1200);
+
+</script>
   <button id="push-enable-btn" onclick="enablePushNotifications()" title="Ativar notificações push do J.A.R.V.I.S." class="hidden fixed z-[90] bottom-24 right-4 safe-bottom w-12 h-12 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 text-xl shadow-[0_0_18px_rgba(0,240,255,0.5)] active:scale-95 transition-transform">🔔</button>
+
+
 </body>
 </html>

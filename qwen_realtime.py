@@ -57,12 +57,51 @@ except Exception:  # pragma: no cover - dependencia ausente desliga o modulo
     websockets = None
 
 
+def _load_env_fallback() -> None:
+    """Carrega .env da raiz do projeto sem sobrescrever variaveis ja existentes."""
+    from pathlib import Path
+
+    env_file = Path(__file__).resolve().parent / ".env"
+    if not env_file.exists():
+        return
+    try:
+        with open(env_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    if k.strip() not in os.environ:
+                        os.environ[k.strip()] = v.strip()
+    except Exception:
+        pass
+
+
+_load_env_fallback()
+
+
+async def _open_ws():
+    """Abre o WebSocket realtime (compativel com websockets 10.x e 12+)."""
+    if websockets is None:
+        raise RuntimeError("websockets indisponivel")
+    url = f"{realtime_url()}?model={realtime_model()}"
+    # websockets 10.x exige pares (nome, valor); 12+ tambem aceita esse formato.
+    headers = [("Authorization", "Bearer " + api_key())]
+    kwargs: Dict[str, Any] = {"open_timeout": 20, "max_size": 8 * 1024 * 1024}
+    params = inspect.signature(websockets.connect).parameters
+    chave_header = "additional_headers" if "additional_headers" in params else "extra_headers"
+    kwargs[chave_header] = headers
+    return await websockets.connect(url, **kwargs)
+
+
 # --------------------------------------------------------------------------- #
 # Configuracao (lida em tempo de execucao para permitir testes e reload)       #
 # --------------------------------------------------------------------------- #
 
 def realtime_url() -> str:
-    return os.environ.get("QWEN_REALTIME_URL", "wss://cubicspaces.cloud/v1/realtime").strip()
+    return os.environ.get(
+        "QWEN_REALTIME_URL",
+        "wss://token-plan.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/realtime",
+    ).strip()
 
 
 def realtime_model() -> str:
@@ -181,8 +220,15 @@ def build_function_call_output(call_id: str, text: str) -> Dict[str, Any]:
     }
 
 
-def build_session_config() -> Dict[str, Any]:
-    """Configuracao da sessao realtime: voz pt-BR, turno manual e ferramentas."""
+def build_session_config(
+    turn_detection: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Configuracao da sessao realtime: voz pt-BR e ferramentas.
+
+    turn_detection=None -> turno manual (commit + response.create por uteracao);
+    turn_detection={"type": "smart_turn"|"server_vad"} -> deteccao no servidor
+    (conversa ao vivo: o modelo responde quando o usuario para de falar).
+    """
     try:
         from zoneinfo import ZoneInfo
 
@@ -196,8 +242,24 @@ def build_session_config() -> Dict[str, Any]:
             f"{JARVIS_REALTIME_INSTRUCTIONS} "
             f"Data e hora atuais: {agora.strftime('%d/%m/%Y %H:%M')} (horario de Brasilia)."
         ),
-        "turn_detection": None,
+        "turn_detection": turn_detection,
         "tools": QWEN_AGENT_TOOLS,
+        "audio": {
+            "input": {
+                "format": {
+                    "type": "pcm",
+                    "sample_rate": INPUT_RATE,
+                    "sample_format": "s16le",
+                    "channels": 1,
+                    "packing": "interleaved",
+                    "channel_layout": "mono",
+                }
+            },
+            "output": {
+                "voice": realtime_voice(),
+                "format": {"type": "pcm", "sample_rate": OUTPUT_RATE},
+            },
+        },
     }
 
 
@@ -294,10 +356,12 @@ class AudioPipe:
         send_frame: Callable[[bytes], Any],
         on_start: Optional[Callable[[], Any]] = None,
         on_stop: Optional[Callable[[], Any]] = None,
+        paced: bool = True,
     ):
         self._send_frame = send_frame
         self._on_start = on_start
         self._on_stop = on_stop
+        self._paced = paced
         self._queue: "asyncio.Queue[Tuple[str, Optional[str], bytes]]" = asyncio.Queue()
         self._cancelled: set = set()
         self._task: Optional[asyncio.Task] = None
@@ -433,15 +497,7 @@ class QwenRealtimeSession:
     # ----- conexao ----- #
 
     async def connect(self) -> None:
-        if websockets is None:
-            raise RuntimeError("websockets indisponivel")
-        url = f"{realtime_url()}?model={realtime_model()}"
-        headers = ["Authorization: Bearer " + api_key()]
-        kwargs: Dict[str, Any] = {"open_timeout": 20, "max_size": 8 * 1024 * 1024}
-        params = inspect.signature(websockets.connect).parameters
-        chave_header = "additional_headers" if "additional_headers" in params else "extra_headers"
-        kwargs[chave_header] = headers
-        self._ws = await websockets.connect(url, **kwargs)
+        self._ws = await _open_ws()
         self._recv_task = asyncio.create_task(self._recv_loop())
         await self._send({"type": "session.update", "session": build_session_config()})
         print(f"[QWEN REALTIME] sessao aberta (device={self.device_id}, model={realtime_model()})")
@@ -631,6 +687,234 @@ class QwenRealtimeSession:
             return
         try:
             resultado = self._on_transcript(papel, texto)
+            if inspect.isawaitable(resultado):
+                await resultado
+        except Exception:
+            pass
+
+
+# --------------------------------------------------------------------------- #
+# Conversa AO VIVO: streaming continuo com VAD no servidor (fala->fala pt-BR)  #
+# --------------------------------------------------------------------------- #
+
+
+class LiveConversation:
+    """Conversa continua com o Qwen realtime - microfone aberto, VAD no servidor.
+
+    Diferente de converse_turn() (turno manual por uteracao), aqui o microfone
+    fica aberto e o proprio servidor detecta inicio/fim de fala (smart_turn /
+    server_vad): o modelo responde sozinho quando o usuario para de falar.
+
+    Eventos de saida (callbacks):
+      - on_audio(pcm24k: bytes)   -> reproduzir (24 kHz s16le mono)
+      - on_transcript(role, texto) -> "user" (transcricao do usuario) /
+                                      "assistant" (falado pelo Qwen)
+      - on_state(estado)          -> "listening" | "thinking" | "speaking" | "idle"
+      - on_tool(name, args_json)  -> log/observabilidade das tools MiMo
+    """
+
+    def __init__(
+        self,
+        on_audio: Optional[Callable[[bytes], Any]] = None,
+        on_transcript: Optional[Callable[[str, str], Any]] = None,
+        on_state: Optional[Callable[[str], Any]] = None,
+        on_tool: Optional[Callable[[str, str], Any]] = None,
+    ):
+        self._on_audio = on_audio
+        self._on_transcript = on_transcript
+        self._on_state = on_state
+        self._on_tool = on_tool
+        self._ws = None
+        self._recv_task: Optional[asyncio.Task] = None
+        self._tools_task: Optional[asyncio.Task] = None
+        self._tool_calls: List[Tuple[str, str, str]] = []
+        self._active_response: Optional[str] = None
+        self._speaking = False
+
+    # ----- conexao ----- #
+
+    async def start(self) -> None:
+        self._ws = await _open_ws()
+        await self._send(
+            {
+                "type": "session.update",
+                "session": build_session_config(
+                    turn_detection={"type": os.environ.get("QWEN_LIVE_VAD", "server_vad")}
+                ),
+            }
+        )
+        self._recv_task = asyncio.create_task(self._recv_loop())
+        await self._state("listening")
+        print(f"[QWEN LIVE] conversa ao vivo iniciada (model={realtime_model()})")
+
+    def _aberta(self) -> bool:
+        if self._ws is None:
+            return False
+        fechado = getattr(self._ws, "closed", None)
+        if fechado is not None:
+            return not fechado
+        estado = getattr(self._ws, "state", None)
+        if estado is not None:
+            return str(estado).upper().endswith("OPEN")
+        return True
+
+    async def _send(self, payload: Dict[str, Any]) -> None:
+        if self._ws is None:
+            raise RuntimeError("sessao realtime fechada")
+        await self._ws.send(json.dumps(payload, ensure_ascii=False))
+
+    # ----- fluxo de audio ----- #
+
+    async def send_audio(self, pcm16k: bytes) -> None:
+        """Microfone aberto: encaminha PCM 16 kHz continuamente."""
+        if not pcm16k or not self._aberta():
+            return
+        await self._send(
+            {
+                "type": "input_audio_buffer.append",
+                "audio": base64.b64encode(pcm16k).decode("ascii"),
+            }
+        )
+
+    async def cancel(self) -> None:
+        """Barge-in: o usuario falou por cima - cancela a resposta em andamento."""
+        if self._aberta() and self._active_response:
+            try:
+                await self._send({"type": "response.cancel"})
+            except Exception:
+                pass
+        self._speaking = False
+
+    async def close(self) -> None:
+        if self._tools_task is not None and not self._tools_task.done():
+            self._tools_task.cancel()
+            self._tools_task = None
+        if self._recv_task is not None:
+            self._recv_task.cancel()
+            self._recv_task = None
+        if self._ws is not None and self._aberta():
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+        self._ws = None
+        await self._state("idle")
+
+    # ----- eventos ----- #
+
+    async def _recv_loop(self) -> None:
+        try:
+            async for mensagem in self._ws:
+                await self._processar_evento(json.loads(mensagem))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            print(f"[QWEN LIVE] recv encerrado ({type(exc).__name__}): {exc}")
+
+    async def _processar_evento(self, evento: Dict[str, Any]) -> None:
+        tipo = str(evento.get("type", ""))
+
+        if tipo == "error":
+            print(f"[QWEN LIVE] erro do servidor: {evento.get('error')}")
+            return
+
+        if tipo == "response.created":
+            resposta = evento.get("response") or {}
+            self._active_response = resposta.get("id")
+            return
+
+        if tipo == "input_audio_buffer.speech_started":
+            # Barge-in nativo do servidor: usuario comecou a falar durante resposta.
+            if self._speaking:
+                self._speaking = False
+                await self._state("interrupt")  # cliente limpa a fila de playback
+                await self._state("listening")
+            return
+
+        if tipo == "conversation.item.input_audio_transcription.completed":
+            await self._transcricao("user", str(evento.get("transcript", "")))
+            return
+
+        if tipo == "response.audio_transcript.delta":
+            await self._transcricao("assistant", str(evento.get("delta", "")))
+            return
+
+        if tipo == "response.audio.delta":
+            try:
+                pcm24 = base64.b64decode(evento.get("delta", ""))
+            except Exception:
+                return
+            if not self._speaking:
+                self._speaking = True
+                await self._state("speaking")
+            if self._on_audio is not None:
+                resultado = self._on_audio(pcm24)
+                if inspect.isawaitable(resultado):
+                    await resultado
+            return
+
+        if tipo == "response.function_call_arguments.done":
+            self._tool_calls.append(
+                (
+                    str(evento.get("call_id", "")),
+                    str(evento.get("name", "")),
+                    str(evento.get("arguments", "")),
+                )
+            )
+            return
+
+        if tipo == "response.done":
+            status = ((evento.get("response") or {}).get("status") or "").lower()
+            if self._tool_calls and status != "error":
+                chamadas, self._tool_calls = self._tool_calls, []
+                self._tools_task = asyncio.create_task(self._executar_tools(chamadas))
+                return
+            self._speaking = False
+            await self._state("listening")
+
+    async def _executar_tools(self, chamadas: List[Tuple[str, str, str]]) -> None:
+        try:
+            await self._state("thinking")
+            for call_id, name, arguments in chamadas:
+                if self._on_tool is not None:
+                    try:
+                        resultado = self._on_tool(name, arguments)
+                        if inspect.isawaitable(resultado):
+                            await resultado
+                    except Exception:
+                        pass
+                inicio = time.time()
+                saida = await _dispatch_tool(name, arguments)
+                print(
+                    f"[QWEN LIVE/AGENTE] tool={name} duracao={time.time() - inicio:.2f}s "
+                    f"retorno={len(saida)} chars"
+                )
+                await self._send(
+                    {
+                        "type": "conversation.item.create",
+                        "item": build_function_call_output(call_id, saida),
+                    }
+                )
+            await self._send({"type": "response.create"})
+        except Exception as exc:
+            print(f"[QWEN LIVE/AGENTE] falha ao executar tools ({type(exc).__name__}): {exc}")
+            await self._state("listening")
+
+    async def _transcricao(self, papel: str, texto: str) -> None:
+        if self._on_transcript is None or not texto:
+            return
+        try:
+            resultado = self._on_transcript(papel, texto)
+            if inspect.isawaitable(resultado):
+                await resultado
+        except Exception:
+            pass
+
+    async def _state(self, estado: str) -> None:
+        if self._on_state is None:
+            return
+        try:
+            resultado = self._on_state(estado)
             if inspect.isawaitable(resultado):
                 await resultado
         except Exception:

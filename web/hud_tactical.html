@@ -36,6 +36,7 @@
   </script>
   <script src="/models/face-api/face-api.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js';"></script>
   <script src="/jarvis_ui_engine.js?v=2.4"></script>
+  <script src="/jarvis_presentation_engine.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -529,22 +530,22 @@
       </div>
     </div>
 
-    <!-- WIDGET 3: OPENCLAW NÚCLEO AUTÔNOMO (Agente J.A.R.V.I.S.) -->
-    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-purple-400/80 transition-all group" onclick="triggerOpenClawInspect()">
+    <!-- WIDGET 3: NÚCLEO COGNITIVO SOBERANO J.A.R.V.I.S. (IA NATIVA DIRETA) -->
+    <div id="card-openclaw-fixed" class="glass-card-stark rounded-xl p-3 w-full spring-trans shadow-2xl cursor-pointer hover:border-purple-400/80 transition-all group" onclick="triggerJarvisCoreInspect()">
       <div class="flex items-center justify-between mb-1.5">
         <div class="flex items-center space-x-2">
           <div class="w-6 h-6 rounded-md bg-purple-500/25 border border-purple-400/50 flex items-center justify-center text-purple-300">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
           </div>
           <div>
-            <div class="text-[9px] tracking-widest text-purple-400 font-semibold uppercase">AGENTE • COGNITIVO</div>
+            <div class="text-[9px] tracking-widest text-cyan-400 font-semibold uppercase">NÚCLEO • COGNITIVO</div>
             <div class="text-xs font-bold text-white tracking-wide flex items-center space-x-1.5">
               <span>CORE AI DIRETO</span>
               <span id="openclaw-live-indicator" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             </div>
           </div>
         </div>
-        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-purple-300 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-400/40">ONLINE</span>
+        <span id="openclaw-status-pill" class="text-[9px] font-mono-code text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/40">SOBERANO</span>
       </div>
 
       <div class="grid grid-cols-2 gap-2 my-1.5 text-[10px] font-mono-code">
@@ -628,7 +629,7 @@
           <span id="vision-presence-badge" class="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">AUSENTE</span>
         </div>
         <div class="flex justify-between items-center">
-          <span class="text-slate-400">OPENCLAW BRIDGE:</span>
+          <span class="text-slate-400">NÚCLEO BRIDGE:</span>
           <span id="vision-openclaw-status" class="text-emerald-400 flex items-center space-x-1">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
             <span>CONECTADO</span>
@@ -2819,6 +2820,12 @@
       }
     }
 
+        // Alias e funções do Núcleo JARVIS Direto (Zero OpenClaw)
+    function triggerJarvisCoreInspect() {
+      sendToOpenClaw("Jarvis, telemetria completa do ecossistema");
+    }
+    const sendToJarvisCore = (text, opts) => sendToOpenClaw(text, opts);
+
     function triggerOpenClawInspect() {
       executeCanvasAction('refresh_openclaw', '');
     }
@@ -2889,6 +2896,14 @@
       if (!window.EventSource) return;
       try {
         const evtSource = new EventSource('/api/hud/events');
+        evtSource.addEventListener('task_event', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            updateLiveTaskCard(data);
+          } catch(err) {
+            console.warn('[TaskCard SSE] Erro ao atualizar tarefa:', err);
+          }
+        });
 
         evtSource.onmessage = (e) => {
           try {
@@ -3039,6 +3054,8 @@
     // ==========================================
     // CONTROLES DE VISÃO COMPUTACIONAL (WEBCAM DO NAVEGADOR)
     // ==========================================
+    let isFlightRadarOpen = false;
+    let isHolo3DLabOpen = false;
     let browserVideoStream = null;
     let isBrowserCameraStreaming = false;
     let isFrameProcessing = false;
@@ -3390,7 +3407,7 @@
     // ==========================================
     // RADAR AÉREO 3D • COBE WEBGL ENGINE (~5kB SHUDING / VERCEL)
     // ==========================================
-    let isFlightRadarOpen = false;
+    isFlightRadarOpen = false;
     let cobeGlobe = null;
     let cobeAnimId = null;
     let flightRadarRegion = 'sa'; // 'sa' = Brasil / América do Sul, 'all' = Global
@@ -5411,6 +5428,7 @@
         console.log("[SpeechEngine] Ambiente QtWebEngine detectado: escuta contínua via nuvem desativada para estabilidade nativa.");
         return;
       }
+      if (window.__JARVIS_DESKTOP_STANDALONE || navigator.userAgent.includes('QtWebEngine') || location.hostname === '127.0.0.1') return;
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
 
@@ -6819,7 +6837,116 @@
         })
         .catch(()=>{});
     };
-  </script>
+  
+    // ==============================================================================
+    // LIVE TASK EXECUTION CARD (RASTREAMENTO DE TAREFA EM TEMPO REAL)
+    // ==============================================================================
+    let isTaskCardCollapsed = false;
+
+    function toggleTaskCardCollapse() {
+      const body = document.getElementById('task-body-container');
+      const icon = document.getElementById('task-collapse-icon');
+      if (!body) return;
+      isTaskCardCollapsed = !isTaskCardCollapsed;
+      if (isTaskCardCollapsed) {
+        body.classList.add('hidden');
+        if (icon) icon.innerText = '▸';
+      } else {
+        body.classList.remove('hidden');
+        if (icon) icon.innerText = '▾';
+      }
+    }
+
+    function updateLiveTaskCard(task) {
+      if (!task) return;
+      const titleEl = document.getElementById('task-title-display');
+      const badgeEl = document.getElementById('task-status-badge');
+      const methodEl = document.getElementById('task-method-display');
+      const stepNameEl = document.getElementById('task-step-name');
+      const stepCounterEl = document.getElementById('task-step-counter');
+      const progressBar = document.getElementById('task-progress-bar');
+      const timerEl = document.getElementById('task-elapsed-timer');
+      const logsContainer = document.getElementById('task-live-logs');
+      const liveDot = document.getElementById('task-live-dot');
+      const glowLine = document.getElementById('task-glow-line');
+      const iconBox = document.getElementById('task-icon-container');
+
+      if (titleEl && task.title) titleEl.innerText = task.title;
+      if (methodEl && task.method) methodEl.innerText = task.method;
+      if (stepNameEl && task.step_name) stepNameEl.innerText = task.step_name;
+
+      const currentStep = task.current_step || 0;
+      const totalSteps = task.total_steps || 1;
+      const progressPct = task.progress_percent || 0;
+      if (stepCounterEl) {
+        stepCounterEl.innerText = `${currentStep}/${totalSteps} (${progressPct}%)`;
+      }
+      if (progressBar) {
+        progressBar.style.width = `${progressPct}%`;
+      }
+      if (timerEl && task.elapsed_seconds !== undefined) {
+        timerEl.innerText = `⏱️ ${task.elapsed_seconds}s`;
+      }
+
+      const status = (task.status || 'idle').toLowerCase();
+      if (badgeEl) {
+        badgeEl.innerText = task.status_label || status.toUpperCase();
+        if (status === 'executing' || status === 'verifying' || status === 'thinking') {
+          badgeEl.className = "text-[9px] font-mono-code text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/50 animate-pulse";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-100 animate-pulse";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300";
+        } else if (status === 'completed') {
+          badgeEl.className = "text-[9px] font-mono-code text-emerald-300 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-400/50";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent opacity-80";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center text-emerald-300";
+        } else if (status === 'error') {
+          badgeEl.className = "text-[9px] font-mono-code text-rose-300 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-400/50 animate-pulse";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-rose-400 animate-ping";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-rose-500 to-transparent opacity-100";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-rose-500/20 border border-rose-400/50 flex items-center justify-center text-rose-300";
+        } else {
+          badgeEl.className = "text-[9px] font-mono-code text-slate-400 px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/50";
+          if (liveDot) liveDot.className = "w-1.5 h-1.5 rounded-full bg-slate-500";
+          if (glowLine) glowLine.className = "absolute top-0 left-0 right-0 h-[2px] bg-transparent";
+          if (iconBox) iconBox.className = "w-6 h-6 rounded-md bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400";
+        }
+      }
+
+      if (logsContainer && Array.isArray(task.logs)) {
+        logsContainer.innerHTML = task.logs.map(l => {
+          let colorClass = "text-slate-300";
+          if (l.type === "action") colorClass = "text-sky-300";
+          else if (l.type === "vision") colorClass = "text-amber-300 font-semibold";
+          else if (l.type === "memory") colorClass = "text-purple-300 font-semibold";
+          else if (l.type === "success") colorClass = "text-emerald-300 font-bold";
+          else if (l.type === "error" || l.type === "warn") colorClass = "text-rose-300 font-bold";
+
+          const safeMsg = (l.message || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          return `<div class="flex items-start space-x-1.5 leading-tight py-0.5 border-b border-slate-900/60">
+            <span class="text-[8px] text-slate-500 select-none">${l.time || ''}</span>
+            <span class="text-[10px] select-none">${l.icon || '⚡'}</span>
+            <span class="${colorClass} break-all flex-1 text-[9px]">${safeMsg}</span>
+          </div>`;
+        }).join('');
+        // Rola automaticamente para o fim (mensagens mais recentes)
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+      }
+    }
+
+    async function loadInitialTaskState() {
+      try {
+        const res = await fetch('/api/task/current');
+        if (res.ok) {
+          const data = await res.json();
+          updateLiveTaskCard(data);
+        }
+      } catch(e) {}
+    }
+
+    setTimeout(loadInitialTaskState, 1000);
+</script>
   <button id="push-enable-btn" onclick="enablePushNotifications()" title="Ativar notificações push do J.A.R.V.I.S." class="hidden fixed z-[90] bottom-24 right-4 safe-bottom w-12 h-12 rounded-full bg-cyan-950/90 border border-cyan-400/60 text-cyan-300 text-xl shadow-[0_0_18px_rgba(0,240,255,0.5)] active:scale-95 transition-transform">🔔</button>
 </body>
 </html>

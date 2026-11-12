@@ -1,22 +1,26 @@
 """
-J.A.R.V.I.S. — Cliente TTS Unificado (ElevenLabs Flash v2.5 PT-BR + Xiaomi MiMo VoiceDesign/Clone).
+J.A.R.V.I.S. — Cliente TTS Unificado (Edge-TTS Neural PT-BR Gratuito + ElevenLabs + Xiaomi MiMo).
 
 Modos (JARVIS_TTS_MODE):
-  elevenlabs (padrão) -> ElevenLabs 'eleven_flash_v2_5' (language_code='pt', 24 kHz PCM em streaming ~0.6s,
-                         Voz Oficial George 'JBFqnCBsd6RMkjVDRZzb' com pronúncia PT-BR nativa impecável).
-  design              -> mimo-v2.5-tts-voicedesign: timbre criado por descrição (JARVIS_VOICE_DESC)
-  clone               -> mimo-v2.5-tts-voiceclone : clona a voz de config/voice/jarvis_ref.wav (5-10 s)
-  preset              -> mimo-v2.5-tts            : voz pré-definida (JARVIS_TTS_VOICE, padrão 'mimo_default')
+  edge / free (padrão) -> Microsoft Edge TTS Neural 'pt-BR-AntonioNeural' (100% gratuito, sotaque brasileiro nativo, 24 kHz PCM).
+  elevenlabs           -> ElevenLabs 'eleven_flash_v2_5' (language_code='pt', 24 kHz PCM em streaming ~0.6s).
+  design               -> mimo-v2.5-tts-voicedesign: timbre criado por descrição (JARVIS_VOICE_DESC).
+  clone                -> mimo-v2.5-tts-voiceclone : clona a voz de config/voice/jarvis_ref.wav (5-10 s).
+  preset               -> mimo-v2.5-tts            : voz pré-definida (JARVIS_TTS_VOICE, padrão 'mimo_default').
 
 Retorna PCM int16 mono 24 kHz. Frases repetidas vêm de cache em disco (latência ~0).
-Se o ElevenLabs oscilar ou esgotar cota, faz failover automático para Xiaomi MiMo / Windows SAPI PT-BR.
 """
 
+import asyncio
 import base64
+import concurrent.futures
 import hashlib
 import json
 import logging
 import os
+import shutil
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
@@ -29,7 +33,12 @@ logger = logging.getLogger("MimoTTS")
 
 SAMPLE_RATE = 24000
 
-# 1. Configuração ElevenLabs (Primário — Voz George com pronúncia PT-BR nativa em ~0.6s)
+# 1. Configuração Edge TTS (Primário — 100% Gratuito, Neural Brasileiro Nativo de Alta Fidelidade)
+EDGE_VOICE = os.environ.get("JARVIS_EDGE_VOICE", "pt-BR-AntonioNeural").strip()
+EDGE_RATE = os.environ.get("JARVIS_EDGE_RATE", "+0%").strip()
+EDGE_PITCH = os.environ.get("JARVIS_EDGE_PITCH", "+0Hz").strip()
+
+# 2. Configuração ElevenLabs (Secundário — Voz George com pronúncia PT-BR em ~0.6s)
 ELEVENLABS_API_KEY = os.environ.get(
     "ELEVENLABS_API_KEY",
     "sk_5417d8a892b2d9820a194d9175bcc7f82439915b66b04b1c",
@@ -37,11 +46,11 @@ ELEVENLABS_API_KEY = os.environ.get(
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb").strip()
 ELEVENLABS_MODEL_ID = os.environ.get("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5").strip()
 
-# 2. Configuração Xiaomi MiMo (Secundário / VoiceDesign / VoiceClone)
+# 3. Configuração Xiaomi MiMo (Fallback — VoiceDesign / VoiceClone / Preset)
 MIMO_API_BASE = os.environ.get("MIMO_API_BASE", "https://token-plan-sgp.xiaomimimo.com/v1").rstrip("/")
 MIMO_API_KEY = os.environ.get("MIMO_API_KEY", "tp-shj7qyndg8imsci7kvfgcbjrus518hemr1pu2p1m0tvtafeb")
 
-TTS_MODE = os.environ.get("JARVIS_TTS_MODE", "elevenlabs").lower()
+TTS_MODE = os.environ.get("JARVIS_TTS_MODE", "edge").lower()
 TTS_VOICE = os.environ.get("JARVIS_TTS_VOICE", "mimo_default")
 VOICE_DESC = os.environ.get(
     "JARVIS_VOICE_DESC",
@@ -50,7 +59,7 @@ VOICE_DESC = os.environ.get(
 )
 TTS_TIMEOUT = float(os.environ.get("JARVIS_TTS_TIMEOUT", "9"))
 
-_CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "JARVIS" / "tts_cache_v2"
+_CACHE_DIR = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "JARVIS" / "tts_cache_v3"
 _REF_WAV = Path(__file__).resolve().parent / "config" / "voice" / "jarvis_ref.wav"
 
 # Frases curtas pré-sintetizadas em segundo plano para resposta imediata (0ms)
@@ -70,6 +79,23 @@ class TTSError(RuntimeError):
 _session = requests.Session()
 
 
+def _get_ffmpeg_bin() -> str:
+    """Localiza o binário do ffmpeg de forma determinística e resiliente."""
+    candidates = [
+        Path(sys.executable).parent / "_internal" / "ffmpeg.exe",
+        Path(sys.executable).parent / "ffmpeg.exe",
+        Path(__file__).resolve().parent / "ffmpeg.exe",
+        Path("C:/JARVIS/dist/JARVIS/_internal/ffmpeg.exe"),
+        Path("C:/JARVIS/ffmpeg.exe"),
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe",
+    ]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    which = shutil.which("ffmpeg")
+    return which or "ffmpeg"
+
+
 def _style_hint() -> str:
     """Direção de atuação conforme o horário (sussurro suave de madrugada)."""
     h = datetime.now().hour
@@ -79,8 +105,72 @@ def _style_hint() -> str:
 
 
 def _cache_path(text: str, provider_tag: str) -> Path:
-    key = f"{provider_tag}|{ELEVENLABS_VOICE_ID}|{ELEVENLABS_MODEL_ID}|{text}".encode("utf-8")
+    voice_tag = EDGE_VOICE if provider_tag in ("edge", "free", "brazilian", "edgetts") else ELEVENLABS_VOICE_ID
+    key = f"v3|{provider_tag}|{voice_tag}|{text}".encode("utf-8")
     return _CACHE_DIR / (hashlib.sha1(key).hexdigest() + ".pcm")
+
+
+def _decode_mp3_to_pcm24k(mp3_bytes: bytes) -> bytes:
+    """Decodifica stream MP3 para PCM mono 24kHz s16le via ffmpeg."""
+    if not mp3_bytes:
+        return b""
+    ffmpeg_bin = _get_ffmpeg_bin()
+    cmd = [
+        ffmpeg_bin, "-nostdin", "-hide_banner", "-loglevel", "quiet",
+        "-threads", "2",
+        "-i", "pipe:0",
+        "-f", "s16le",
+        "-acodec", "pcm_s16le",
+        "-ac", "1",
+        "-ar", "24000",
+        "pipe:1"
+    ]
+    try:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        pcm_out, err = proc.communicate(input=mp3_bytes, timeout=8)
+        if proc.returncode != 0:
+            raise TTSError(f"ffmpeg erro na conversão ({ffmpeg_bin}): {err.decode('utf-8', errors='ignore')}")
+        return pcm_out
+    except Exception as e:
+        raise TTSError(f"Falha ao decodificar áudio via ffmpeg ({ffmpeg_bin}): {e}") from e
+
+
+async def _edge_stream_async(text: str, voice: str, rate: str, pitch: str) -> bytes:
+    import edge_tts
+    communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+    mp3_chunks = []
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            mp3_chunks.append(chunk["data"])
+    return b"".join(mp3_chunks)
+
+
+def _synthesize_edge(text: str, voice: str = EDGE_VOICE, rate: str = EDGE_RATE) -> bytes:
+    """Sintetiza via Edge-TTS (Neural pt-BR Gratuito) e converte para PCM 24kHz mono."""
+    t0 = time.time()
+    try:
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    mp3_data = pool.submit(asyncio.run, _edge_stream_async(text, voice, rate, EDGE_PITCH)).result(timeout=TTS_TIMEOUT + 4)
+            else:
+                mp3_data = loop.run_until_complete(_edge_stream_async(text, voice, rate, EDGE_PITCH))
+        except RuntimeError:
+            mp3_data = asyncio.run(_edge_stream_async(text, voice, rate, EDGE_PITCH))
+
+        if not mp3_data:
+            raise TTSError("Edge-TTS retornou buffer de áudio vazio")
+
+        pcm = _decode_mp3_to_pcm24k(mp3_data)
+        if len(pcm) < 1200:
+            raise TTSError("Edge-TTS PCM decodificado insuficiente")
+
+        logger.info("⚡ [Edge-TTS pt-BR] '%s' sintetizado com sucesso em %.2fs (%d bytes PCM)", text[:30], time.time() - t0, len(pcm))
+        return pcm
+    except Exception as e:
+        logger.error("Erro Edge-TTS pt-BR para '%s': %s", text[:30], e)
+        raise TTSError(f"Edge-TTS erro: {e}") from e
 
 
 def _synthesize_elevenlabs(text: str) -> bytes:
@@ -208,7 +298,7 @@ def _synthesize_mimo(text: str, mode: str = "design") -> bytes:
 def synthesize(text: str, use_cache: bool = True) -> bytes:
     """
     Sintetiza `text` e retorna PCM int16 24 kHz mono.
-    Prioridade padrão: ElevenLabs Flash v2.5 PT-BR (~0.6s) -> Cache em disco -> Fallback SAPI/MiMo.
+    Prioridade padrão: Edge-TTS Neural pt-BR (100% Gratuito) -> Cache em disco v3 -> Fallback robusto.
     """
     text = (text or "").strip()
     if not text:
@@ -223,12 +313,51 @@ def synthesize(text: str, use_cache: bool = True) -> bytes:
             logger.warning("Cache TTS ilegível (%s): %s", cp.name, e)
 
     out = b""
-    if mode in ("elevenlabs", "eleven", "auto", "default"):
-        out = _synthesize_elevenlabs(text)
+
+    # 1. Modo Edge / Gratuito Brasileiro (PADRÃO SOBERANO)
+    if mode in ("edge", "free", "brazilian", "edgetts", "antonio", "default", "auto"):
+        try:
+            out = _synthesize_edge(text, voice=EDGE_VOICE)
+        except Exception as ex_edge:
+            logger.warning("Falha Edge-TTS voz '%s' (%s). Tentando Francisca pt-BR...", EDGE_VOICE, ex_edge)
+            try:
+                out = _synthesize_edge(text, voice="pt-BR-FranciscaNeural")
+            except Exception as ex_fran:
+                logger.warning("Falha Francisca pt-BR (%s). Tentando Thalita pt-BR...", ex_fran)
+                try:
+                    out = _synthesize_edge(text, voice="pt-BR-ThalitaMultilingualNeural")
+                except Exception as ex_tha:
+                    logger.error("Falha em todas as vozes brasileiras Edge-TTS: %s", ex_tha)
+
+    # 2. Modo ElevenLabs (apenas se explicitamente configurado)
+    elif mode in ("elevenlabs", "eleven"):
+        try:
+            out = _synthesize_elevenlabs(text)
+        except Exception as ex_eleven:
+            logger.warning("Falha ElevenLabs (%s). Acionando Edge-TTS pt-BR...", ex_eleven)
+            try:
+                out = _synthesize_edge(text)
+            except Exception:
+                out = b""
+
+    # 3. Modo Xiaomi MiMo (apenas se explicitamente configurado)
     elif mode in ("design", "clone", "preset"):
-        out = _synthesize_mimo(text, mode=mode)
-    else:
-        out = _synthesize_elevenlabs(text)
+        try:
+            out = _synthesize_mimo(text, mode=mode)
+        except Exception as ex_mimo:
+            logger.warning("Falha MiMo (%s). Acionando Edge-TTS pt-BR...", ex_mimo)
+            try:
+                out = _synthesize_edge(text)
+            except Exception:
+                out = b""
+
+    # Fallback final se ainda não obteve áudio
+    if not out:
+        try:
+            out = _synthesize_edge(text)
+        except Exception as ex_final:
+            logger.error("Falha em todos os motores de síntese vocal: %s", ex_final)
+            return b""
 
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)

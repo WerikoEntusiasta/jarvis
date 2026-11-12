@@ -107,5 +107,9 @@ out.txt
 snapshot.json
 read_hud_nav.py
 
+*.lnk
+*.ipk
+tracked_files.txt
+current_screen.png
 # Binarios de terceiros nao versionados
 ffmpeg.exe
