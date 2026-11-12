@@ -45,16 +45,32 @@ class TestConfig(unittest.TestCase):
         self.assertIn("Senhor Werik", cfg["instructions"])
         self.assertIsNone(cfg["turn_detection"])  # turno manual (VAD da esfera)
         self.assertEqual(cfg["modalities"], ["text", "audio"])
-        self.assertEqual(cfg["tools"], QWEN_AGENT_TOOLS)
+        from qwen_realtime import carregar_tools_conversa
+        self.assertEqual(cfg["tools"], carregar_tools_conversa())
 
-    def test_tools_tem_raciocinar_e_executar(self):
+    def test_tools_tem_raciocinar_e_subagente(self):
         nomes = [t["function"]["name"] for t in QWEN_AGENT_TOOLS]
-        self.assertEqual(nomes, ["raciocinar", "executar"])
+        self.assertEqual(nomes, ["raciocinar", "subagente"])
         for tool in QWEN_AGENT_TOOLS:
             self.assertEqual(tool["type"], "function")
             params = tool["function"]["parameters"]
             self.assertEqual(params["type"], "object")
             self.assertTrue(params["required"])
+
+    def test_catalogo_direto_inclui_comandos_e_exclui_sensiveis(self):
+        from qwen_realtime import carregar_tools_conversa, _TOOLS_DELEGADAS
+
+        nomes = [t["function"]["name"] for t in carregar_tools_conversa()]
+        # comandos do dia a dia executados direto pelo modelo de conversa
+        for esperado in ("pc_volume", "open_app", "control_lights",
+                         "start_dynamic_presentation", "generate_and_show_screen"):
+            self.assertIn(esperado, nomes)
+        # operacoes sensiveis/complexas ficam disponiveis via 'subagente'
+        for delegada in _TOOLS_DELEGADAS:
+            self.assertNotIn(delegada, nomes)
+        # delegacoes sempre presentes
+        self.assertIn("raciocinar", nomes)
+        self.assertIn("subagente", nomes)
 
 
 class TestFunctionCallOutput(unittest.TestCase):
@@ -238,14 +254,60 @@ class TestSessaoProtocolo(unittest.TestCase):
         creates = [m for m in ws.enviados if m.get("type") == "response.create"]
         self.assertEqual(len(creates), 2)  # um por turno + um apos a tool
 
-    def test_function_call_executar_usa_ferramentas(self):
+    def test_function_call_comando_direto_executa_sem_agente(self):
         eventos = [
             {"type": "response.created", "response": {"id": "r1"}},
             {
                 "type": "response.function_call_arguments.done",
                 "call_id": "c1",
-                "name": "executar",
-                "arguments": json.dumps({"instrucao": "aumentar volume"}),
+                "name": "pc_volume",
+                "arguments": json.dumps({"action": "up"}),
+            },
+            {"type": "response.done", "response": {"status": "completed"}},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        capturas = {}
+
+        def _fake_execute_tool(name, args):
+            capturas["name"] = name
+            capturas["args"] = args
+            return {"ok": True, "volume": 80}
+
+        with patch("mimo_tools.execute_tool", side_effect=_fake_execute_tool) as ex:
+            frames = []
+            ws = _FalsoWS(eventos)
+            stub = _StubWebsockets(ws)
+
+            async def _run():
+                pipe = AudioPipe(lambda f: frames.append(f))
+                sessao = QwenRealtimeSession("dev-1", pipe)
+                with patch("qwen_realtime.websockets", stub), \
+                     patch("qwen_realtime._run_agent_sync") as agente:
+                    ok = await sessao.converse(_pcm16(300, 0.1, 16000), timeout=5)
+                await sessao.close()
+                return ok, agente.called
+
+            ok, agente_chamado = asyncio.run(_run())
+
+        self.assertTrue(ok)
+        self.assertTrue(ex.called)           # comando executado diretamente
+        self.assertFalse(agente_chamado)     # SEM passar pelo LLM/agente
+        self.assertEqual(capturas["name"], "pc_volume")
+        self.assertEqual(capturas["args"], {"action": "up"})
+        outputs = [m for m in ws.enviados
+                   if m.get("type") == "conversation.item.create"
+                   and m.get("item", {}).get("type") == "function_call_output"]
+        self.assertEqual(len(outputs), 1)
+        self.assertIn("volume", outputs[0]["item"]["output"])
+
+    def test_function_call_subagente_delega_ao_mimo(self):
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {
+                "type": "response.function_call_arguments.done",
+                "call_id": "c1",
+                "name": "subagente",
+                "arguments": json.dumps({"tarefa": "refatore o firmware da esfera"}),
             },
             {"type": "response.done", "response": {"status": "completed"}},
             {"type": "response.done", "response": {"status": "completed"}},
@@ -256,7 +318,7 @@ class TestSessaoProtocolo(unittest.TestCase):
             capturas["prompt"] = prompt
             capturas["force_route"] = force_route
             capturas["allow_tools"] = allow_tools
-            return "volume ajustado"
+            return "tarefa complexa concluida"
 
         with patch("qwen_realtime._run_agent_sync", side_effect=_fake_agent):
             frames = []
@@ -274,9 +336,9 @@ class TestSessaoProtocolo(unittest.TestCase):
             ok = asyncio.run(_run())
 
         self.assertTrue(ok)
-        self.assertIn("EXECUCAO DE ACAO", capturas["prompt"])
-        self.assertIsNone(capturas["force_route"])  # rota fast (MiMo flash)
-        self.assertTrue(capturas["allow_tools"])  # com mimo_tools
+        self.assertIn("SUBAGENTE COMPLEXO", capturas["prompt"])
+        self.assertIsNone(capturas["force_route"])  # agente completo MiMo
+        self.assertTrue(capturas["allow_tools"])    # com todas as ferramentas internas
 
     def test_erro_do_servidor_falha_turno(self):
         eventos = [{"type": "error", "error": {"message": "boom"}}]
@@ -390,8 +452,8 @@ class TestLiveConversation(unittest.TestCase):
         eventos = [
             {"type": "response.created", "response": {"id": "r1"}},
             {"type": "response.function_call_arguments.done",
-             "call_id": "c1", "name": "executar",
-             "arguments": json.dumps({"instrucao": "aumentar volume"})},
+             "call_id": "c1", "name": "subagente",
+             "arguments": json.dumps({"tarefa": "refatore o firmware da esfera"})},
             {"type": "response.done", "response": {"status": "completed"}},
             {"type": "response.done", "response": {"status": "completed"}},
         ]
@@ -409,7 +471,7 @@ class TestLiveConversation(unittest.TestCase):
                 on_tool=lambda name, args: tools.append((name, args)),
             )
             with patch("qwen_realtime.websockets", stub), \
-                 patch("qwen_realtime._run_agent_sync", return_value="volume ajustado") as agente:
+                 patch("qwen_realtime._run_agent_sync", return_value="tarefa concluida") as agente:
                 await conv.start()
                 await conv.send_audio(b"\x01\x02" * 1600)
                 for _ in range(50):
@@ -419,12 +481,49 @@ class TestLiveConversation(unittest.TestCase):
 
         chamado = asyncio.run(_run())
         self.assertTrue(chamado)  # tool foi roteada para o agente MiMo
-        self.assertEqual(tools, [("executar", json.dumps({"instrucao": "aumentar volume"}))])
+        self.assertEqual(tools, [("subagente", json.dumps({"tarefa": "refatore o firmware da esfera"}))])
         outputs = [m for m in ws.enviados
                    if m.get("type") == "conversation.item.create"
                    and m.get("item", {}).get("type") == "function_call_output"]
         self.assertEqual(len(outputs), 1)
         self.assertIn("thinking", estados)
+
+    def test_comando_direto_na_conversa_executa_sem_agente(self):
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "response.function_call_arguments.done",
+             "call_id": "c1", "name": "pc_volume",
+             "arguments": json.dumps({"action": "up"})},
+            {"type": "response.done", "response": {"status": "completed"}},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ws = _FalsoWS(eventos)
+        stub = _StubWebsockets(ws)
+        audios, estados, transcricoes, tools = [], [], [], []
+
+        async def _run():
+            from qwen_realtime import LiveConversation
+
+            conv = LiveConversation(
+                on_audio=lambda pcm: audios.append(pcm),
+                on_transcript=lambda papel, texto: transcricoes.append((papel, texto)),
+                on_state=lambda estado: estados.append(estado),
+                on_tool=lambda name, args: tools.append((name, args)),
+            )
+            with patch("qwen_realtime.websockets", stub), \
+                 patch("mimo_tools.execute_tool",
+                       return_value={"ok": True, "volume": 80}) as ex, \
+                 patch("qwen_realtime._run_agent_sync") as agente:
+                await conv.start()
+                await conv.send_audio(b"\x01\x02" * 1600)
+                for _ in range(50):
+                    await asyncio.sleep(0.01)
+                await conv.close()
+                return ex.called, agente.called
+
+        ex_chamado, agente_chamado = asyncio.run(_run())
+        self.assertTrue(ex_chamado)        # executado direto pelo modelo de conversa
+        self.assertFalse(agente_chamado)   # sem MiMo no meio
 
 
 class TestBridge(unittest.TestCase):

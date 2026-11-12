@@ -33,6 +33,9 @@ import time
 from typing import Any, Dict, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Importa modulos do desktop (core.local_server, dynamic_presentation_engine...)
+# para que as tools executadas na ponte alcancem o HUD via relay SSE.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "jarvis-windows"))
 
 import qwen_realtime as qr
 

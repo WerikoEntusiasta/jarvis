@@ -149,30 +149,55 @@ JARVIS_REALTIME_INSTRUCTIONS = (
     "(1) Responda SEMPRE em portugues do Brasil, com voz natural, tom cortes, "
     "sofisticado e direto, chamando o usuario de 'Senhor' ou 'Senhor Werik'. "
     "(2) Como esta e uma conversa por VOZ, mantenha as respostas curtas: 1 a 3 frases. "
-    "(3) Para conversa casual responda diretamente, sem chamar ferramentas. "
-    "(4) Quando a pergunta exigir RACIOCINIO PROFUNDO (analise, planejamento, calculo, "
-    "comparacao, explicacao longa ou decisao complexa), chame a ferramenta 'raciocinar'. "
-    "(5) Quando o usuario pedir para EXECUTAR algo (abrir aplicativos, controlar luzes, "
-    "volume, midia, telas do HUD, captura de tela, qualquer automacao do computador ou "
-    "da casa), chame a ferramenta 'executar'. "
-    "(6) Nunca invente o resultado de uma acao: chame a ferramenta e fale apenas o "
-    "resultado real que ela retornar."
+    "(3) CONVERSA DIRETA: para conversa casual responda sem chamar ferramentas. "
+    "(4) COMANDOS VOCE EXECUTA DIRETO: qualquer pedido de acao (abrir/fechar apps, "
+    "volume, midia, teclado, mouse, luzes, telas, apresentacoes, TV LG, Obsidian, "
+    "buscas, PowerShell, telemetria) use a ferramenta correspondente DIRETAMENTE, "
+    "sem delegar a nenhum agente. Nunca invente resultado de acao: execute a "
+    "ferramenta e fale apenas o resultado real que ela retornar. "
+    "(5) EXPLICACOES GERAM CANVAS: quando pedirem uma explicacao, demonstracao ou "
+    "analise de qualquer assunto, monte uma apresentacao visual com a ferramenta "
+    "'start_dynamic_presentation' (cenas com hologram_card, chart, table, "
+    "metric_grid, comparison, diagram, conclusion) e conduza a explicacao falada "
+    "por cima da apresentacao, avancando cenas com 'update_presentation_scene' e "
+    "encerrando com 'control_presentation'. "
+    "(6) RACIOCINIO COMPLEXO: use 'raciocinar' somente para analises muito "
+    "profundas, longas ou dificeis de resolver direto. "
+    "(7) SUBAGENTE: use 'subagente' somente para tarefas complexas multi-etapa ou "
+    "operacoes sensiveis que exigem cuidado extra."
 )
 
 
 # --------------------------------------------------------------------------- #
-# Ferramentas expostas ao Qwen -> ponte para o agente MiMo                     #
+# Ferramentas: comandos EXECUTADOS PELO MODELO DE CONVERSA + delegacao MiMo    #
 # --------------------------------------------------------------------------- #
 
+# Delegadas ao subagente MiMo: operacoes sensiveis/complexas (multi-etapa,
+# auto-modificacao de codigo, firmware da esfera, automacao pesada).
+_TOOLS_DELEGADAS = {
+    "self_write_code",
+    "self_modify_code",
+    "self_git_sync",
+    "self_git_pull",
+    "sphere_modify_firmware",
+    "sphere_compile_firmware",
+    "sphere_upload_usb",
+    "sphere_ota_deploy",
+    "run_powershell",
+    "web_automation_playwright",
+    "win_automation_pywinauto",
+}
+
+# Delegacoes ao agente MiMo: somente raciocinio profundo e tarefas complexas.
 QWEN_AGENT_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
             "name": "raciocinar",
             "description": (
-                "Raciocinio profundo com o agente MiMo Pro. Use quando a pergunta do "
-                "usuario exigir analise, planejamento, calculo, comparacao, pesquisa ou "
-                "uma resposta longa e estruturada que va alem de uma frase."
+                "Raciocinio profundo com o agente MiMo Pro. Use SOMENTE quando a "
+                "pergunta exigir analise muito longa, calculo complexo, planejamento "
+                "profundo ou decisao dificil demais para responder direto."
             ),
             "parameters": {
                 "type": "object",
@@ -189,26 +214,45 @@ QWEN_AGENT_TOOLS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "executar",
+            "name": "subagente",
             "description": (
-                "Executa uma acao real pelo agente MiMo Flash com ferramentas: controlar "
-                "o PC (abrir/fechar apps, volume, midia, teclado, mouse, print), luzes "
-                "inteligentes, telas do HUD, telemetria, timers, alarmes e automacoes. "
-                "Use sempre que o usuario pedir para fazer algo."
+                "Delega uma tarefa complexa multi-etapa ou operacao sensivel ao "
+                "agente MiMo (com todas as ferramentas internas, incluindo edicao "
+                "de codigo, firmware da esfera, PowerShell e automacoes pesadas). "
+                "Use SOMENTE para o que for complexo demais para as ferramentas diretas."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "instrucao": {
+                    "tarefa": {
                         "type": "string",
-                        "description": "A acao desejada, em portugues, de forma direta.",
+                        "description": "A tarefa completa, em portugues, com contexto.",
                     }
                 },
-                "required": ["instrucao"],
+                "required": ["tarefa"],
             },
         },
     },
 ]
+
+
+def carregar_tools_conversa() -> List[Dict[str, Any]]:
+    """Comandos diretos do mimo_tools + as duas delegacoes ao MiMo.
+
+    O modelo de conversa executa os comandos do dia a dia (luzes, volume, apps,
+    telas, apresentacoes, midia, telemetria...) diretamente, sem LLM no meio.
+    Ferramentas sensiveis/complexas continuam disponiveis via 'subagente'.
+    """
+    try:
+        from mimo_tools import TOOLS as _MIMO_TOOLS
+    except Exception as exc:
+        print(f"[QWEN REALTIME] mimo_tools indisponivel ({type(exc).__name__})")
+        _MIMO_TOOLS = []
+    diretas = [
+        t for t in _MIMO_TOOLS
+        if t.get("function", {}).get("name") not in _TOOLS_DELEGADAS
+    ]
+    return list(diretas) + QWEN_AGENT_TOOLS
 
 
 def build_function_call_output(call_id: str, text: str) -> Dict[str, Any]:
@@ -243,7 +287,7 @@ def build_session_config(
             f"Data e hora atuais: {agora.strftime('%d/%m/%Y %H:%M')} (horario de Brasilia)."
         ),
         "turn_detection": turn_detection,
-        "tools": QWEN_AGENT_TOOLS,
+        "tools": carregar_tools_conversa(),
         "audio": {
             "input": {
                 "format": {
@@ -315,7 +359,12 @@ def _run_agent_sync(prompt: str, force_route: Optional[str], allow_tools: bool) 
 
 
 async def _dispatch_tool(name: str, arguments_json: str) -> str:
-    """Executa a ferramenta pedida pelo Qwen usando o agente MiMo."""
+    """Executa a ferramenta pedida pelo Qwen.
+
+    - Comandos diretos (mimo_tools): executados IMEDIATAMENTE, sem LLM no meio.
+    - 'raciocinar': delega raciocinio profundo ao agente MiMo Pro.
+    - 'subagente': delega tarefa complexa/sensivel ao agente MiMo completo.
+    """
     try:
         args = json.loads(arguments_json) if arguments_json else {}
     except Exception:
@@ -323,16 +372,36 @@ async def _dispatch_tool(name: str, arguments_json: str) -> str:
     if not isinstance(args, dict):
         args = {}
 
+    # ---- comandos diretos: executa na hora ----
+    if name not in ("raciocinar", "subagente"):
+        def _executar_direto() -> str:
+            try:
+                from mimo_tools import execute_tool
+
+                res = execute_tool(name, args)
+                if isinstance(res, dict):
+                    # Higieniza chaves internas pesadas (_image_b64, _presentation_data,
+                    # _screen_data...) - elas sao entregues ao HUD por SSE, nao ao modelo.
+                    res = {k: v for k, v in res.items() if not str(k).startswith("_")}
+                return json.dumps(res, ensure_ascii=False, default=str)
+            except Exception as exc:
+                return json.dumps(
+                    {"ok": False, "erro": f"{type(exc).__name__}: {exc}"},
+                    ensure_ascii=False,
+                )
+
+        saida = await asyncio.to_thread(_executar_direto)
+        return saida[:MAX_TOOL_RESULT_CHARS]
+
+    # ---- delegacoes ao agente MiMo ----
     if name == "raciocinar":
         pergunta = str(args.get("pergunta", "")).strip()
         prompt = f"[JARVIS | RACIOCINIO PROFUNDO | ORIGEM: VOZ]\n{pergunta}"
         texto = await asyncio.to_thread(_run_agent_sync, prompt, "deep", False)
-    elif name == "executar":
-        instrucao = str(args.get("instrucao", "")).strip()
-        prompt = f"[JARVIS | EXECUCAO DE ACAO | ORIGEM: VOZ]\n{instrucao}"
+    else:  # subagente
+        tarefa = str(args.get("tarefa", "")).strip()
+        prompt = f"[JARVIS | SUBAGENTE COMPLEXO | ORIGEM: VOZ]\n{tarefa}"
         texto = await asyncio.to_thread(_run_agent_sync, prompt, None, True)
-    else:
-        texto = f"Ferramenta desconhecida: {name}"
 
     return str(texto)[:MAX_TOOL_RESULT_CHARS]
 

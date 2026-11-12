@@ -238,6 +238,25 @@ def broadcast_hud_event(event_type: str, data: dict):
 
             _SSE_CLIENTS.discard(q)
 
+    # CROSS-PROCESS: quando as tools rodam fora do processo do servidor HTTP
+    # (ex.: ponte de voz em processo proprio), nao ha clientes SSE aqui - os
+    # eventos de tela/canvas/apresentacao seriam perdidos. Reencaminha via
+    # HTTP para o servidor local, que retransmite aos navegadores conectados.
+    # Guarda de recursao: no processo do servidor _SERVER_INSTANCE esta setado,
+    # entao o endpoint /api/hud/broadcast nunca reencaminha de novo.
+    if _SERVER_INSTANCE is None:
+        try:
+            import urllib.request
+
+            req = urllib.request.Request(
+                "http://127.0.0.1:%d/api/hud/broadcast" % LOCAL_PORT,
+                data=json.dumps({"event": event_type, "data": payload}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "User-Agent": "JARVIS-Core/1.0"},
+            )
+            urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            pass
+
 
 
 
@@ -2163,6 +2182,19 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 
+            return
+
+        # Relay cross-process de eventos SSE (tela/canvas/apresentacao):
+        # usado por processos externos (ponte de voz) que executam tools.
+        if path == "/api/hud/broadcast":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                event_type = str(data.get("event") or "toast")
+                payload = data.get("data") if isinstance(data.get("data"), dict) else {}
+                broadcast_hud_event(event_type, payload)
+                self._send_json({"ok": True})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
             return
 
 
