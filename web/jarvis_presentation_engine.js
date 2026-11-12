@@ -18,7 +18,10 @@
     activeInstances: new Map(),
     sceneQueue: [],
     sceneIndex: 0,
-    seq: 0
+    seq: 0,
+    autoTimer: null,
+    paused: false,
+    currentScene: null
   };
 
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
@@ -763,6 +766,7 @@
 
     // Limpa todos os cards do canvas de forma orquestrada
     clearSpatialWorkspace() {
+      this.cancelAutoAdvance();
       state.activeInstances.forEach(inst => {
         try {
           if (typeof inst.cleanup === 'function') inst.cleanup();
@@ -835,9 +839,11 @@
       });
 
       // Se houver cena 2, adiciona ao lado após um breve intervalo ou sincronizado
+      state.currentScene = scenes[0];
       if (scenes.length > 1) {
         state.sceneQueue = scenes.slice(1);
         state.sceneIndex = 1;
+        this.scheduleNextScene(scenes[0]);
       }
       return true;
     },
@@ -850,6 +856,8 @@
           type: nextScene.component_type || 'narrative',
           props: nextScene
         });
+        state.currentScene = nextScene;
+        this.scheduleNextScene(nextScene);
       }
     },
 
@@ -867,6 +875,11 @@
     // Controles de apresentacao (usados pelos eventos SSE do narrador)
     togglePlayPause() {
       state.paused = !state.paused;
+      if (state.paused) {
+        this.cancelAutoAdvance();
+      } else {
+        this.scheduleNextScene(state.currentScene);
+      }
       return !state.paused;
     },
 
@@ -886,6 +899,28 @@
     close() {
       this.clearSpatialWorkspace();
       return true;
+    },
+
+    // Auto-avanço de cenas: cada cena fica na tela pelo seu duration_sec
+    // (padrao 8s) e a proxima e criada como card NOVO. Garante que todas as
+    // cenas da explicacao aparecam mesmo sem eventos de narracao.
+    scheduleNextScene(scene) {
+      this.cancelAutoAdvance();
+      if (!state.sceneQueue || state.sceneQueue.length === 0) return;
+      if (state.paused) return;
+      const secs = (scene && parseFloat(scene.duration_sec)) || 8;
+      const delay = Math.max(3, Math.min(30, secs)) * 1000;
+      state.autoTimer = setTimeout(() => {
+        state.autoTimer = null;
+        if (!state.paused) this.next();
+      }, delay);
+    },
+
+    cancelAutoAdvance() {
+      if (state.autoTimer) {
+        clearTimeout(state.autoTimer);
+        state.autoTimer = null;
+      }
     },
 
     isOpen() {
