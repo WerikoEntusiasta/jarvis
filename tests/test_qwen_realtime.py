@@ -345,6 +345,21 @@ class TestSessaoProtocolo(unittest.TestCase):
         ok, _, _ = self._rodar(eventos, _pcm16(300, 0.1, 16000))
         self.assertFalse(ok)
 
+    def test_corrida_vad_response_nao_falha_turno(self):
+        """Erros benignos de corrida (VAD x response.create) nao quebram o turno."""
+        eventos = [
+            {"type": "response.created", "response": {"id": "r1"}},
+            {"type": "error", "error": {"message":
+                "Server VAD turn committed but no response was created because a manual response is already in progress."}},
+            {"type": "error", "error": {"message":
+                "Cannot create response while another response is in progress."}},
+            {"type": "response.audio.delta", "response_id": "r1",
+             "delta": base64.b64encode(_pcm16(440, 0.1, 24000)).decode()},
+            {"type": "response.done", "response": {"status": "completed"}},
+        ]
+        ok, _, _ = self._rodar(eventos, _pcm16(300, 0.1, 16000))
+        self.assertTrue(ok)  # turno completou apesar das corridas
+
 
 class TestConverseTurn(unittest.TestCase):
     def test_sem_chave_retorna_false_sem_enviar(self):

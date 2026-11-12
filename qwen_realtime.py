@@ -560,6 +560,9 @@ class QwenRealtimeSession:
         self._turn_done: Optional[asyncio.Event] = None
         self._turn_ok = False
         self._active_response: Optional[str] = None
+        self._response_ativa = False
+        self._resposta_livre = asyncio.Event()
+        self._resposta_livre.set()
         self._tool_calls: List[Tuple[str, str, str]] = []
         self.created_at = time.time()
 
@@ -669,6 +672,12 @@ class QwenRealtimeSession:
         tipo = str(evento.get("type", ""))
 
         if tipo == "error":
+            msg = str(evento.get("error", ""))
+            # Erros benignos de corrida VAD x response.create durante execucao
+            # de tools: a resposta automatica do servidor ja cobre o caso.
+            if "no response was created" in msg or "Cannot create response" in msg:
+                print(f"[QWEN REALTIME] corrida VAD/response ignorada: {msg[:110]}")
+                return
             print(f"[QWEN REALTIME] erro do servidor: {evento.get('error')}")
             if self._turn_done is not None:
                 self._turn_ok = False
@@ -678,6 +687,8 @@ class QwenRealtimeSession:
         if tipo == "response.created":
             resposta = evento.get("response") or {}
             self._active_response = resposta.get("id")
+            self._response_ativa = True
+            self._resposta_livre.clear()
             return
 
         if tipo == "conversation.item.input_audio_transcription.completed":
@@ -719,6 +730,8 @@ class QwenRealtimeSession:
 
         if tipo == "response.done":
             status = ((evento.get("response") or {}).get("status") or "").lower()
+            self._response_ativa = False
+            self._resposta_livre.set()
             if self._tool_calls and status != "error":
                 chamadas, self._tool_calls = self._tool_calls, []
                 self._tools_task = asyncio.create_task(self._executar_tools(chamadas))
@@ -728,6 +741,18 @@ class QwenRealtimeSession:
             if self._turn_done is not None:
                 self._turn_done.set()
             return
+
+    async def _aguardar_slot_resposta(self, timeout: float = 60.0) -> bool:
+        """Espera o servidor ficar livre antes de um novo response.create.
+
+        Evita 'Cannot create response while another response is in progress'
+        quando o usuario continua falando (server_vad) durante tools lentas.
+        """
+        try:
+            await asyncio.wait_for(self._resposta_livre.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
 
     async def _executar_tools(self, chamadas: List[Tuple[str, str, str]]) -> None:
         try:
@@ -744,6 +769,9 @@ class QwenRealtimeSession:
                         "item": build_function_call_output(call_id, saida),
                     }
                 )
+            # Espera o servidor liberar (evita erro de response.create em corrida
+            # com o VAD quando o usuario continua falando durante tools lentas).
+            await self._aguardar_slot_resposta()
             await self._send({"type": "response.create"})
         except Exception as exc:
             print(f"[QWEN/AGENTE] falha ao executar tools ({type(exc).__name__}): {exc}")
@@ -799,11 +827,15 @@ class LiveConversation:
         self._tool_calls: List[Tuple[str, str, str]] = []
         self._active_response: Optional[str] = None
         self._speaking = False
+        self._response_ativa = False
+        self._resposta_livre: Optional[asyncio.Event] = None
 
     # ----- conexao ----- #
 
     async def start(self) -> None:
         self._ws = await _open_ws()
+        self._resposta_livre = asyncio.Event()
+        self._resposta_livre.set()
         await self._send(
             {
                 "type": "session.update",
@@ -884,12 +916,21 @@ class LiveConversation:
         tipo = str(evento.get("type", ""))
 
         if tipo == "error":
+            msg = str(evento.get("error", ""))
+            # Corridas benignas VAD x response.create durante execucao de tools:
+            # a resposta automatica do servidor ja cobre o caso - nao interromper.
+            if "no response was created" in msg or "Cannot create response" in msg:
+                print(f"[QWEN LIVE] corrida VAD/response ignorada: {msg[:110]}")
+                return
             print(f"[QWEN LIVE] erro do servidor: {evento.get('error')}")
             return
 
         if tipo == "response.created":
             resposta = evento.get("response") or {}
             self._active_response = resposta.get("id")
+            self._response_ativa = True
+            if self._resposta_livre is not None:
+                self._resposta_livre.clear()
             return
 
         if tipo == "input_audio_buffer.speech_started":
@@ -934,6 +975,9 @@ class LiveConversation:
 
         if tipo == "response.done":
             status = ((evento.get("response") or {}).get("status") or "").lower()
+            self._response_ativa = False
+            if self._resposta_livre is not None:
+                self._resposta_livre.set()
             if self._tool_calls and status != "error":
                 chamadas, self._tool_calls = self._tool_calls, []
                 self._tools_task = asyncio.create_task(self._executar_tools(chamadas))
@@ -964,6 +1008,12 @@ class LiveConversation:
                         "item": build_function_call_output(call_id, saida),
                     }
                 )
+            # Espera o servidor liberar antes de pedir a resposta falada.
+            if self._resposta_livre is not None:
+                try:
+                    await asyncio.wait_for(self._resposta_livre.wait(), timeout=60)
+                except asyncio.TimeoutError:
+                    pass
             await self._send({"type": "response.create"})
         except Exception as exc:
             print(f"[QWEN LIVE/AGENTE] falha ao executar tools ({type(exc).__name__}): {exc}")

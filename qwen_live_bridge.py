@@ -119,6 +119,11 @@ class _ClientBridge:
                     await self.conv.send_audio(bytes(mensagem))
                 else:
                     await self._comando(json.loads(mensagem))
+        except Exception as exc:
+            # 1005/1000/1001 = cliente encerrou normalmente (microfone desligado).
+            nome = type(exc).__name__
+            if "ConnectionClosed" not in nome:
+                print(f"[QWEN LIVE] fluxo do cliente interrompido ({nome}): {exc}")
         finally:
             if self.conv is not None:
                 await self.conv.close()
