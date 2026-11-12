@@ -65,6 +65,7 @@ _quarentena_5S/
 # Temporary scratch and debug scripts
 check_*.py
 test_*.py
+!tests/test_*.py
 apply_*.py
 deploy_*.py
 patch_*.py
@@ -105,3 +106,6 @@ err.txt
 out.txt
 snapshot.json
 read_hud_nav.py
+
+# Binarios de terceiros nao versionados
+ffmpeg.exe

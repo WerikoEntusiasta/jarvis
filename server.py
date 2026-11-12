@@ -6805,6 +6805,16 @@ def run_xiaozhi_websocket_server():
             strip_wake_word,
         )
 
+        # Conversacao por voz: Qwen-Audio-3.0-Realtime-Plus (fala->fala pt-BR) com
+        # roteamento de raciocinio/execucao para o agente MiMo via function calling.
+        # Sem chave configurada (ou falha de conexao) o pipeline classico STT->LLM->TTS
+        # continua sendo usado integralmente.
+        try:
+            import qwen_realtime as _qwen_rt
+        except Exception as _exc_qwen_import:
+            print(f"[ESFERA] qwen_realtime indisponivel ({type(_exc_qwen_import).__name__}).")
+            _qwen_rt = None
+
         sessions = {}
 
         def _pcm_wav(pcm):
@@ -7000,6 +7010,38 @@ def run_xiaozhi_websocket_server():
 
         async def _handle_utterance(websocket, gate, audio, device_id):
             _t_vad = time.time()
+
+            # VIA PRIMARIA: Qwen-Audio-3.0-Realtime-Plus (fala->fala pt-BR).
+            # Conversa direto pelo modelo realtime; raciocinio/execucao sao
+            # roteados por function calling para o agente MiMo. Em qualquer
+            # falha cai para o pipeline classico STT -> LLM -> TTS abaixo.
+            if _qwen_rt is not None and _qwen_rt.is_enabled():
+                await _status(websocket, "thinking")
+                try:
+                    _t_qwen = time.time()
+                    _qwen_ok = await _qwen_rt.converse_turn(
+                        device_id,
+                        audio,
+                        send_json=lambda payload: websocket.send(
+                            json.dumps(payload, ensure_ascii=False)
+                        ),
+                        send_bin=lambda frame: websocket.send(frame),
+                    )
+                except Exception as _exc_qwen_turn:
+                    print(
+                        f"[ESFERA] turno Qwen realtime falhou "
+                        f"({type(_exc_qwen_turn).__name__}); usando pipeline classico."
+                    )
+                    _qwen_ok = False
+                if _qwen_ok:
+                    gate.extend_conversation()
+                    await _status(websocket, "success")
+                    print(
+                        f"[ESFERA QWEN] turno realtime concluido em "
+                        f"{time.time() - _t_qwen:.2f}s (device={device_id})"
+                    )
+                    return
+
             await _status(websocket, "transcribing")
             try:
                 transcript = await asyncio.to_thread(_transcribe_pcm, audio)
