@@ -10,6 +10,7 @@ Usado pelas tools do Qwen e pelos cards dinâmicos do HUD.
 
 import re
 import time
+import json
 import html as html_lib
 import logging
 import urllib.request
@@ -213,6 +214,45 @@ def fetch_weather(cidade: str, dias: int = 7) -> Optional[Dict[str, Any]]:
 _TAG_RE = re.compile(r"<[^>]+>")
 _IMG_RE = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.I)
 
+# SearXNG self-hosted (mesmo do web_intel) - usado p/ buscar IMAGEM de capa
+# quando o RSS de noticia nao traz nenhuma.
+_SEARXNG_URL = "http://45.167.187.80:8890"
+
+
+def _search_image(query: str, timeout: int = 10) -> str:
+    """Busca a melhor imagem para um tema via SearXNG (categories=images).
+
+    Retorna URL http(s) direta ou "" se nada util (nunca lanca erro).
+    """
+    query = str(query or "").strip()
+    if not query:
+        return ""
+    key = "img:" + query.lower()[:100]
+    hit = _cached_get(key)
+    if hit is not None:
+        return hit
+
+    qs = urllib.parse.urlencode({
+        "q": query[:200],
+        "format": "json",
+        "categories": "images",
+        "language": "pt-BR",
+    })
+    url = ""
+    try:
+        data = json.loads(_http_get(f"{_SEARXNG_URL}/search?{qs}",
+                                    timeout=timeout).decode("utf-8",
+                                                           errors="replace"))
+        for r in (data.get("results") or [])[:8]:
+            cand = (r.get("img_src") or r.get("thumbnail") or "").strip()
+            # aceita so URLs http(s) diretas (o image_proxy exige assinatura)
+            if cand.startswith(("http://", "https://")):
+                url = cand
+                break
+    except Exception as e:
+        logger.debug(f"[PublicAPIs] busca de imagem falhou '{query}': {e}")
+    return _cache_put(key, url)
+
 
 def _strip_html(text: str) -> str:
     if not text:
@@ -287,6 +327,22 @@ def fetch_news(tema: str = "brasil", limite: int = 6,
 
     if not items:
         return None
+
+    # Imagem de capa: o RSS nao traz imagem para toda noticia - busca uma
+    # relevante no SearXNG (images) para os itens que faltam. Paralelo p/ nao
+    # atrasar o card; falha individual nunca derruba a busca.
+    sem_img = [i for i in items if not i.get("image")][:8]
+    if sem_img:
+        from concurrent.futures import ThreadPoolExecutor
+        def _pegar(item):
+            item["image"] = _search_image(
+                f"{item['title']} {item['source']}".strip())
+            return item
+        try:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(_pegar, sem_img))
+        except Exception as e:
+            logger.debug(f"[PublicAPIs] busca de imagens em lote falhou: {e}")
 
     topico = tema if len(tema) < 40 else tema[:37] + "..."
     resumo = f"Manchetes sobre {topico}: " + "; ".join(

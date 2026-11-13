@@ -967,5 +967,154 @@ class TestWhatsApp(unittest.TestCase):
                 os.environ["LOCAL_SERVER_PORT"] = env_port
 
 
+class TestCardsDirty(unittest.TestCase):
+    """cards_visible: a IA usa p/ perguntar se o Senhor quer limpar ao fim da fala."""
+
+    def setUp(self):
+        import dynamic_presentation_engine as pe
+        self.pe = pe
+        pe.set_cards_dirty(False)
+
+    def tearDown(self):
+        self.pe.set_cards_dirty(False)
+
+    def test_status_expoe_cards_visible(self):
+        st = self.pe.get_presentation_status()
+        self.assertIn("cards_visible", st)
+        self.assertFalse(st["cards_visible"])
+
+    def test_show_card_marca_dirty(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {"type": "text", "title": "T",
+                                       "text": "conteudo"})
+        self.assertTrue(r.get("ok"), r)
+        self.assertTrue(self.pe.get_presentation_status()["cards_visible"],
+                        "show_card nao marcou cards visiveis")
+
+    def test_close_limpa_dirty(self):
+        from mimo_tools import execute_tool
+        execute_tool("show_card", {"type": "text", "title": "T", "text": "x"})
+        self.assertTrue(self.pe.get_presentation_status()["cards_visible"])
+        r = self.pe.control_presentation("close")
+        self.assertTrue(r.get("ok"))
+        self.assertFalse(self.pe.get_presentation_status()["cards_visible"],
+                         "close nao limpou o estado de cards")
+
+    def test_update_scene_marca_dirty(self):
+        self.pe.update_presentation_scene({"title": "x", "component_type": "text",
+                                           "content": "y"})
+        self.assertTrue(self.pe.get_presentation_status()["cards_visible"])
+
+    def test_start_apresentacao_marca_e_close_limpa(self):
+        r = self.pe.start_dynamic_presentation({"title": "T", "scenes": [
+            {"title": "c1", "component_type": "text", "content": "olá"}]})
+        self.assertTrue(r.get("ok"), r)
+        self.assertTrue(self.pe.get_presentation_status()["cards_visible"])
+        self.pe.control_presentation("close")
+        self.assertFalse(self.pe.get_presentation_status()["cards_visible"])
+
+    def test_clear_spatial_limpa_dirty(self):
+        self.pe.set_cards_dirty(True)
+        self.pe.clear_spatial_workspace()
+        self.assertFalse(self.pe.get_presentation_status()["cards_visible"])
+
+
+class TestNoticiaImagem(unittest.TestCase):
+    """Card de noticia SEM imagem do RSS ganha capa buscada na internet."""
+
+    def test_public_apis_importa_json_no_topo(self):
+        # REGRESSAO: json importado so dentro de geocode/fetch_weather fazia
+        # _search_image lancar NameError engolido -> 0 imagens sempre.
+        import ast
+        from pathlib import Path
+        src = Path(r"C:\JARVIS\public_apis.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        top = [n for n in tree.body if isinstance(n, ast.Import)]
+        nomes = [a.name for n in top for a in n.names]
+        self.assertIn("json", nomes, "import json precisa ser no topo do modulo")
+
+    def test_search_image_unitaria_com_mock(self):
+        # sem rede: simula resposta do SearXNG
+        from unittest.mock import patch
+        import public_apis
+        fake = json.dumps({"results": [
+            {"img_src": "https://exemplo.com/foto.jpg",
+             "url": "https://exemplo.com"},
+            {"img_src": ""},
+        ]}).encode()
+        with patch.object(public_apis, "_http_get", return_value=fake):
+            public_apis._CACHE.pop("img:tema teste", None)
+            url = public_apis._search_image("tema teste")
+        self.assertEqual(url, "https://exemplo.com/foto.jpg")
+
+    def test_search_image_so_aceita_http(self):
+        from unittest.mock import patch
+        import public_apis
+        fake = json.dumps({"results": [
+            {"img_src": "javascript:alert(1)"},
+            {"img_src": "data:text/html,xb"},
+            {"img_src": "https://ok.com/i.png"},
+        ]}).encode()
+        with patch.object(public_apis, "_http_get", return_value=fake):
+            public_apis._CACHE.pop("img:x", None)
+            url = public_apis._search_image("x")
+        self.assertEqual(url, "https://ok.com/i.png")
+
+    def test_search_image_falha_retorna_vazio_nunca_lanca(self):
+        from unittest.mock import patch
+        import public_apis
+        with patch.object(public_apis, "_http_get",
+                          side_effect=RuntimeError("rede fora")):
+            public_apis._CACHE.pop("img:y", None)
+            url = public_apis._search_image("y")
+        self.assertEqual(url, "")
+
+    def test_fetch_news_preenche_imagens_faltantes(self):
+        # sem rede: RSS fake sem imagem + SearXNG images fake
+        from unittest.mock import patch
+        import public_apis
+        rss = """<?xml version="1.0"?><rss version="2.0"><channel>
+        <item><title>Noticia Um - G1</title><link>https://g1.globo.com/1</link>
+        <pubDate>Thu, 13 Nov 2026 10:00:00 GMT</pubDate><source url="x">G1</source>
+        <description>resumo um</description></item>
+        <item><title>Noticia Dois - UOL</title><link>https://uol.com.br/2</link>
+        <pubDate>Thu, 13 Nov 2026 11:00:00 GMT</pubDate><source url="y">UOL</source>
+        <description>resumo dois</description></item>
+        </channel></rss>"""
+        imgs = json.dumps({"results": [
+            {"img_src": "https://cdn.com/capa1.jpg"},
+            {"img_src": "https://cdn.com/capa2.jpg"},
+        ]}).encode()
+
+        def fake_get(url, timeout=15):
+            if "news.google" in url:
+                return rss.encode()
+            if "categories=images" in url or "images" in url:
+                return imgs
+            return b"{}"
+
+        public_apis._CACHE.clear()
+        with patch.object(public_apis, "_http_get", side_effect=fake_get):
+            r = public_apis.fetch_news("tema unico xyz", limite=2)
+        self.assertIsNotNone(r)
+        self.assertEqual(len(r["items"]), 2)
+        for item in r["items"]:
+            self.assertTrue(item.get("image"),
+                            f"imagem nao buscada p/ {item['title']}")
+
+    def test_fetch_news_falha_de_imagem_nao_derruba(self):
+        # se a busca de imagem quebra, a noticia ainda volta
+        from unittest.mock import patch
+        import public_apis
+        rss = """<?xml version="1.0"?><rss version="2.0"><channel>
+        <item><title>Noticia - G1</title><link>https://g1.globo.com/a</link>
+        <description>r</description></item></channel></rss>"""
+        public_apis._CACHE.clear()
+        with patch.object(public_apis, "_http_get", return_value=rss.encode()):
+            r = public_apis.fetch_news("outra tema abc", limite=1)
+        self.assertIsNotNone(r)
+        self.assertEqual(len(r["items"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

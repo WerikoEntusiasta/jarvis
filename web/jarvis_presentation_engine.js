@@ -396,13 +396,27 @@
         border-radius: 12px;
         overflow: hidden;
         margin-bottom: 10px;
+        position: relative;
       }
-      .spatial-news-lead-img {
+      .spatial-news-lead-cover {
         width: 42%;
         min-height: 110px;
-        object-fit: cover;
-        background: #1c1c1f;
         flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1c1c1f 0%, #0e0e11 100%);
+        font-size: 34px;
+        opacity: 0.85;
+      }
+      .spatial-news-lead-img {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 42%;
+        height: 100%;
+        object-fit: cover;
+        z-index: 1;
       }
       .spatial-news-lead-body { padding: 11px 13px 11px 0; display: flex; flex-direction: column; gap: 6px; }
       .spatial-news-title {
@@ -985,8 +999,12 @@
 
     const lead = items[0];
     const rest = items.slice(1, 7);
+    // Capa: fundo com icone SEMPRE por tras; a imagem (quando houver)
+    // cobre - se falhar ao carregar (hotlink bloqueado), onerror revela a capa.
+    const coverGlyph = "📰";
     const leadHtml = `
       <div class="spatial-news-lead">
+        <div class="spatial-news-lead-cover" aria-hidden="true">${coverGlyph}</div>
         ${lead.image ? `<img class="spatial-news-lead-img" src="${esc(lead.image)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
         <div class="spatial-news-lead-body">
           <a class="spatial-news-title" href="${esc(lead.link || '#')}" target="_blank" rel="noopener">${esc(lead.title || '')}</a>

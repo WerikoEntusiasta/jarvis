@@ -48,10 +48,23 @@ check("news: lead com imagem + lista", () => {
   const b = T.buildNewsCard({ items: newsItems }, "");
   assert.ok(b, "builder retornou null");
   assert.ok(b.html.includes("spatial-news-lead"), "sem lead");
+  assert.ok(b.html.includes("spatial-news-lead-cover"), "sem capa fallback");
   assert.ok(b.html.includes("https://img/1.jpg"), "sem imagem");
   assert.ok(b.html.includes("Segunda manchete"), "sem lista");
   assert.ok(b.html.includes("Terceira manchete"), "lista incompleta");
   assert.ok(b.html.includes('target="_blank"'), "links nao abrem em nova aba");
+});
+
+check("news: SEM imagem no lead -> capa 📰 visivel", () => {
+  const semImg = newsItems.map(i => ({ ...i, image: "" }));
+  const b = T.buildNewsCard({ items: semImg }, "");
+  assert.ok(b.html.includes("spatial-news-lead-cover"), "capa ausente");
+  assert.ok(b.html.includes("📰"), "glyph ausente");
+  // nao pode haver <img> vazio apontando pra ''
+  assert.ok(!b.html.includes('class="spatial-news-lead-img" src=""'),
+            "img vazia renderizada");
+  // lead-texto continua presente
+  assert.ok(b.html.includes("IA brasileira avanca"), "titulo lead sumiu");
 });
 
 check("news: sem itens retorna null", () => {

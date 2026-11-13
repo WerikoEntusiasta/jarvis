@@ -16,6 +16,18 @@ logger = logging.getLogger("DynamicPresentationEngine")
 
 _ACTIVE_PRESENTATION: Optional[Dict[str, Any]] = None
 
+# Ha cards visiveis no palco do HUD? Marcado quando qualquer fluxo cria card
+# (show_card, start_dynamic_presentation, update_presentation_scene, spatial)
+# e desmarcado no close/stop/clear. A IA usa isto via get_presentation_status
+# p/ saber se deve perguntar ao Senhor se quer limpar ao fim da fala.
+_CARDS_DIRTY = False
+
+
+def set_cards_dirty(value: bool = True) -> None:
+    """Marca/desmarca a presenca de cards no palco."""
+    global _CARDS_DIRTY
+    _CARDS_DIRTY = bool(value)
+
 def _broadcast_to_hud(event_type: str, data: dict) -> bool:
     """Envia evento para o barramento SSE do HUD local com tolerância ao path de execução."""
     try:
@@ -191,6 +203,7 @@ def start_dynamic_presentation(script_or_dict: Dict[str, Any]) -> Dict[str, Any]
     try:
         validated = validate_presentation_script(script_or_dict)
         _ACTIVE_PRESENTATION = validated
+        set_cards_dirty(True)
 
         # Dispara evento SSE para o HUD e conexões ativas
         _broadcast_to_hud("presentation_start", validated)
@@ -216,6 +229,7 @@ def update_presentation_scene(scene_data: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "scene_data deve ser um dicionário."}
 
         _broadcast_to_hud("presentation_scene", scene_data)
+        set_cards_dirty(True)
         return {"ok": True, "message": "Cena enviada ao HUD com sucesso."}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -233,15 +247,22 @@ def control_presentation(action: str, params: Optional[Dict[str, Any]] = None) -
 
     if act in {"close", "stop"}:
         _ACTIVE_PRESENTATION = None
+        set_cards_dirty(False)
 
     return {"ok": True, "action": act, "message": f"Comando '{act}' enviado à apresentação com sucesso."}
 
 def get_presentation_status() -> Dict[str, Any]:
-    """Retorna o estado da apresentação multimodal ativa."""
+    """Retorna o estado da apresentação multimodal ativa.
+
+    `cards_visible` = ha cards no palco (qualquer fluxo: show_card,
+    apresentacao ou spatial). A IA consulta antes de perguntar ao Senhor
+    se quer limpe-los ao fim da fala.
+    """
     global _ACTIVE_PRESENTATION
     return {
         "ok": True,
         "is_active": _ACTIVE_PRESENTATION is not None,
+        "cards_visible": _CARDS_DIRTY,
         "presentation": _ACTIVE_PRESENTATION
     }
 
@@ -385,6 +406,7 @@ def add_spatial_component(component_id: str, component_type: str, position: Dict
     _ACTIVE_SPATIAL_WORKSPACE["updated_at"] = time.time()
 
     _broadcast_to_hud("spatial_component_added", component_data)
+    set_cards_dirty(True)
     logger.info(f"[SpatialEngine] Componente '{cid}' ({c_type}) adicionado ao Workspace.")
     return {"ok": True, "component_id": cid, "type": c_type}
 
@@ -472,6 +494,7 @@ def clear_spatial_workspace() -> Dict[str, Any]:
     """Limpa e desativa o Spatial Workspace."""
     global _ACTIVE_SPATIAL_WORKSPACE
     _ACTIVE_SPATIAL_WORKSPACE = None
+    set_cards_dirty(False)
     _broadcast_to_hud("spatial_workspace_cleared", {})
     return {"ok": True, "message": "Spatial Workspace limpo com sucesso."}
 
