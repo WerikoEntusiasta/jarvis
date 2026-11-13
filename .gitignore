@@ -43,6 +43,9 @@ logs/*
 # 5S: runtime configs com segredos/estado (nunca versionar)
 config/*.json
 
+# Jarvis Server Guardian: dados de runtime (history/audit/config do monitor)
+guardian/
+
 # PyInstaller & Build Artifacts
 build/
 build_/

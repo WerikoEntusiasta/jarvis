@@ -16,13 +16,31 @@ from unittest.mock import patch
 
 import zima_guardian as g
 
+_TMP_BASE: str = ""
+
+
+def _aplicar_paths(base: str):
+    b = Path(base)
+    g.GUARDIAN_DIR = b / "guardian"
+    g.CONFIG_PATH = g.GUARDIAN_DIR / "config.json"
+    g.AUDIT_PATH = g.GUARDIAN_DIR / "audit.jsonl"
+    g.HISTORY_PATH = g.GUARDIAN_DIR / "history.json"
+
 
 def setUpModule():
     os.environ["JARVIS_NO_RELAY"] = "1"
+    # paths em TEMP: testes NUNCA podem poluir o history/audit/config
+    # reais do app (ja aconteceu: fixture "CPU 99%" foi para o history
+    # real do Guardian).
+    global _TMP_BASE
+    _TMP_BASE = tempfile.mkdtemp(prefix="guardian_test_")
+    _aplicar_paths(_TMP_BASE)
 
 
 def tearDownModule():
     os.environ.pop("JARVIS_NO_RELAY", None)
+    if _TMP_BASE:
+        shutil.rmtree(_TMP_BASE, ignore_errors=True)
 
 
 # --------------------------------------------------------------------------- #
@@ -198,6 +216,74 @@ class TestGuardianDiagnose(unittest.TestCase):
                          if f["id"] == "disk__")
         self.assertEqual(disk_root["sev"], "critico")
 
+    def test_discos_de_sistema_ignorados(self):
+        # REGRESSAO: /mnt/overlay (1%) e /mnt/boot (3%) geravam alerta
+        # CRITICO falso a cada coleta - sao particoes de sistema do ZimaOS
+        df = ("Mounted on Size Used Available Use%\n"
+              "/ 1 0 1 100%\n"
+              "/DATA 222 177 45 80%\n"
+              "/mnt/overlay 1 1 0 100%\n"
+              "/mnt/boot 32 1 31 3%\n"
+              "/usr 2 1 1 50%\n")
+        fake = _fake_ssh_factory([
+            (r"nproc", (0, "4\n1.02 1.15 1.22 2/2745 1", "")),
+            (r"grep '\^cpu '", (0, "", "")),
+            (r"free -m", (0, "Mem: 15880 6300 9000 194 7359 8212", "")),
+            (r"thermal", (0, "", "")),
+            (r"df -B1G", (0, df, "")),
+            (r"docker", (0, "", "")),
+            (r"ss ", (0, "", "")),
+            (r"ps -eo", (0, "", "")),
+            (r"systemctl", (0, "", "")),
+        ])
+        with patch.object(g, "run_ssh", side_effect=fake):
+            m = g.collect_metrics(amostrar_cpu=False)
+        mounts = [d["mount"] for d in m["disks"]]
+        self.assertIn("/", mounts)
+        self.assertIn("/DATA", mounts)
+        self.assertNotIn("/mnt/overlay", mounts)
+        self.assertNotIn("/mnt/boot", mounts)
+        self.assertNotIn("/usr", mounts)
+        # e o diagnose NAO gera achado critico de disco de sistema
+        m["ok"] = True
+        r = g.diagnose(metrics=m)
+        discos_achados = [f for f in r["findings"] if f["area"] == "disco"]
+        self.assertEqual([f["titulo"] for f in discos_achados],
+                         ["Disco / em 100% (1G livres)"])
+
+    def test_disco_usa_cooldown_maior_que_cpu(self):
+        # disco (sistema imutavel) alerta no max 1x/12h; cpu a cada 30min
+        chamadas = []
+        orig = g._deve_alertar
+
+        def spy(chave, cd):
+            chamadas.append((chave, cd))
+            return orig(chave, cd)
+
+        findings = [
+            {"id": "disk_x", "sev": "alto", "area": "disco",
+             "titulo": "t", "causa_provavel": "c", "evidencias": [],
+             "recomendacao": "r"},
+            {"id": "cpu_y", "sev": "alto", "area": "cpu",
+             "titulo": "t2", "causa_provavel": "c", "evidencias": [],
+             "recomendacao": "r"},
+        ]
+        g._monitor_state["alerts"].clear()
+        with patch.object(g, "diagnose",
+                          side_effect=lambda *a, **k: {
+                              "ok": True, "findings": findings,
+                              "summary": "s"}), \
+             patch.object(g, "_emitir_alerta"), \
+             patch.object(g, "_save_history"), \
+             patch.object(g, "_load_history", return_value=[]), \
+             patch.object(g, "_deve_alertar", side_effect=spy):
+            g.monitor_once()
+        cds = dict(chamadas)
+        self.assertEqual(cds["disk_x"],
+                         g.load_limits()["disk_alert_cooldown_min"])
+        self.assertEqual(cds["cpu_y"], g.load_limits()["alert_cooldown_min"])
+        self.assertGreater(cds["disk_x"], cds["cpu_y"])
+
 
 # --------------------------------------------------------------------------- #
 # Docker: whitelist, aprovacao, acoes seguras                                 #
@@ -222,6 +308,16 @@ class TestGuardianDocker(unittest.TestCase):
         r = self._run("list")
         self.assertTrue(r.get("ok"), r)
         self.assertIn("c1", r["output"])
+
+    def test_list_com_filtro_de_status(self):
+        # linguagem natural: "lista os containers parados" -> target=stopped
+        r = self._run("list", "stopped")
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("--filter status=exited", r["command"])
+        r2 = self._run("list")
+        self.assertNotIn("--filter", r2["command"])
+        r3 = self._run("list", "running")
+        self.assertIn("--filter status=running", r3["command"])
 
     def test_injecao_no_alvo_e_recusada(self):
         for alvo_malicioso in ("x; rm -rf /", "x$(evil)", "a b",

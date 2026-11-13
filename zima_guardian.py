@@ -55,6 +55,12 @@ DEFAULT_LIMITS: Dict[str, Any] = {
     "enabled": True,
     "monitor_interval_s": 300,
     "alert_cooldown_min": 30,
+    # particoes de sistema do ZimaOS: nunca sao 'falta de espaco' real
+    # (overlay read-only, boot EFI, /usr do sistema imutavel)
+    "disk_ignore_mounts": ["/mnt/", "/boot", "/etc", "/usr", "/sys"],
+    # / raiz do ZimaOS e estavel (sistema imutavel) - alerta de disco
+    # real merece no max 1x/12h, nao a cada30min
+    "disk_alert_cooldown_min": 720,
     "cpu_pct": 90.0,
     "load_per_core": 2.0,
     "ram_pct": 90.0,
@@ -357,12 +363,18 @@ def collect_metrics(amostrar_cpu: bool = True) -> Dict[str, Any]:
         timeout=15)
     if rc == 0:
         discos = []
+        ignores = load_limits().get("disk_ignore_mounts") or []
         for linha in out.splitlines()[1:]:
             partes = linha.split()
             if len(partes) >= 5 and partes[-1].endswith("%"):
                 alvo = partes[0]
                 if any(bloqueado in alvo for bloqueado in
                        ("google", "icloud", "/media/", "/run", "/proc")):
+                    continue
+                # particoes de sistema (overlay/boot/etc): nao sao
+                # 'falta de espaco' real - evita alerta falso toda coleta
+                if any(alvo == ign or alvo.startswith(ign)
+                       for ign in ignores):
                     continue
                 discos.append({
                     "mount": alvo,
@@ -748,8 +760,15 @@ def docker_plan(op: str, target: str = "",
     tail = min(500, max(1, _int(args.get("tail", 100)) or 100))
 
     if op in ("list", "ps"):
-        cmd = ("docker ps -a --format "
-               "'{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}'")
+        # filtro natural por linguagem natural: list target="stopped"/"running"
+        filtro = {"running": "running", "up": "running",
+                  "stopped": "exited", "parado": "exited",
+                  "parados": "exited", "exited": "exited"}.get(
+            str(target).lower())
+        cmd = ("docker ps -a"
+               + (f" --filter status={filtro}" if filtro else "")
+               + " --format "
+                 "'{{.Names}}|{{.Status}}|{{.Image}}|{{.Ports}}'")
     elif op == "images":
         cmd = "docker images --format '{{.Repository}}:{{.Tag}}|{{.Size}}'"
     elif op == "volumes":
@@ -816,8 +835,10 @@ def docker_admin(op: str, target: str = "", args: Optional[Dict[str, Any]] = Non
         rc, out, err = run_ssh(cmd, timeout=40)
         audit("docker_leitura", {"op": op, "target": target, "rc": rc})
         if rc != 0:
-            return {"ok": False, "error": (err or out or "falhou")[:400]}
-        return {"ok": True, "op": op, "output": out.strip()[:12000]}
+            return {"ok": False, "error": (err or out or "falhou")[:400],
+                    "command": cmd}
+        return {"ok": True, "op": op, "command": cmd,
+                "output": out.strip()[:12000]}
 
     # --- escrita: classifica risco ---
     eh_critico = bool(target) and target in CRITICAL_CONTAINERS
@@ -1179,7 +1200,11 @@ def monitor_once() -> Dict[str, Any]:
 
     novos = []
     for a in diagnostico["findings"]:
-        if _deve_alertar(a["id"], cfg["alert_cooldown_min"]):
+        # disco: sistema imutavel -> cooldown maior (alerta real max 1x/12h)
+        cooldown = (cfg.get("disk_alert_cooldown_min", 720)
+                    if a.get("area") == "disco"
+                    else cfg["alert_cooldown_min"])
+        if _deve_alertar(a["id"], cooldown):
             novos.append(a)
 
     if novos:
