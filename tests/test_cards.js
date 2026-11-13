@@ -188,5 +188,20 @@ check("whatsapp: chat_id malicioso e sanitizado", () => {
   assert.ok(!b.html.includes("alert(1)"), "chat_id nao sanitizado");
 });
 
+// ------------------------------------------------------------ regressao compose
+check("compose: components dict do backend nao quebra (fonte)", () => {
+  // O backend manda components={} (dict). `|| []` nao protege porque objeto
+  // e truthy -> "comps.forEach is not a function" no handler SSE.
+  const fs = require("fs");
+  const src = fs.readFileSync(
+    require("path").join(__dirname, "..", "web", "jarvis_presentation_engine.js"),
+    "utf8");
+  assert.ok(
+    /Array\.isArray\(payload\s*&&\s*payload\.components\)/.test(src),
+    "compose precisa checar Array.isArray(payload.components)");
+  assert.ok(!/const comps = payload\.components \|\| \[\]/.test(src),
+            "guard antigo (|| []) voltou");
+});
+
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);

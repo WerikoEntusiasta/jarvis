@@ -1444,7 +1444,11 @@
     // Inicia ou compõe um conjunto de cards
     compose(payload) {
       this.clearSpatialWorkspace();
-      const comps = payload.components || [];
+      // ATENCAO: o backend manda components como DICT ({} na criacao do
+      // workspace) - `|| []` nao protege (objeto e truthy) e quebrava
+      // com "comps.forEach is not a function". So aceitamos array de verdade.
+      const comps = Array.isArray(payload && payload.components)
+        ? payload.components : [];
       comps.forEach((c, idx) => {
         this.addSpatialComponent(c.id || ('card_' + idx), c.type || 'narrative', c.position, c.props || c);
       });
