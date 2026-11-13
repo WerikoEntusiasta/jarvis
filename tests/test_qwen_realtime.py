@@ -789,5 +789,98 @@ class TestWebIntel(unittest.TestCase):
         self.assertEqual(capturado["ct"], "application/json")
 
 
+class TestWhatsApp(unittest.TestCase):
+    """WhatsApp via WAHA self-hosted (ZimaOS) - tools + card + endpoints."""
+
+    def test_tools_whatsapp_no_catalogo_e_no_qwen(self):
+        import mimo_tools
+        from qwen_realtime import carregar_tools_conversa, _TOOLS_DELEGADAS
+        esperadas = ("whatsapp_status", "whatsapp_qr", "whatsapp_unread",
+                     "whatsapp_read", "whatsapp_send")
+        nomes_total = [t["function"]["name"] for t in mimo_tools.TOOLS]
+        nomes_qwen = [t["function"]["name"] for t in carregar_tools_conversa()]
+        for esp in esperadas:
+            self.assertIn(esp, nomes_total)
+            self.assertIn(esp, nomes_qwen)
+            self.assertNotIn(esp, _TOOLS_DELEGADAS)
+
+    def test_waha_sessions_reais(self):
+        # contra o WAHA real do ZimaOS: sessions do JARVIS existem
+        import waha_client as wa
+        r = wa.get_sessions()
+        self.assertTrue(r.get("ok"), r)
+        nomes = {s["name"]: s for s in r["sessions"]}
+        self.assertIn("jarvis", nomes)
+        self.assertIn("Businees", nomes)
+        self.assertEqual(nomes["jarvis"]["role"], "pessoal")
+        self.assertEqual(nomes["Businees"]["role"], "comercial")
+        # o comercial deve estar conectado (estado conhecido)
+        self.assertEqual(nomes["Businees"]["status"], "WORKING")
+
+    def test_qr_pessoal_dataurl(self):
+        import waha_client as wa
+        r = wa.get_qr("jarvis")
+        self.assertTrue(r.get("ok"), r)
+        if r.get("connected"):
+            return  # conectado nao precisa de QR
+        self.assertTrue(r["qr"].startswith("data:image/"), "QR nao e dataURL")
+
+    def test_unread_shape(self):
+        import waha_client as wa
+        r = wa.get_unread()
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("messages", r)
+        self.assertIn("total_unread", r)
+        self.assertIn("summary", r)
+        for m in r["messages"]:
+            for campo in ("session", "chat_id", "name", "unread", "label"):
+                self.assertIn(campo, m)
+
+    def test_send_sem_args_erro(self):
+        import waha_client as wa
+        r = wa.send_text("", "")
+        self.assertFalse(r.get("ok"))
+        r2 = wa.send_text("5500000000000@c.us", "")
+        self.assertFalse(r2.get("ok"))
+
+    def test_tool_status_via_execute(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("whatsapp_status", {})
+        self.assertTrue(r.get("ok"), r)
+        self.assertTrue(any(s["name"] == "Businees" for s in r["sessions"]))
+
+    def test_tool_qr_broadcast_sem_base64_ao_modelo(self):
+        # a tool nao deve devolver o dataURL ao modelo (gasta tokens)
+        from mimo_tools import execute_tool
+        r = execute_tool("whatsapp_qr", {"session": "jarvis"})
+        self.assertTrue(r.get("ok"), r)
+        self.assertNotIn("qr", r, "dataURL vazou para o modelo")
+        self.assertIn("message", r)
+
+    def test_card_whatsapp_no_validador(self):
+        from dynamic_presentation_engine import validate_presentation_script
+        v = validate_presentation_script({"title": "t", "scenes": [{
+            "title": "Zap", "component_type": "whatsapp",
+            "content": "2 nao lidas",
+            "messages": [{"name": "X", "unread": 1, "label": "oi",
+                          "chat_id": "5511@c.us"}],
+            "total_unread": 2, "role": "pessoal",
+        }]})
+        s = v["scenes"][0]
+        self.assertEqual(s["component_type"], "whatsapp")
+        self.assertEqual(len(s["messages"]), 1)
+        self.assertEqual(s["total_unread"], 2)
+
+    def test_endpoints_http_no_local_server(self):
+        # os handlers GET/POST existem no arquivo do servidor
+        from pathlib import Path
+        src = Path(r"C:\JARVIS\jarvis-windows\core\local_server.py").read_text(
+            encoding="utf-8", errors="replace")
+        self.assertIn('"/api/whatsapp/status"', src)
+        self.assertIn('"/api/whatsapp/qr"', src)
+        self.assertIn('"/api/whatsapp/unread"', src)
+        self.assertIn('"/api/whatsapp/reply"', src)
+
+
 if __name__ == "__main__":
     unittest.main()

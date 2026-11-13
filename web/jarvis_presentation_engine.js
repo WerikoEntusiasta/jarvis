@@ -482,6 +482,109 @@
       .spatial-weather-maxmin { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #e4e4e7; }
       .spatial-weather-maxmin b { color: #ffffff; font-weight: 700; }
       .spatial-weather-rain { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #38bdf8; }
+      /* ---- Card de WHATSAPP (mensagens nao lidas) ---- */
+      .spatial-wa-header {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        background: linear-gradient(135deg, rgba(37, 211, 102, 0.10), rgba(37, 211, 102, 0.04));
+        border: 1px solid rgba(37, 211, 102, 0.25);
+        border-radius: 12px;
+        padding: 10px 13px;
+        margin-bottom: 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: #86efac;
+      }
+      .spatial-wa-unread-pill {
+        margin-left: auto;
+        background: #25d366;
+        color: #04301a;
+        font-weight: 800;
+        border-radius: 999px;
+        padding: 2px 9px;
+        font-size: 10px;
+      }
+      .spatial-wa-msg {
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-left: 3px solid #25d366;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .spatial-wa-msg-top {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .spatial-wa-name {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .spatial-wa-badge {
+        background: rgba(37, 211, 102, 0.18);
+        color: #86efac;
+        border-radius: 999px;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 1px 7px;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .spatial-wa-ts {
+        margin-left: auto;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        color: #52525b;
+      }
+      .spatial-wa-text { font-size: 12px; color: #d4d4d8; line-height: 1.5; word-break: break-word; }
+      .spatial-wa-role {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8.5px;
+        color: #71717a;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      .spatial-wa-reply-row { display: flex; gap: 7px; margin-top: 3px; }
+      .spatial-wa-reply-input {
+        flex: 1;
+        background: #1c1c1f;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 8px;
+        padding: 7px 10px;
+        color: #e4e4e7;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        outline: none;
+        min-width: 0;
+      }
+      .spatial-wa-reply-input:focus { border-color: rgba(37, 211, 102, 0.55); }
+      .spatial-wa-reply-btn {
+        background: #25d366;
+        color: #04301a;
+        border: none;
+        border-radius: 8px;
+        padding: 7px 13px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: filter 0.15s ease;
+      }
+      .spatial-wa-reply-btn:hover { filter: brightness(1.12); }
+      .spatial-wa-reply-btn:disabled { opacity: 0.5; cursor: wait; }
+      .spatial-wa-empty {
+        color: #71717a;
+        font-size: 12px;
+        text-align: center;
+        padding: 14px;
+        border: 1px dashed rgba(37, 211, 102, 0.25);
+        border-radius: 10px;
+      }
     `;
     document.head.appendChild(tag);
   }
@@ -933,6 +1036,52 @@
     return { html: hero + strip, mount() { return null; } };
   }
 
+  // BUILDER: WHATSAPP - mensagens nao lidas com resposta direta pelo card
+  function buildWhatsappCard(p, cRaw) {
+    const isObj = cRaw && typeof cRaw === 'object';
+    const msgs = (Array.isArray(p.messages) && p.messages.length) ? p.messages
+      : (isObj && Array.isArray(cRaw.messages) && cRaw.messages.length) ? cRaw.messages : [];
+    const total = Number(p.total_unread || (isObj ? cRaw.total_unread : 0) || 0) ||
+      msgs.reduce((s, m) => s + (Number(m.unread) || 0), 0);
+
+    const header = `
+      <div class="spatial-wa-header">
+        <span>💬 WhatsApp</span>
+        <span>${esc(p.role || (msgs[0] && msgs[0].role) || 'conectado')}</span>
+        <span class="spatial-wa-unread-pill">${total} não lida${total === 1 ? '' : 's'}</span>
+      </div>`;
+
+    if (!msgs.length) {
+      return { html: `${header}<div class="spatial-wa-empty">✅ Nenhuma mensagem não lida.</div>`,
+               mount() { return null; } };
+    }
+
+    const body = msgs.slice(0, 6).map((m, i) => {
+      const safeId = String(m.chat_id || '').replace(/[^\w@.\-:]/g, '');
+      const sess = String(m.session || 'Businees').replace(/[^\w]/g, '');
+      return `
+      <div class="spatial-wa-msg">
+        <div class="spatial-wa-msg-top">
+          <span class="spatial-wa-name">${esc(m.name || 'Contato')}</span>
+          <span class="spatial-wa-badge">${Number(m.unread) || 1}</span>
+          <span class="spatial-wa-ts">${esc(m.ts || '')}</span>
+        </div>
+        ${m.role ? `<span class="spatial-wa-role">${esc(m.role)}</span>` : ''}
+        <span class="spatial-wa-text">${esc(m.label || '(sem conteúdo)')}</span>
+        ${safeId ? `
+        <div class="spatial-wa-reply-row">
+          <input class="spatial-wa-reply-input" id="wa_reply_${i}" type="text"
+                 placeholder="Responder ${esc((m.name || '').split(' ')[0])}..."
+                 onkeydown="if(event.key==='Enter')window.JarvisWhatsApp&&window.JarvisWhatsApp.send('${safeId}','${sess}',${i})">
+          <button class="spatial-wa-reply-btn"
+                  onclick="window.JarvisWhatsApp&&window.JarvisWhatsApp.send('${safeId}','${sess}',${i})">ENVIAR</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+
+    return { html: header + body, mount() { return null; } };
+  }
+
   function buildCardContent(type, p) {
     const cRaw = p.content;
     const isObj = cRaw && typeof cRaw === 'object';
@@ -1003,6 +1152,8 @@
       visualBuilder = buildNewsCard(p, cRaw);
     } else if (type === 'weather' || type === 'tempo' || type === 'clima') {
       visualBuilder = buildWeatherCard(p, cRaw);
+    } else if (type === 'whatsapp' || type === 'zap') {
+      visualBuilder = buildWhatsappCard(p, cRaw);
     } else if (type === 'chart' || type === 'echarts' || p.options || p.option || (p.data && Object.keys(p.data).length)) {
       const rawOpts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data
         || (isObj && (cRaw.chart_type || cRaw.series || cRaw.xAxis) ? cRaw : null);
@@ -1407,6 +1558,53 @@
     }
   };
 
+  // Resposta a mensagens DIRETO do card (POST p/ local_server -> WAHA)
+  // A API key fica no backend - o browser nunca a vê.
+  if (typeof window !== 'undefined') {
+  window.JarvisWhatsApp = {
+    send(chatId, session, idx) {
+      const input = document.getElementById('wa_reply_' + idx);
+      const btn = input && input.parentElement &&
+                  input.parentElement.querySelector('.spatial-wa-reply-btn');
+      const texto = (input ? input.value : '').trim();
+      if (!texto || !input) return;
+      if (btn) { btn.disabled = true; btn.textContent = '...'; }
+      fetch('/api/whatsapp/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: texto, session: session })
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.ok) {
+            input.value = '';
+            if (btn) btn.textContent = '✓ ENVIADO';
+            if (window.showHudAlert) {
+              window.showHudAlert('WHATSAPP', 'Mensagem enviada com sucesso.', 'sucesso');
+            }
+          } else {
+            if (btn) btn.textContent = 'ERRO';
+            if (window.showHudAlert) {
+              window.showHudAlert('WHATSAPP',
+                (res && res.error) || 'Falha ao enviar.', 'erro');
+            }
+          }
+        })
+        .catch(() => {
+          if (btn) btn.textContent = 'ERRO';
+          if (window.showHudAlert) {
+            window.showHudAlert('WHATSAPP', 'Sem conexão com o servidor.', 'erro');
+          }
+        })
+        .finally(() => {
+          setTimeout(() => {
+            if (btn) { btn.disabled = false; btn.textContent = 'ENVIAR'; }
+          }, 2500);
+        });
+    }
+  };
+  }
+
   // Exposto apenas para testes automatizados (Node) - nao afeta o runtime
   engine._test = {
     normalizeChartOptions,
@@ -1414,6 +1612,7 @@
     buildTextCard,
     buildNewsCard,
     buildWeatherCard,
+    buildWhatsappCard,
     esc
   };
 

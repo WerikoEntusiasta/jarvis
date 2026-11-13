@@ -930,6 +930,44 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             return
 
+        # ---- WhatsApp (WAHA via waha_client) - painel do HUD ----
+        if path.startswith("/api/whatsapp/status"):
+            try:
+                import waha_client as _wa
+                self._send_json(_wa.get_sessions())
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path.startswith("/api/whatsapp/qr"):
+            try:
+                import waha_client as _wa
+                sess = "jarvis"
+                if "?" in path:
+                    from urllib.parse import urlparse, parse_qs
+                    qs = parse_qs(urlparse(path).query)
+                    sess = (qs.get("session") or ["jarvis"])[0]
+                self._send_json(_wa.get_qr(sess))
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path.startswith("/api/whatsapp/unread"):
+            try:
+                import waha_client as _wa
+                limite = 10
+                if "?" in path:
+                    from urllib.parse import urlparse, parse_qs
+                    qs = parse_qs(urlparse(path).query)
+                    try:
+                        limite = int((qs.get("limit") or ["10"])[0])
+                    except ValueError:
+                        limite = 10
+                self._send_json(_wa.get_unread("", limite))
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
 
 
 
@@ -2193,6 +2231,26 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 payload = data.get("data") if isinstance(data.get("data"), dict) else {}
                 broadcast_hud_event(event_type, payload)
                 self._send_json({"ok": True})
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        # Resposta a mensagem de WhatsApp DIRETO do card do HUD
+        # (o frontend chama este endpoint; a API key nunca vai ao browser)
+        if path == "/api/whatsapp/reply":
+            try:
+                data = json.loads(_decode_body(body)) if body else {}
+                chat_id = str(data.get("chat_id") or "").strip()
+                text = str(data.get("text") or "").strip()
+                session = str(data.get("session") or "").strip()
+                if not chat_id or not text:
+                    self._send_json(
+                        {"ok": False, "error": "chat_id e text obrigatorios"},
+                        status=400)
+                    return
+                import waha_client as _wa
+                res = _wa.send_text(chat_id, text, session)
+                self._send_json(res, status=200 if res.get("ok") else 502)
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, status=500)
             return

@@ -136,5 +136,44 @@ check("chart: opcao invalida -> null", () => {
   assert.strictEqual(T.normalizeChartOptions(null), null);
 });
 
+// ------------------------------------------------------------ whatsapp card
+const waMsgs = [
+  { name: "Werik ( Pessoal )", unread: 2, label: "Bom dia, JARVIS!",
+    ts: "13/11 10:00", session: "Businees", role: "comercial",
+    chat_id: "5517991951381@c.us" },
+  { name: "Thiago", unread: 1, label: "🎤 áudio", ts: "13/11 09:30",
+    session: "jarvis", role: "pessoal", chat_id: "551199999@c.us" },
+];
+
+check("whatsapp: header com total + mensagens + input resposta", () => {
+  const b = T.buildWhatsappCard({ messages: waMsgs, total_unread: 3, role: "comercial" }, "");
+  assert.ok(b, "builder retornou null");
+  assert.ok(b.html.includes("spatial-wa-header"), "sem header");
+  assert.ok(b.html.includes("3 não lidas"), "sem total");
+  assert.ok(b.html.includes("Werik"), "sem remetente");
+  assert.ok(b.html.includes("Bom dia"), "sem texto");
+  assert.ok(b.html.includes("spatial-wa-reply-input"), "sem input de resposta");
+  assert.ok(b.html.includes("/api/whatsapp/reply") === false, "input nao expoe endpoint inline");
+  assert.ok(b.html.includes("JarvisWhatsApp.send"), "sem acao de envio");
+});
+
+check("whatsapp: sem mensagens -> estado vazio amigavel", () => {
+  const b = T.buildWhatsappCard({ messages: [], total_unread: 0 }, "");
+  assert.ok(b.html.includes("Nenhuma mensagem"), "sem mensagem de vazio");
+});
+
+check("whatsapp: injeta via buildCardContent", () => {
+  const b = T.buildCardContent("whatsapp", { messages: waMsgs, total_unread: 3 });
+  assert.ok(b.html.includes("spatial-wa-msg"), "sem itens de mensagem");
+});
+
+check("whatsapp: chat_id malicioso e sanitizado", () => {
+  const b = T.buildWhatsappCard({ messages: [{
+    name: "X", unread: 1, label: "y",
+    chat_id: "abc'); alert(1); ('x"
+  }] }, "");
+  assert.ok(!b.html.includes("alert(1)"), "chat_id nao sanitizado");
+});
+
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);

@@ -3966,6 +3966,96 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "whatsapp_status",
+                "description": (
+                    "Status das sessions do WhatsApp (WAHA): mostra qual esta conectada "
+                    "(pessoal='jarvis', comercial='Businees'). Use antes de relatar mensagens "
+                    "ou quando perguntarem sobre o estado do WhatsApp."
+                ),
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "whatsapp_qr",
+                "description": (
+                    "Gera o QR code de pareamento do WhatsApp no HUD (painel WhatsApp). "
+                    "session='jarvis' = pessoal, 'Businees' = comercial. O QR aparece no "
+                    "HUD para o Senhor escanear com o celular. Se ja estiver conectado, "
+                    "retorna so a confirmacao."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session": {"type": "string", "enum": ["jarvis", "Businees"],
+                                    "description": "Qual WhatsApp (padrao: jarvis = pessoal)."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "whatsapp_unread",
+                "description": (
+                    "Lista mensagens NAO LIDAS do WhatsApp (diretas, nao grupos) das duas "
+                    "sessions. Use quando pedirem 'bom dia' com relatorio, 'tenho mensagens?', "
+                    "'o que chegou no zap'. Depois exiba com show_card e relate em voz."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "session": {"type": "string", "enum": ["jarvis", "Businees"],
+                                    "description": "Filtra por session (padrao: ambas)."},
+                        "limit": {"type": "integer", "description": "Max de conversas (padrao 10)."}
+                    }
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "whatsapp_read",
+                "description": (
+                    "Le as ultimas mensagens de uma conversa especifica do WhatsApp. "
+                    "Use o chat_id vindo de whatsapp_unread ou whatsapp_send."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {"type": "string", "description": "ID do chat (ex: '5517...@c.us')."},
+                        "session": {"type": "string", "description": "Session (padrao: a WORKING)."},
+                        "limit": {"type": "integer", "description": "Nº de mensagens (padrao 10)."}
+                    },
+                    "required": ["chat_id"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "whatsapp_send",
+                "description": (
+                    "Envia mensagem de texto no WhatsApp. Use quando o Senhor pedir para "
+                    "mandar/responder mensagem ('responde pra ele', 'manda um oi'). "
+                    "Use o chat_id de whatsapp_unread/whatsapp_read. NUNCA invente o envio: "
+                    "só afirme 'enviado' se retornar ok=true."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "chat_id": {"type": "string", "description": "Destino (id do chat/conversa)."},
+                        "text": {"type": "string", "description": "Texto da mensagem."},
+                        "session": {"type": "string", "description": "Session (padrao: a WORKING)."}
+                    },
+                    "required": ["chat_id", "text"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espaços visuais contínuos onde múltiplos componentes independentes coexistem e se transformam em tempo real (gráficos interativos Apache ECharts, diagramas estruturados, painéis de inteligência, métricas e visualizações 3D sem depender de slides ou caixas estáticas).",
                 "parameters": {
@@ -6401,6 +6491,57 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                            int(args.get("max_chars") or 12000),
                            str(args.get("selector") or ""))
             return _wr(str(args.get("query", "")), int(args.get("depth") or 3))
+
+        if name in ("whatsapp_status", "whatsapp_qr", "whatsapp_unread",
+                    "whatsapp_read", "whatsapp_send"):
+            # WhatsApp via WAHA self-hosted no ZimaOS (waha_client)
+            import waha_client as wa
+
+            if name == "whatsapp_status":
+                return wa.get_sessions()
+
+            if name == "whatsapp_qr":
+                res = wa.get_qr(str(args.get("session") or "jarvis"))
+                # QR nao vai ao modelo (base64 gastaria tokens) - vai ao HUD
+                # via evento SSE; o modelo recebe so a confirmacao.
+                if res.get("ok") and res.get("qr"):
+                    try:
+                        from dynamic_presentation_engine import _broadcast_to_hud
+                        _broadcast_to_hud("whatsapp_qr", {
+                            "session": res.get("session"),
+                            "status": res.get("status"),
+                            "qr": res.get("qr"),
+                        })
+                        res = {"ok": True,
+                               "session": res.get("session"),
+                               "status": res.get("status"),
+                               "message": "QR exibido no painel do HUD - peça para o "
+                                          "Senhor escanear com o celular."}
+                    except Exception as e:
+                        logger.warning("broadcast whatsapp_qr falhou: %s", e)
+                return res
+
+            if name == "whatsapp_unread":
+                return wa.get_unread(str(args.get("session") or ""),
+                                     int(args.get("limit") or 10))
+
+            if name == "whatsapp_read":
+                return wa.get_messages(str(args.get("session") or ""),
+                                       str(args.get("chat_id", "")),
+                                       int(args.get("limit") or 10))
+
+            # whatsapp_send
+            res = wa.send_text(str(args.get("chat_id", "")),
+                               str(args.get("text", "")),
+                               str(args.get("session") or ""))
+            if res.get("ok"):
+                try:
+                    from dynamic_presentation_engine import _broadcast_to_hud
+                    _broadcast_to_hud("toast", {
+                        "message": f"📤 WhatsApp: {str(args.get('text', ''))[:60]}"})
+                except Exception:
+                    pass
+            return res
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe

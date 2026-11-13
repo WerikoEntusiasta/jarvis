@@ -73,6 +73,8 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
         # Cards universais: resposta em texto, noticias e previsao do tempo
         "text", "answer", "response", "news", "noticia",
         "weather", "tempo", "clima",
+        # WhatsApp (mensagens nao lidas do WAHA)
+        "whatsapp", "zap",
     }
 
     for idx, sc in enumerate(scenes):
@@ -131,6 +133,10 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
         thumbnail = str(_pick("thumbnail", default="") or "")
         item_a = _pick("item_a", default={}) or {}
         item_b = _pick("item_b", default={}) or {}
+        # WhatsApp: mensagens nao lidas
+        wa_messages = _pick("messages", default=[]) or []
+        wa_total = _pick("total_unread", default=0) or 0
+        wa_role = str(_pick("role", default="") or "")
 
         scene_obj = {
             "scene_id": str(sc.get("scene_id") or f"scene_{idx + 1}"),
@@ -160,6 +166,9 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
             "media": media,
             "caption": caption,
             "thumbnail": thumbnail,
+            "messages": wa_messages,
+            "total_unread": wa_total,
+            "role": wa_role,
             "canvas_elements": sc.get("canvas_elements") or sc.get("elements", []),
             "canvas_connections": sc.get("canvas_connections") or sc.get("connections", []),
             "canvas_width": int(sc.get("canvas_width") or 800),
