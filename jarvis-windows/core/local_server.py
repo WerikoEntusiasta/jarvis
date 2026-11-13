@@ -2628,6 +2628,33 @@ def start_local_server(port: int = LOCAL_PORT) -> bool:
 
 
 
+        # Guardian: monitoramento continuo do ZimaOS. Daemon (morre com o
+        # app);1a coleta apos 60s p/ nao atrasar o boot; alertas com
+        # cooldown interno (monitor_once deduplica - sem spam).
+        def _guardian_loop():
+            import time as _t
+            _t.sleep(60)
+            while True:
+                try:
+                    import zima_guardian as _g
+                    _g.monitor_once()
+                    intervalo = max(60, int(_g.load_limits().get(
+                        "monitor_interval_s", 300)))
+                except Exception as _exc_g:
+                    print(f"[Guardian] rodada falhou: {_exc_g}")
+                    intervalo = 300
+                _t.sleep(intervalo)
+        try:
+            import zima_guardian  # noqa: F401 (verifica disponibilidade)
+            threading.Thread(target=_guardian_loop, daemon=True,
+                             name="JarvisGuardianMonitor").start()
+            print("[JarvisLocalServer] Guardian monitor ativo "
+                  "(intervalo via guardian/config.json)")
+        except Exception as _exc_start:
+            print(f"[JarvisLocalServer] Guardian indisponivel: {_exc_start}")
+
+
+
         print(f"[JarvisLocalServer] Servidor local Stark HUD ativo em http://127.0.0.1:{port}")
 
 

@@ -4056,6 +4056,52 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "zima_guardian",
+                "description": (
+                    "ZimaOS Server Guardian: monitoramento, diagnostico, administracao "
+                    "Docker e seguranca do servidor ZimaOS. Acoes: 'health' (saude + "
+                    "achados), 'diagnose' (investigacao profunda com logs; topico=container/servico "
+                    "opcional), 'monitor' (rodada de monitoramento com alertas), "
+                    "'report' (relatorio de saude p/ narracao), 'history' (incidentes+auditoria), "
+                    "'security' (logins falhos, portas, mineracao, conexoes suspeitas em N horas), "
+                    "'evaluate' (avaliacao de Prometheus/Grafana/cAdvisor/Wazuh/firewall), "
+                    "'docker' (list/inspect/logs/stats/start/stop/restart; op destrutivas "
+                    "rm/rmi/pull/prune/volume_rm/network_rm EXIGEM approval_id), 'repair' "
+                    "(service_restart na safe-list / container_restart - baixo risco automatico), "
+                    "'block_ip' (EXIGE approval_id e IP publico; redes privadas recusadas "
+                    "sempre), 'audit' (registro de acoes). OPERACOES CRITICAS: ao receber "
+                    "approval_required, apresente o plan (acao, motivo, recursos, risco, "
+                    "comando) ao usuario e so rechame com o approval_id EXATO - se os "
+                    "parametros mudarem, uma nova aprovacao e necessaria."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["health", "diagnose", "monitor", "report",
+                                     "history", "security", "evaluate", "docker",
+                                     "repair", "block_ip", "audit"],
+                            "description": "Acao do guardian."
+                        },
+                        "op": {"type": "string", "description": "docker: list, inspect, logs, stats, images, volumes, networks, start, stop, restart, rm, rmi, pull, prune. repair: service_restart, container_restart."},
+                        "target": {"type": "string", "description": "Container, imagem, servico ou alvo (nome validado por whitelist)."},
+                        "params": {"type": "object", "description": "Parametros da acao (ex: logs {tail: 100, since: 30m})."},
+                        "approval_id": {"type": "string", "description": "ID retornado por uma acao critica - vinculado a acao EXATA."},
+                        "ip": {"type": "string", "description": "block_ip: IP publico a bloquear (redes privadas recusadas)."},
+                        "motivo": {"type": "string", "description": "block_ip: motivo do bloqueio."},
+                        "evidence": {"type": "string", "description": "block_ip: evidencia observada (ex: 37 tentativas de login)."},
+                        "topico": {"type": "string", "description": "diagnose: container ou servico a investigar."},
+                        "hours": {"type": "integer", "description": "security: janela de horas (padrao 24)."},
+                        "limit": {"type": "integer", "description": "history: registros (padrao 15)."}
+                    },
+                    "required": ["action"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espacos visuais onde multiplos componentes coexistem, e MANIPULAR os cards no palco: mover (x,y em %), redimensionar, ampliar/zoom (expand), minimizar, agrupar/separar, ordenar sobreposicao (z-index), destacar, salvar/restaurar layouts e limpar. Cards unicos criados na hora, animados via transicoes CSS.",
                 "parameters": {
@@ -6544,6 +6590,11 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 except Exception:
                     pass
             return res
+
+        if name == "zima_guardian":
+            # Guardian: monitoramento/diagnostico/docker/seguranca do ZimaOS
+            import zima_guardian as guardian
+            return guardian.handle_tool(args)
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe
