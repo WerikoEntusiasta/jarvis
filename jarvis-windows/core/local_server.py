@@ -459,6 +459,22 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, status=500)
             return
 
+        if path == "/api/agents/dynamic":
+            # Config dinamica + propostas de auto-edicao pendentes (consulta).
+            try:
+                query_params = parse_qs(parsed.query)
+                agent_id = (query_params.get("agent", ["jarvis"])[0] or "jarvis").strip()
+                import agent_dynamic
+                self._send_json({
+                    "ok": True,
+                    "agent": agent_id,
+                    "status": agent_dynamic.handle_tool({"action": "status", "agent_id": agent_id}),
+                    "pending_all": agent_dynamic.pending_all(),
+                })
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
 
 
         # 1. Server-Sent Events (SSE) para o HUD
