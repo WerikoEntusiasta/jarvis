@@ -126,6 +126,14 @@ import sys
 
 
 
+import time
+
+
+
+
+
+
+
 from pathlib import Path
 
 
@@ -3860,6 +3868,42 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "show_card",
+                "description": (
+                    "EXIBIR CARD VISUAL no HUD - a forma padrão do J.A.R.V.I.S. de explicar qualquer resposta. "
+                    "USE PARA TUDO: toda resposta sua deve virar um card sincronizado com sua fala. "
+                    "type='text': resposta simples em texto com botão COPIAR (use sempre que sua resposta for uma explicação, definição, conselho ou resposta direta). "
+                    "type='news': puxa notícias reais de APIs públicas automaticamente pelo parâmetro 'query' e monta card interativo com imagens, fonte e links. "
+                    "type='weather': puxa previsão real de 7 dias por Open-Meteo automaticamente pelo parâmetro 'city' e monta card com faixa diária. "
+                    "O card aparece no ritmo da sua fala - chame ANTES de começar a falar do assunto."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "enum": ["text", "news", "weather"],
+                            "description": "Tipo do card: text (resposta/copiável), news (notícias com imagens), weather (previsão do tempo)."
+                        },
+                        "title": {"type": "string", "description": "Título curto do card (ex: 'Previsão de São Paulo', 'Resumo sobre juros')."},
+                        "subtitle": {"type": "string", "description": "Subtítulo/contexto opcional do card."},
+                        "text": {
+                            "type": "string",
+                            "description": "type='text': a resposta completa que deve aparecer no card com botão copiar. Para os demais tipos: resumo escrito opcional."
+                        },
+                        "query": {"type": "string", "description": "type='news': tema/busca das notícias (ex: 'tecnologia', 'economia Brasil')."},
+                        "when": {"type": "string", "description": "type='news': recência opcional (ex: 'hoje', 'última hora')."},
+                        "limit": {"type": "integer", "description": "type='news': nº de notícias (padrão 6, máx 12)."},
+                        "city": {"type": "string", "description": "type='weather': cidade para a previsão (ex: 'São Paulo', 'Catanduva')."},
+                        "days": {"type": "integer", "description": "type='weather': nº de dias (padrão 7, máx 16)."}
+                    },
+                    "required": ["type", "title"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espaços visuais contínuos onde múltiplos componentes independentes coexistem e se transformam em tempo real (gráficos interativos Apache ECharts, diagramas estruturados, painéis de inteligência, métricas e visualizações 3D sem depender de slides ou caixas estáticas).",
                 "parameters": {
@@ -6209,6 +6253,80 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             import dynamic_presentation_engine as pe
 
             return pe.get_presentation_status()
+
+        if name == "show_card":
+            # Card universal: toda resposta do JARVIS vira card visual no HUD.
+            # news/weather puxam APIs publicas reais (sem chave) automaticamente.
+            import dynamic_presentation_engine as pe
+
+            card_type = str(args.get("type") or "text").strip().lower()
+            title = str(args.get("title") or "J.A.R.V.I.S.").strip()
+            subtitle = str(args.get("subtitle") or "").strip()
+            text = str(args.get("text") or "").strip()
+
+            scene: Dict[str, Any] = {
+                "scene_id": f"card_{int(time.time() * 1000)}",
+                "title": title,
+                "subtitle": subtitle,
+                "duration_sec": 0,
+            }
+
+            if card_type == "news":
+                from public_apis import fetch_news
+                tema = str(args.get("query") or title)
+                dados = fetch_news(tema, int(args.get("limit") or 6),
+                                   str(args.get("when") or ""))
+                if not dados:
+                    return {"ok": False,
+                            "error": f"não consegui notícias sobre '{tema}' agora"}
+                scene.update({
+                    "component_type": "news",
+                    "content": text or dados.get("summary", ""),
+                    "items": dados["items"],
+                    "tags": [dados.get("source", "Google Notícias"), dados["topic"]],
+                })
+                resumo = dados.get("summary", "")
+
+            elif card_type == "weather":
+                from public_apis import fetch_weather
+                cidade = str(args.get("city") or "").strip()
+                if not cidade:
+                    return {"ok": False, "error": "informe a cidade (parâmetro city)"}
+                dados = fetch_weather(cidade, int(args.get("days") or 7))
+                if not dados:
+                    return {"ok": False,
+                            "error": f"não encontrei previsão para '{cidade}'"}
+                scene.update({
+                    "component_type": "weather",
+                    "content": text or dados.get("summary", ""),
+                    "days": dados["days"],
+                    "city": dados["city"],
+                    "tags": [dados["city"], dados.get("source", "Open-Meteo")],
+                })
+                resumo = dados.get("summary", "")
+
+            else:
+                # Resposta simples em texto com botao copiar
+                if not text:
+                    return {"ok": False, "error": "parâmetro 'text' vazio"}
+                scene.update({
+                    "component_type": "text",
+                    "content": text,
+                    "copy_text": text,
+                })
+                resumo = text
+
+            resultado = pe.update_presentation_scene(scene)
+            if not resultado.get("ok"):
+                return resultado
+            return {
+                "ok": True,
+                "card_type": card_type,
+                "title": title,
+                # resumo devolvido ao modelo para ele narrar em sincronia
+                "summary": resumo,
+                "message": f"Card '{title}' ({card_type}) exibido no HUD.",
+            }
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe

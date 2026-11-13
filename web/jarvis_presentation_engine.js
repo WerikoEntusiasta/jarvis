@@ -356,6 +356,132 @@
         color: #71717a;
         font-style: italic;
       }
+      /* ---- Card de TEXTO simples (resposta da IA + copiar) ---- */
+      .spatial-text-block {
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #e4e4e7;
+        white-space: pre-wrap;
+        word-break: break-word;
+        position: relative;
+        margin-top: 4px;
+      }
+      .spatial-copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        background: rgba(34, 211, 238, 0.10);
+        border: 1px solid rgba(34, 211, 238, 0.35);
+        color: #67e8f9;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.18s ease;
+      }
+      .spatial-copy-btn:hover { background: rgba(34, 211, 238, 0.25); color: #ffffff; }
+      /* ---- Card de NOTICIAS ---- */
+      .spatial-news-lead {
+        display: flex;
+        gap: 12px;
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+      .spatial-news-lead-img {
+        width: 42%;
+        min-height: 110px;
+        object-fit: cover;
+        background: #1c1c1f;
+        flex-shrink: 0;
+      }
+      .spatial-news-lead-body { padding: 11px 13px 11px 0; display: flex; flex-direction: column; gap: 6px; }
+      .spatial-news-title {
+        font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.35;
+        text-decoration: none;
+      }
+      a.spatial-news-title:hover { color: #67e8f9; }
+      .spatial-news-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        color: #71717a;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .spatial-news-sum {
+        font-size: 11.5px;
+        color: #a1a1aa;
+        line-height: 1.5;
+      }
+      .spatial-news-item {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        padding: 8px 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        text-decoration: none;
+      }
+      .spatial-news-item:last-child { border-bottom: none; }
+      a.spatial-news-item:hover .spatial-news-item-title { color: #67e8f9; }
+      .spatial-news-item-dot { color: #22d3ee; font-size: 11px; flex-shrink: 0; }
+      .spatial-news-item-title { font-size: 12px; color: #e4e4e7; line-height: 1.4; flex: 1; }
+      .spatial-news-item-src {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8.5px;
+        color: #52525b;
+        text-transform: uppercase;
+        flex-shrink: 0;
+      }
+      /* ---- Card de PREVISAO DO TEMPO ---- */
+      .spatial-weather-hero {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(59, 130, 246, 0.06));
+        border: 1px solid rgba(34, 211, 238, 0.20);
+        border-radius: 14px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+      }
+      .spatial-weather-hero-emoji { font-size: 40px; line-height: 1; }
+      .spatial-weather-hero-temps { display: flex; flex-direction: column; gap: 2px; }
+      .spatial-weather-hero-max { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 800; color: #ffffff; }
+      .spatial-weather-hero-min { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #71717a; }
+      .spatial-weather-hero-desc { font-size: 12.5px; color: #a1a1aa; margin-top: 3px; }
+      .spatial-weather-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+        gap: 7px;
+        margin-top: 4px;
+      }
+      .spatial-weather-day {
+        background: #121214;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        padding: 9px 5px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .spatial-weather-dow { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #71717a; text-transform: uppercase; letter-spacing: 1px; }
+      .spatial-weather-icon { font-size: 19px; line-height: 1.2; }
+      .spatial-weather-maxmin { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: #e4e4e7; }
+      .spatial-weather-maxmin b { color: #ffffff; font-weight: 700; }
+      .spatial-weather-rain { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #38bdf8; }
     `;
     document.head.appendChild(tag);
   }
@@ -727,6 +853,84 @@
     };
   }
 
+  // BUILDER: TEXTO simples - resposta pura da IA com botao copiar
+  function buildTextCard(p, cRaw) {
+    const texto = String(
+      p.copy_text || p.answer || p.text ||
+      (typeof cRaw === 'string' ? cRaw : (cRaw && (cRaw.text || cRaw.answer)) || p.content || '')
+    ).trim();
+    if (!texto) return null;
+    const cid = 'txt_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    return {
+      html: `
+        <div class="spatial-text-block" id="${cid}">
+          <button class="spatial-copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('${cid}').querySelector('code').innerText).then(()=>{this.textContent='COPIADO ✓';setTimeout(()=>this.textContent='COPIAR',1500)})">COPIAR</button>
+          <code style="font-family:'JetBrains Mono',monospace;font-size:12.5px;white-space:pre-wrap;color:inherit;background:none;">${esc(texto)}</code>
+        </div>`,
+      mount() { return null; }
+    };
+  }
+
+  // BUILDER: NOTICIAS - manchete com imagem + lista clicavel
+  function buildNewsCard(p, cRaw) {
+    const isObj = cRaw && typeof cRaw === 'object';
+    const items = (Array.isArray(p.items) && p.items.length) ? p.items
+      : (isObj && Array.isArray(cRaw.items) && cRaw.items.length) ? cRaw.items : [];
+    if (!items.length) return null;
+
+    const lead = items[0];
+    const rest = items.slice(1, 7);
+    const leadHtml = `
+      <div class="spatial-news-lead">
+        ${lead.image ? `<img class="spatial-news-lead-img" src="${esc(lead.image)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+        <div class="spatial-news-lead-body">
+          <a class="spatial-news-title" href="${esc(lead.link || '#')}" target="_blank" rel="noopener">${esc(lead.title || '')}</a>
+          <span class="spatial-news-meta">${esc(lead.source || 'Notícias')}${lead.published ? ' · ' + esc(String(lead.published).slice(0, 16)) : ''}</span>
+          ${lead.summary ? `<span class="spatial-news-sum">${esc(lead.summary)}</span>` : ''}
+        </div>
+      </div>`;
+    const restHtml = rest.filter(i => i && i.title).map(i => `
+      <a class="spatial-news-item" href="${esc(i.link || '#')}" target="_blank" rel="noopener">
+        <span class="spatial-news-item-dot">◆</span>
+        <span class="spatial-news-item-title">${esc(i.title)}</span>
+        <span class="spatial-news-item-src">${esc(i.source || '')}</span>
+      </a>`).join('');
+    return {
+      html: `${leadHtml}${restHtml ? `<div class="spatial-news-list">${restHtml}</div>` : ''}`,
+      mount() { return null; }
+    };
+  }
+
+  // BUILDER: PREVISAO DO TEMPO - hoje em destaque + faixa de 7 dias
+  function buildWeatherCard(p, cRaw) {
+    const isObj = cRaw && typeof cRaw === 'object';
+    const days = (Array.isArray(p.days) && p.days.length) ? p.days
+      : (isObj && Array.isArray(cRaw.days) && cRaw.days.length) ? cRaw.days : [];
+    if (!days.length) return null;
+    const today = days[0];
+    const fmt = v => (v == null || v === '') ? '--' : Math.round(Number(v));
+    const hero = `
+      <div class="spatial-weather-hero">
+        <span class="spatial-weather-hero-emoji">${esc(today.emoji || '🌡️')}</span>
+        <div class="spatial-weather-hero-temps">
+          <span class="spatial-weather-hero-max">${fmt(today.temp_max)}°</span>
+          <span class="spatial-weather-hero-min">mín ${fmt(today.temp_min)}°</span>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#fff;">${esc(p.city || p.title || 'Hoje')}</div>
+          <div class="spatial-weather-hero-desc">${esc(today.description || '')}${today.rain_prob != null ? ` · ${fmt(today.rain_prob)}% chuva` : ''}</div>
+        </div>
+      </div>`;
+    const strip = `<div class="spatial-weather-strip">${days.slice(0, 7).map(d => `
+      <div class="spatial-weather-day">
+        <span class="spatial-weather-dow">${esc(d.weekday || (d.date || '').slice(8, 10))}</span>
+        <span class="spatial-weather-icon">${esc(d.emoji || '🌡️')}</span>
+        <span class="spatial-weather-maxmin"><b>${fmt(d.temp_max)}°</b> ${fmt(d.temp_min)}°</span>
+        ${d.rain_prob != null ? `<span class="spatial-weather-rain">💧${fmt(d.rain_prob)}%</span>` : ''}
+      </div>`).join('')}</div>`;
+    return { html: hero + strip, mount() { return null; } };
+  }
+
   function buildCardContent(type, p) {
     const cRaw = p.content;
     const isObj = cRaw && typeof cRaw === 'object';
@@ -791,6 +995,12 @@
     let visualBuilder = null;
     if (type === 'network' || type === 'graph' || type === 'cytoscape') {
       visualBuilder = buildCytoscapeNetwork(p, 220);
+    } else if (type === 'text' || type === 'answer' || type === 'response') {
+      visualBuilder = buildTextCard(p, cRaw);
+    } else if (type === 'news' || type === 'noticia') {
+      visualBuilder = buildNewsCard(p, cRaw);
+    } else if (type === 'weather' || type === 'tempo' || type === 'clima') {
+      visualBuilder = buildWeatherCard(p, cRaw);
     } else if (type === 'chart' || type === 'echarts' || p.options || p.option || (p.data && Object.keys(p.data).length)) {
       const rawOpts = p.options || p.option || (p.data && (p.data.options || p.data.option)) || p.data
         || (isObj && (cRaw.chart_type || cRaw.series || cRaw.xAxis) ? cRaw : null);

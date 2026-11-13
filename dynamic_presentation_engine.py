@@ -69,7 +69,10 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
     valid_types = {
         "hologram_card", "video", "gallery", "chart", "table", 
         "map", "diagram", "comparison", "metric_grid", "conclusion",
-        "smart_canvas", "canvas", "network", "graph"
+        "smart_canvas", "canvas", "network", "graph",
+        # Cards universais: resposta em texto, noticias e previsao do tempo
+        "text", "answer", "response", "news", "noticia",
+        "weather", "tempo", "clima",
     }
 
     for idx, sc in enumerate(scenes):
@@ -118,7 +121,9 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
         rows = _pick("rows", default=[]) or []
         items = _pick("items", default=[]) or []
         markers = _pick("markers", default=[]) or []
+        days = _pick("days", "forecast", default=[]) or []
         conclusion = str(_pick("conclusion", default="") or "")
+        copy_text = str(_pick("copy_text", "answer", default="") or "")
         summary_points = _pick("summary_points", default=[]) or []
         actions = _pick("actions", default=[]) or []
         media = _pick("media", default={}) or {}
@@ -144,6 +149,8 @@ def validate_presentation_script(script: Dict[str, Any]) -> Dict[str, Any]:
             "headers": headers,
             "rows": rows,
             "items": items,
+            "days": days,
+            "copy_text": copy_text,
             "item_a": item_a,
             "item_b": item_b,
             "markers": markers,

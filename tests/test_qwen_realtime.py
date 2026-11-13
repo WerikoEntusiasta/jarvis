@@ -645,5 +645,76 @@ class TestValidadorApresentacao(unittest.TestCase):
         self.assertIn("chart_type", scenes_desc)
 
 
+class TestShowCardUniversal(unittest.TestCase):
+    """Card universal: toda resposta do JARVIS vira card visual no HUD."""
+
+    def test_show_card_presente_no_catalogo(self):
+        import mimo_tools
+        nomes = [t["function"]["name"] for t in mimo_tools.TOOLS]
+        self.assertIn("show_card", nomes)
+        alvo = [t for t in mimo_tools.TOOLS
+                if t["function"]["name"] == "show_card"][0]
+        enum = alvo["function"]["parameters"]["properties"]["type"]["enum"]
+        self.assertEqual(sorted(enum), ["news", "text", "weather"])
+
+    def test_show_card_text_retorna_summary(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {
+            "type": "text",
+            "title": "Resposta",
+            "text": "A Selic esta em 12,75% ao ano.",
+        })
+        self.assertTrue(r.get("ok"), r)
+        self.assertEqual(r["card_type"], "text")
+        self.assertIn("Selic", r["summary"])
+
+    def test_show_card_text_sem_texto_erro(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {"type": "text", "title": "Vazio"})
+        self.assertFalse(r.get("ok"))
+        self.assertIn("text", r.get("error", ""))
+
+    def test_show_card_weather_real(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {
+            "type": "weather", "title": "Tempo", "city": "São Paulo", "days": 7,
+        })
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("máxima", r["summary"])
+
+    def test_show_card_weather_sem_cidade_erro(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {"type": "weather", "title": "Tempo"})
+        self.assertFalse(r.get("ok"))
+        self.assertIn("city", r.get("error", ""))
+
+    def test_show_card_news_real(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("show_card", {
+            "type": "news", "title": "Noticias",
+            "query": "tecnologia", "limit": 4,
+        })
+        self.assertTrue(r.get("ok"), r)
+        self.assertTrue(r["summary"].startswith("Manchetes"))
+
+    def test_cena_text_passa_no_validador(self):
+        # a cena gerada precisa sobreviver ao validador do HUD
+        from dynamic_presentation_engine import validate_presentation_script
+        v = validate_presentation_script({"title": "t", "scenes": [{
+            "title": "Resposta", "component_type": "text",
+            "content": "texto da resposta", "copy_text": "texto da resposta",
+        }]})
+        s = v["scenes"][0]
+        self.assertEqual(s["component_type"], "text")
+        self.assertEqual(s["copy_text"], "texto da resposta")
+
+    def test_tipos_novos_validos_no_validador(self):
+        from dynamic_presentation_engine import validate_presentation_script
+        for ct in ("text", "news", "weather"):
+            v = validate_presentation_script({"title": "t", "scenes": [
+                {"title": "x", "component_type": ct, "content": "c"}]})
+            self.assertEqual(v["scenes"][0]["component_type"], ct, ct)
+
+
 if __name__ == "__main__":
     unittest.main()
