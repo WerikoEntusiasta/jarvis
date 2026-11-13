@@ -3904,6 +3904,68 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "web_search",
+                "description": (
+                    "Busca web PRIVADA e rapida (SearXNG self-hosted - Google/Bing/DuckDuckGo agregados, "
+                    "sem chave, sem rastreio). Use para fatos atuais, noticias, precos, horarios, "
+                    "qualquer informacao que exija a internet AGORA. Retorna titulos, links e resumos. "
+                    "Para ler o conteudo completo de uma pagina use read_webpage; para busca + leitura "
+                    "numa unica chamada use web_research."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "A busca em portugues (ex: 'cotacao do dolar hoje')."},
+                        "limit": {"type": "integer", "description": "Nº de resultados (padrão 8, máx 20)."}
+                    },
+                    "required": ["query"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_webpage",
+                "description": (
+                    "Le uma pagina web e retorna o conteudo como Markdown limpo (Crawl4ai self-hosted, "
+                    "extrator oficial - funciona ate em paginas com JavaScript). Use quando precisar do "
+                    "texto REAL de um artigo, noticia ou documento. Pode receber a URL vinda de um "
+                    "web_search."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL completa da pagina (http/https)."},
+                        "max_chars": {"type": "integer", "description": "Maximo de caracteres (padrão 12000, até 50000)."},
+                        "selector": {"type": "string", "description": "CSS selector opcional p/ extrair só uma regiao (ex: 'article')."}
+                    },
+                    "required": ["url"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_research",
+                "description": (
+                    "PESQUISA PROFUNDA em uma unica chamada: busca no SearXNG e le as 2-3 melhores "
+                    "paginas com Crawl4ai, devolvendo um dossie pronto. Use quando a pergunta exige "
+                    "resposta fundamentada (noticia complexa, comparacoes, como-fazer, historia "
+                    "detalhada). Economiza turnos:1 chamada = busca + leitura."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "A pergunta/tema a pesquisar em portugues."},
+                        "depth": {"type": "integer", "description": "Nº de paginas a ler (padrão 3, max 5)."}
+                    },
+                    "required": ["query"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espaços visuais contínuos onde múltiplos componentes independentes coexistem e se transformam em tempo real (gráficos interativos Apache ECharts, diagramas estruturados, painéis de inteligência, métricas e visualizações 3D sem depender de slides ou caixas estáticas).",
                 "parameters": {
@@ -6327,6 +6389,18 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                 "summary": resumo,
                 "message": f"Card '{title}' ({card_type}) exibido no HUD.",
             }
+
+        if name in ("web_search", "read_webpage", "web_research"):
+            # Web intel via infra self-hosted no ZimaOS (SearXNG + Crawl4ai)
+            from web_intel import web_search as _ws, read_url as _ru, web_research as _wr
+
+            if name == "web_search":
+                return _ws(str(args.get("query", "")), int(args.get("limit") or 8))
+            if name == "read_webpage":
+                return _ru(str(args.get("url", "")),
+                           int(args.get("max_chars") or 12000),
+                           str(args.get("selector") or ""))
+            return _wr(str(args.get("query", "")), int(args.get("depth") or 3))
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe

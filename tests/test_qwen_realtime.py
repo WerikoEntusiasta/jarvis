@@ -716,5 +716,78 @@ class TestShowCardUniversal(unittest.TestCase):
             self.assertEqual(v["scenes"][0]["component_type"], ct, ct)
 
 
+class TestWebIntel(unittest.TestCase):
+    """Web intel via infra self-hosted no ZimaOS (SearXNG + Crawl4ai)."""
+
+    def test_tools_web_no_catalogo(self):
+        import mimo_tools
+        nomes = [t["function"]["name"] for t in mimo_tools.TOOLS]
+        for esperado in ("web_search", "read_webpage", "web_research"):
+            self.assertIn(esperado, nomes)
+
+    def test_tools_web_chegam_ao_qwen(self):
+        from qwen_realtime import carregar_tools_conversa, _TOOLS_DELEGADAS
+        nomes = [t["function"]["name"] for t in carregar_tools_conversa()]
+        for esperado in ("web_search", "read_webpage", "web_research"):
+            self.assertIn(esperado, nomes)
+            self.assertNotIn(esperado, _TOOLS_DELEGADAS)
+
+    def test_web_search_real(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("web_search", {"query": "python language", "limit": 3})
+        self.assertTrue(r.get("ok"), r)
+        self.assertGreaterEqual(len(r["results"]), 1)
+        self.assertIn("summary", r)
+        self.assertIn("url", r["results"][0])
+
+    def test_web_search_query_vazia_erro(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("web_search", {"query": ""})
+        self.assertFalse(r.get("ok"))
+
+    def test_read_webpage_real(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("read_webpage", {
+            "url": "https://example.com", "max_chars": 2000})
+        self.assertTrue(r.get("ok"), r)
+        self.assertGreater(r["length"], 100)
+        self.assertIn("markdown", r)
+
+    def test_read_webpage_sem_esquema_normaliza(self):
+        # URL sem https:// deve ser normalizada
+        from web_intel import read_url
+        r = read_url("example.com", limite=1000)
+        self.assertTrue(r.get("ok"), r)
+        self.assertTrue(r["url"].startswith("https://"))
+
+    def test_web_research_retorna_dossie(self):
+        from mimo_tools import execute_tool
+        r = execute_tool("web_research", {"query": "historia do brasil", "depth": 2})
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("results", r)
+        self.assertIn("pages", r)
+        self.assertGreaterEqual(r["pages_read"], 1)
+
+    def test_content_type_json_no_post(self):
+        # Regressao: sem Content-Type o urllib envia x-www-form-urlencoded
+        # e o Crawl4ai responde 422
+        from web_intel import _http
+        import urllib.request
+        capturado = {}
+        orig = urllib.request.urlopen
+
+        def fake(req, *a, **k):
+            capturado["ct"] = req.get_header("Content-type")
+            capturado["data"] = req.data
+            raise KeyboardInterrupt  # so captura, nao envia
+        urllib.request.urlopen = fake
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                _http("http://x/crawl", payload={"urls": ["https://x"]})
+        finally:
+            urllib.request.urlopen = orig
+        self.assertEqual(capturado["ct"], "application/json")
+
+
 if __name__ == "__main__":
     unittest.main()
