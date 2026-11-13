@@ -1334,6 +1334,42 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, status=500)
             return
 
+        if path == "/api/agents/dynamic":
+            # Config dinamica + proposta de auto-edicao pendente de um agente.
+            try:
+                query_params = parse_qs(parsed.query)
+                agent_id = (query_params.get("agent", ["jarvis"])[0] or "jarvis").strip()
+                import agent_dynamic
+                self._send_json({
+                    "ok": True,
+                    "agent": agent_id,
+                    "status": agent_dynamic.handle_tool({"action": "status", "agent_id": agent_id}),
+                    "pending_all": agent_dynamic.pending_all(),
+                })
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
+        if path == "/api/agents/dynamic/approve":
+            # Aprovacao/recusa de proposta de auto-edicao (voz, HUD ou script).
+            try:
+                data = json.loads(body.decode("utf-8", errors="ignore") or "{}") if body else {}
+                approval_id = str(data.get("approval_id", "")).strip()
+                decision = str(data.get("decision", "")).lower()
+                if not approval_id:
+                    self._send_json({"ok": False, "error": "approval_id obrigatorio"}, status=400)
+                    return
+                import agent_dynamic
+                if decision == "reject":
+                    res = agent_dynamic.reject_self_edit(
+                        approval_id, str(data.get("motivo", "")))
+                else:
+                    res = agent_dynamic.approve_self_edit(approval_id)
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
         if path == "/api/task/event":
             try:
                 payload = json.loads(body.decode("utf-8", errors="ignore") or "{}")

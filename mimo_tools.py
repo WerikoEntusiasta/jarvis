@@ -4102,6 +4102,46 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "agent_self_edit",
+                "description": (
+                    "Auto-edicao do SEU proprio agente com aprovacao. Quando o "
+                    "Senhor Werik pedir para voce mudar comportamento, tom, "
+                    "tratamento (ex: 'me chame de chefe'), prioridades ou "
+                    "'fazer diferente daqui pra frente': action='propose' com "
+                    "file (SOUL.md/USER.md/IDENTITY.md/MEMORY.md/config.json), "
+                    "content (arquivo inteiro novo) e reason. A proposta NUNCA "
+                    "aplica direto: devolve approval_required - APRESENTE a "
+                    "mudanca e so re-chame com action='approve' e o approval_id "
+                    "EXATO apos o Senhor aprovar (action='reject' descarta). "
+                    "status/pending mostram config dinamica e propostas abertas. "
+                    "Mudancas valem na proxima conversa (config e lido ao vivo)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["propose", "approve", "reject", "pending", "status"],
+                            "description": "propose=registrar proposta; approve=aplicar com approval_id; reject=descartar; pending/status=consulta."
+                        },
+                        "file": {
+                            "type": "string",
+                            "enum": ["SOUL.md", "IDENTITY.md", "USER.md", "MEMORY.md", "config.json"],
+                            "description": "Arquivo proprio a editar (propose)."
+                        },
+                        "content": {"type": "string", "description": "Conteudo COMPLETO novo do arquivo (propose) - nunca diff parcial."},
+                        "reason": {"type": "string", "description": "Por que a mudanca e necessaria (pedido do Senhor)."},
+                        "approval_id": {"type": "string", "description": "ID da proposta para approve/reject - vinculado a proposta EXATA."},
+                        "motivo": {"type": "string", "description": "reject: motivo da recusa."},
+                        "agent_id": {"type": "string", "description": "ID do agente (padrao 'jarvis'). Squad passa o proprio id."}
+                    },
+                    "required": ["action"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espacos visuais onde multiplos componentes coexistem, e MANIPULAR os cards no palco: mover (x,y em %), redimensionar, ampliar/zoom (expand), minimizar, agrupar/separar, ordenar sobreposicao (z-index), destacar, salvar/restaurar layouts e limpar. Cards unicos criados na hora, animados via transicoes CSS.",
                 "parameters": {
@@ -6595,6 +6635,12 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             # Guardian: monitoramento/diagnostico/docker/seguranca do ZimaOS
             import zima_guardian as guardian
             return guardian.handle_tool(args)
+
+        if name == "agent_self_edit":
+            # Config dinamica + auto-edicao dos agentes (SOUL/USER/config.json)
+            # com aprovacao, backup e auditoria (agent_dynamic).
+            import agent_dynamic
+            return agent_dynamic.handle_tool(args)
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe

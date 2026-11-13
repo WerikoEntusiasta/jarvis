@@ -252,6 +252,17 @@ def chat_with_agent(agent_id: str, message: str, history: Optional[List[Dict[str
     except Exception as ex_ctx:
         logger.warning("[SQUAD] Falha injetando contexto em tempo real: %s", ex_ctx)
 
+    # Config DINAMICA (lida AO VIVO a cada conversa): API de IA pesada, modelo,
+    # sistema de voz, ferramentas e ordens permanentes do Senhor valem na hora.
+    dyn_cfg: Dict[str, Any] = {}
+    dyn_summary = ""
+    try:
+        import agent_dynamic
+        dyn_cfg = agent_dynamic.effective_config(agent_id)
+        dyn_summary = agent_dynamic.config_summary(agent_id)
+    except Exception as ex_dyn:
+        logger.warning("[SQUAD] Config dinamica indisponivel: %s", ex_dyn)
+
     # 1. Monta o System Prompt preservando SOUL.md e IDENTITY.md
     system_prompt = f"""Você é {profile['name']} ({profile['emoji']}), especialista de elite do J.A.R.V.I.S. Squad e da Amplifica Marketing.
 Seu líder e comandante é o Senhor Werik.
@@ -261,7 +272,7 @@ Seu líder e comandante é o Senhor Werik.
 
 --- SUA IDENTIDADE ---
 {profile.get('identity') or profile.get('name')}
-
+{dyn_summary}
 --- REGRAS DE CONVIVÊNCIA COM O USUÁRIO ---
 - Dirija-se sempre ao usuário com máximo respeito e prontidão como "Senhor Werik".
 - Seja altamente resolutivo, técnico, direto, ágil e leal.
@@ -277,15 +288,27 @@ Seu líder e comandante é o Senhor Werik.
 
     messages.append({"role": "user", "content": message})
 
-    # 2. Roteamento Inteligente de Complexidade MiMo
+    # 2. Roteamento Inteligente de Complexidade MiMo (+ override dinamico)
     routing = select_mimo_model(message, history, agent_id)
     selected_model = routing["model"]
+    try:
+        import agent_dynamic as _adyn
+        selected_model = _adyn.override_model(
+            dyn_cfg, MIMO_MODEL_FLASH, MIMO_MODEL_PRO, routing["tier"])
+    except Exception:
+        pass
     model_tier = routing["tier"]
     max_tokens = routing["max_tokens"]
     temperature = routing["temperature"]
 
-    logger.info("[SQUAD-ROUTER] Agente: %s | Modelo: %s (%s) | Motivo: %s",
-                agent_id, selected_model, model_tier, routing["reason"])
+    # API de IA dinamica: config.json pode apontar para outra API (base/key)
+    # para tarefas pesadas - novas APIs sao encontradas e usadas sem codigo novo.
+    _api_cfg = dyn_cfg.get("api") if isinstance(dyn_cfg.get("api"), dict) else {}
+    api_base = str(_api_cfg.get("base") or MIMO_API_BASE).rstrip("/")
+    api_key = str(_api_cfg.get("key") or MIMO_API_KEY)
+
+    logger.info("[SQUAD-ROUTER] Agente: %s | Modelo: %s (%s) | API: %s | Motivo: %s",
+                agent_id, selected_model, model_tier, api_base, routing["reason"])
 
     reply_text = ""
     provider_used = f"Xiaomi MiMo ({selected_model})"
@@ -300,11 +323,11 @@ Seu líder e comandante é o Senhor Werik.
             "max_tokens": max_tokens
         }
         req = urllib.request.Request(
-            f"{MIMO_API_BASE}/chat/completions",
+            f"{api_base}/chat/completions",
             data=json.dumps(mimo_payload).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {MIMO_API_KEY}"
+                "Authorization": f"Bearer {api_key}"
             }
         )
         with urllib.request.urlopen(req, timeout=45) as resp:
