@@ -898,6 +898,74 @@ class TestWhatsApp(unittest.TestCase):
             internos, [],
             f"imports internos de urllib.parse quebram o handler: {internos}")
 
+    def test_qr_handler_le_query_de_parsed_query(self):
+        # REGRESSAO: path no do_GET e so parsed.path (SEM query string).
+        # Um handler que busca '?' em path nunca ve o param e devolve o
+        # QR da session errada (jarvis em vez da pedida).
+        from pathlib import Path
+        src = Path(r"C:\JARVIS\jarvis-windows\core\local_server.py").read_text(
+            encoding="utf-8", errors="replace")
+        # o handler de qr precisa ler parsed.query
+        self.assertIn("qs = parse_qs(parsed.query)", src)
+        # e NAO deve depender de '?' em path
+        self.assertNotIn('"?" in path', src)
+        self.assertNotIn("'?' in path", src)
+
+    def test_endpoints_whatsapp_reais_via_http(self):
+        # sub-executa o servidor local em porta alternativa e valida os
+        # endpoints ponta a ponta (inclusive query string de session)
+        import os
+        import sys
+        import time
+        import http.client
+        import json as _json
+
+        porta = 8099
+        cwd = os.getcwd()
+        env_port = os.environ.get("LOCAL_SERVER_PORT")
+        try:
+            os.environ["LOCAL_SERVER_PORT"] = str(porta)
+            sys.path.insert(0, r"C:\JARVIS\jarvis-windows")
+            from core import local_server
+            local_server.start_local_server(port=porta)
+            time.sleep(1.0)
+
+            def _get(path, timeout=25):
+                conn = http.client.HTTPConnection("127.0.0.1", porta,
+                                                  timeout=timeout)
+                conn.request("GET", path)
+                resp = conn.getresponse()
+                body = resp.read()
+                conn.close()
+                return resp.status, body
+
+            st, body = _get("/api/status")
+            self.assertEqual(st, 200)
+
+            st, body = _get("/api/whatsapp/status")
+            self.assertEqual(st, 200)
+            d = _json.loads(body)
+            self.assertTrue(d.get("ok"))
+
+            # query string: a session pedida deve voltar identificada
+            st, body = _get("/api/whatsapp/qr?session=Businees")
+            self.assertEqual(st, 200)
+            d = _json.loads(body)
+            self.assertEqual(d.get("session"), "Businees",
+                             "query session ignorada pelo handler")
+            # Businees e WORKING conhecido -> connected True (sem QR)
+            self.assertTrue(d.get("connected"))
+
+            st, body = _get("/api/whatsapp/unread?limit=3")
+            self.assertEqual(st, 200)
+            self.assertTrue(_json.loads(body).get("ok"))
+        finally:
+            os.chdir(cwd)
+            if env_port is None:
+                os.environ.pop("LOCAL_SERVER_PORT", None)
+            else:
+                os.environ["LOCAL_SERVER_PORT"] = env_port
+
 
 if __name__ == "__main__":
     unittest.main()

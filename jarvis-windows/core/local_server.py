@@ -942,10 +942,11 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
         if path.startswith("/api/whatsapp/qr"):
             try:
                 import waha_client as _wa
-                sess = "jarvis"
-                if "?" in path:
-                    qs = parse_qs(urlparse(path).query)
-                    sess = (qs.get("session") or ["jarvis"])[0]
+                # ATENCAO: 'path' aqui e so parsed.path (sem query string) -
+                # a query vem em parsed.query. Sem isto sess caia sempre
+                # no default e devolvia o QR da session errada.
+                qs = parse_qs(parsed.query)
+                sess = (qs.get("session") or ["jarvis"])[0]
                 self._send_json(_wa.get_qr(sess))
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, status=500)
@@ -954,13 +955,11 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
         if path.startswith("/api/whatsapp/unread"):
             try:
                 import waha_client as _wa
-                limite = 10
-                if "?" in path:
-                    qs = parse_qs(urlparse(path).query)
-                    try:
-                        limite = int((qs.get("limit") or ["10"])[0])
-                    except ValueError:
-                        limite = 10
+                qs = parse_qs(parsed.query)
+                try:
+                    limite = int((qs.get("limit") or ["10"])[0])
+                except ValueError:
+                    limite = 10
                 self._send_json(_wa.get_unread("", limite))
             except Exception as e:
                 self._send_json({"ok": False, "error": str(e)}, status=500)
