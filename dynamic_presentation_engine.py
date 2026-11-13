@@ -7,9 +7,11 @@ em roteiros estruturados de cenas dinâmicas executadas no HUD em tempo real.
 
 import os
 import sys
+import re
 import time
 import json
 import logging
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger("DynamicPresentationEngine")
@@ -462,6 +464,30 @@ def apply_spatial_operation(component_id: str, operation: str, params: Optional[
             if component_id not in _ACTIVE_SPATIAL_WORKSPACE["groups"][group]:
                 _ACTIVE_SPATIAL_WORKSPACE["groups"][group].append(component_id)
         return update_spatial_component(component_id, {"group": group}, True)
+    if operation == "z_index":
+        # Ordem de sobreposicao: front/back calculados sobre todos os cards,
+        # up/down relativos ao card alvo.
+        mode = str(params.get("mode") or params.get("z_mode") or "front").lower()
+        if mode not in {"front", "back", "up", "down"}:
+            return {"ok": False,
+                    "error": f"z_index: modo invalido '{mode}' (use front/back/up/down)"}
+        todos = [int((c.get("position") or {}).get("zIndex") or 0)
+                 for c in _ACTIVE_SPATIAL_WORKSPACE["components"].values()]
+        atual = int((component.get("position") or {}).get("zIndex") or 0)
+        if mode == "front":
+            novo = min((max(todos) if todos else 0) + 1, 99)
+        elif mode == "back":
+            novo = max((min(todos) if todos else 0) - 1, -20)
+        elif mode == "up":
+            novo = min(atual + 1, 99)
+        else:
+            novo = max(atual - 1, -20)
+        if novo == atual:
+            return {"ok": True, "component_id": component_id,
+                    "z_index": atual,
+                    "message": f"Card ja esta em z-index {atual} (limite)."}
+        return update_spatial_component(component_id,
+                                        {"position": {"zIndex": novo}}, True)
     if operation == "connect":
         target = str(params.get("target") or params.get("target_id") or "").strip()
         if not target or target not in _ACTIVE_SPATIAL_WORKSPACE["components"]:
@@ -497,6 +523,114 @@ def clear_spatial_workspace() -> Dict[str, Any]:
     set_cards_dirty(False)
     _broadcast_to_hud("spatial_workspace_cleared", {})
     return {"ok": True, "message": "Spatial Workspace limpo com sucesso."}
+
+
+# --------------------------------------------------------------------------- #
+# Layouts: salvar/restaurar a organizacao dos cards (arquivo JSON)             #
+# --------------------------------------------------------------------------- #
+
+LAYOUTS_DIR = Path(os.environ.get("JARVIS_HOME") or r"C:\JARVIS") / "spatial_layouts"
+
+
+def _slug_layout(name: Any) -> str:
+    slug = re.sub(r"[^\w\-]+", "_", str(name or "").strip(), flags=re.UNICODE)
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    return slug[:48] or "padrao"
+
+
+def list_spatial_layouts() -> List[str]:
+    """Lista os layouts salvos (sem extensao)."""
+    try:
+        if not LAYOUTS_DIR.is_dir():
+            return []
+        return sorted(p.stem for p in LAYOUTS_DIR.glob("*.json"))
+    except OSError:
+        return []
+
+
+def save_spatial_layout(layout_name: Any) -> Dict[str, Any]:
+    """Salva o layout ATUAL do palco (posicoes, grupos, props) em JSON.
+
+    A fonte da verdade e o registry do workspace - todos os cards vieram
+    de tools, entao o registry tem a geometria completa.
+    """
+    global _ACTIVE_SPATIAL_WORKSPACE
+    ws = _ACTIVE_SPATIAL_WORKSPACE
+    if not ws or not ws.get("components"):
+        return {"ok": False, "error": "Nenhum card no palco para salvar."}
+
+    slug = _slug_layout(layout_name)
+    payload = {
+        "name": slug,
+        "title": ws.get("title", ""),
+        "layout": ws.get("layout", "freeform"),
+        "components": ws["components"],
+        "groups": ws.get("groups", {}),
+        "connections": ws.get("connections", []),
+        "saved_at": time.time(),
+    }
+    try:
+        LAYOUTS_DIR.mkdir(parents=True, exist_ok=True)
+        destino = LAYOUTS_DIR / f"{slug}.json"
+        destino.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
+                           encoding="utf-8")
+    except OSError as e:
+        return {"ok": False, "error": f"falha ao gravar layout: {e}"}
+
+    total = len(payload["components"])
+    logger.info(f"[SpatialEngine] Layout '{slug}' salvo ({total} cards).")
+    return {"ok": True, "layout": slug, "total_components": total,
+            "path": str(destino),
+            "message": f"Layout '{slug}' salvo com {total} card(s)."}
+
+
+def load_spatial_layout(layout_name: Any) -> Dict[str, Any]:
+    """Restaura um layout salvo: limpa o palco e reemite cada card."""
+    global _ACTIVE_SPATIAL_WORKSPACE
+    slug = _slug_layout(layout_name)
+    arquivo = LAYOUTS_DIR / f"{slug}.json"
+    if not arquivo.is_file():
+        return {"ok": False,
+                "error": f"Layout '{slug}' nao encontrado.",
+                "available": list_spatial_layouts()}
+
+    try:
+        payload = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        return {"ok": False, "error": f"falha ao ler layout: {e}"}
+
+    components = payload.get("components") or {}
+    if not isinstance(components, dict) or not components:
+        return {"ok": False, "error": "Layout sem componentes."}
+
+    # Limpa o palco atual e monta o workspace restaurado
+    _broadcast_to_hud("spatial_workspace_cleared", {})
+    _ACTIVE_SPATIAL_WORKSPACE = {
+        "id": f"workspace_{int(time.time())}",
+        "title": str(payload.get("title") or slug),
+        "subtitle": "",
+        "layout": str(payload.get("layout") or "freeform"),
+        "mode": "spatial",
+        "options": {},
+        "components": components,
+        "connections": payload.get("connections") or [],
+        "groups": payload.get("groups") or {},
+        "created_at": time.time(),
+        "updated_at": time.time(),
+        "layout_name": slug,
+    }
+    set_cards_dirty(True)
+
+    # Reemite cada card no MESMO formato do add_spatial_component
+    # (frontend: addSpatialComponent aceita {id, type, position, props, state, group})
+    for cid, comp in components.items():
+        if isinstance(comp, dict):
+            _broadcast_to_hud("spatial_component_added", comp)
+
+    total = len(components)
+    logger.info(f"[SpatialEngine] Layout '{slug}' restaurado ({total} cards).")
+    return {"ok": True, "layout": slug, "total_components": total,
+            "message": f"Layout '{slug}' restaurado com {total} card(s)."}
 
 def compose_spatial_scene(title: str, subtitle: str = "", components: List[Dict[str, Any]] = None, layout: str = "freeform") -> Dict[str, Any]:
     """

@@ -21,7 +21,8 @@
     seq: 0,
     autoTimer: null,
     paused: false,
-    currentScene: null
+    currentScene: null,
+    groups: {}  // gid -> [component_id] (sincronia de movimento em grupo)
   };
 
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({
@@ -68,6 +69,54 @@
         filter: blur(6px);
         pointer-events: none;
       }
+      /* ---- Estados de manipulacao: zoom/expand, minimizar, foco ---- */
+      .spatial-card-wrapper.spatial-state-expanded { z-index: 20; }
+      .spatial-card-wrapper.spatial-state-expanded .spatial-card-surface {
+        border-color: rgba(255, 255, 255, 0.55);
+        box-shadow: 0 35px 90px rgba(0, 0, 0, 0.95), 0 0 45px rgba(34, 211, 238, 0.18);
+      }
+      .spatial-card-wrapper.spatial-state-focused .spatial-card-surface {
+        border-color: rgba(34, 211, 238, 0.65);
+        box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.40), 0 0 30px rgba(34, 211, 238, 0.22);
+      }
+      .spatial-card-wrapper.spatial-state-minimized {
+        height: auto !important;
+        max-height: 56px !important;
+      }
+      .spatial-card-wrapper.spatial-state-minimized .spatial-card-body {
+        display: none;
+      }
+      .spatial-card-wrapper.spatial-state-minimized .spatial-card-header {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      .spatial-card-wrapper.spatial-state-minimized .spatial-card-surface {
+        padding: 10px 16px;
+      }
+      /* ---- Grupo: borda roxa + rotulo do nome do grupo ---- */
+      .spatial-card-wrapper.spatial-grouped .spatial-card-surface {
+        border-color: rgba(167, 139, 250, 0.55);
+        box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.30), 0 0 26px rgba(167, 139, 250, 0.15);
+      }
+      .spatial-card-wrapper.spatial-grouped::after {
+        content: attr(data-group);
+        position: absolute;
+        top: -9px;
+        left: 14px;
+        background: #7c3aed;
+        color: #ffffff;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 1px 8px;
+        border-radius: 999px;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .spatial-card-wrapper.spatial-grouped { z-index: 5; }
       .spatial-card-wrapper.highlighted .spatial-card-surface {
         border-color: rgba(255, 255, 255, 0.65);
         box-shadow: 0 0 50px rgba(255, 255, 255, 0.28), 0 25px 60px rgba(0, 0, 0, 0.95);
@@ -663,7 +712,12 @@
       const top = pos.top !== undefined ? pos.top : (typeof pos.y === 'string' ? pos.y : `${pos.y}%`);
       const width = pos.width !== undefined ? (typeof pos.width === 'string' ? pos.width : `${pos.width}%`) : '38%';
       const height = pos.height !== undefined ? (typeof pos.height === 'string' ? pos.height : `${pos.height}%`) : 'auto';
-      return { left, top, width, height, maxHeight: pos.maxHeight || '580px' };
+      const geom = { left, top, width, height, maxHeight: pos.maxHeight || '580px' };
+      // z-index (sobreposicao) - quando o backend envia, respeitamos
+      if (pos.zIndex !== undefined && pos.zIndex !== null && pos.zIndex !== '') {
+        geom.zIndex = Number(pos.zIndex);
+      }
+      return geom;
     }
 
     // Slots orgânicos contornando o Arc Reactor central
@@ -686,6 +740,85 @@
       height: pos.height ? (typeof pos.height === 'string' ? pos.height : `${pos.height}%`) : slot.height,
       maxHeight: slot.maxHeight
     };
+  }
+
+  // ------------------------------------------------------------------------ #
+  // HELPERS DE MANIPULACAO: geometria, estado (zoom/minimizar), grupos       #
+  // ------------------------------------------------------------------------ #
+
+  // Aplica geometria completa ao DOM (inclui height/maxHeight que o update
+  // antigo ignorava - redimensionamento vertical nao funcionava).
+  function applyGeomTo(dom, geom) {
+    if (!dom || !geom) return;
+    dom.style.left = geom.left;
+    dom.style.top = geom.top;
+    if (geom.width) dom.style.width = geom.width;
+    if (geom.height && geom.height !== 'auto') dom.style.height = geom.height;
+    if (geom.maxHeight) dom.style.maxHeight = geom.maxHeight;
+    if (geom.zIndex !== undefined && geom.zIndex !== null && !isNaN(geom.zIndex)) {
+      dom.style.zIndex = geom.zIndex;
+    }
+  }
+
+  // Converte '59%' ou 59 para numero (%); null se nao conversivel
+  function pct(v) {
+    if (typeof v === 'number' && !isNaN(v)) return v;
+    if (typeof v === 'string') {
+      const n = parseFloat(v);
+      return isNaN(n) ? null : n;
+    }
+    return null;
+  }
+
+  // Estado visual: expanded (zoom/tela cheia), minimized, focused
+  function setStateClass(dom, st) {
+    ['spatial-state-expanded', 'spatial-state-minimized', 'spatial-state-focused']
+      .forEach(c => dom.classList.remove(c));
+    if (st && st !== 'visible' && st !== 'hidden') {
+      dom.classList.add('spatial-state-' + st);
+    }
+  }
+
+  // Grupo visual: borda roxa + rotulo com o nome do grupo
+  function setGroupClass(dom, gid) {
+    if (gid) {
+      dom.classList.add('spatial-grouped');
+      dom.dataset.group = String(gid);
+    } else {
+      dom.classList.remove('spatial-grouped');
+      delete dom.dataset.group;
+    }
+  }
+
+  function registerGroup(gid, id) {
+    // sai dos grupos anteriores
+    Object.keys(state.groups).forEach(g => {
+      const arr = state.groups[g];
+      const i = arr.indexOf(id);
+      if (i >= 0 && g !== String(gid)) arr.splice(i, 1);
+    });
+    if (!gid) return;
+    const key = String(gid);
+    if (!state.groups[key]) state.groups[key] = [];
+    if (!state.groups[key].includes(id)) state.groups[key].push(id);
+  }
+
+  // Ao mover UM card do grupo, os outros acompanham com o mesmo delta (%) -
+  // e e a fonte da "sensacao de agrupamento".
+  function syncGroupMovement(movingId, record, dx, dy) {
+    if (!record.group || (!dx && !dy)) return;
+    const membros = state.groups[record.group] || [];
+    membros.forEach(mid => {
+      if (mid === movingId) return;
+      const par = state.components.get(mid);
+      if (!par || !par.dom) return;
+      const pos = par.position || {};
+      const x = (pct(pos.x) !== null ? pct(pos.x) : pct(pos.left) || 0) + dx;
+      const y = (pct(pos.y) !== null ? pct(pos.y) : pct(pos.top) || 0) + dy;
+      const geom = resolvePosition(Object.assign({}, pos, { x, y }), 0);
+      applyGeomTo(par.dom, geom);
+      par.position = Object.assign({}, pos, { x, y });
+    });
   }
 
   // Normaliza opcoes de grafico vindas do modelo no formato amigavel
@@ -1261,11 +1394,7 @@
       wrapper.className = 'spatial-card-wrapper entering';
       wrapper.dataset.type = type;
       wrapper.id = `spatial-comp-${id}`;
-      wrapper.style.left = geom.left;
-      wrapper.style.top = geom.top;
-      wrapper.style.width = geom.width;
-      if (geom.height !== 'auto') wrapper.style.height = geom.height;
-      if (geom.maxHeight) wrapper.style.maxHeight = geom.maxHeight;
+      applyGeomTo(wrapper, geom);
 
       const built = buildCardContent(type, props);
 
@@ -1308,7 +1437,20 @@
         if (mountResult) state.activeInstances.set(id, mountResult);
       }
 
-      state.components.set(id, { dom: wrapper, type, position, props, mountResult });
+      const record = {
+        dom: wrapper, type, position, props, mountResult,
+        // estado/grupo vindos do payload (ex: restauracao de layout)
+        state: (typeof arg1 === 'object' && arg1 && arg1.state) || 'visible',
+        group: (typeof arg1 === 'object' && arg1 && arg1.group) || null
+      };
+      state.components.set(id, record);
+      if (record.state && record.state !== 'visible') {
+        setStateClass(wrapper, record.state);
+      }
+      if (record.group) {
+        setGroupClass(wrapper, record.group);
+        registerGroup(record.group, id);
+      }
 
       // Animação de entrada fluida (spring entrance)
       // Animacao de entrada - GSAP quando disponivel (fallback CSS acima)
@@ -1345,31 +1487,91 @@
     updateSpatialComponent(id, updates, animate = true) {
       const record = state.components.get(id);
       if (!record || !record.dom) return false;
+      updates = updates || {};
 
       if (updates.props) {
         Object.assign(record.props, updates.props);
       }
+
+      // ---- Geometria: mover / redimensionar / z-index ----
       if (updates.position) {
-        const geom = resolvePosition(updates.position, 0);
-        record.dom.style.left = geom.left;
-        record.dom.style.top = geom.top;
-        if (geom.width) record.dom.style.width = geom.width;
+        const pos = updates.position;
+        const hasGeom = pos.x !== undefined || pos.left !== undefined;
+        if (hasGeom) {
+          // resolvePosition aplica x/y/width/height/maxHeight/zIndex
+          applyGeomTo(record.dom, resolvePosition(pos, 0));
+        } else {
+          // so width/height (resize puro) ou so zIndex (sobreposicao):
+          // nao passa por resolvePosition para NAO teleportar ao slot
+          if (pos.width !== undefined) {
+            record.dom.style.width =
+              typeof pos.width === 'string' ? pos.width : `${pos.width}%`;
+          }
+          if (pos.height !== undefined && pos.height !== 'auto') {
+            record.dom.style.height =
+              typeof pos.height === 'string' ? pos.height : `${pos.height}%`;
+          }
+        }
+        if (pos.zIndex !== undefined && pos.zIndex !== null && !isNaN(Number(pos.zIndex))) {
+          record.dom.style.zIndex = Number(pos.zIndex);
+        }
+        // registra a posicao nova e move os pares do grupo (delta)
+        let dx = 0, dy = 0;
+        if (hasGeom && record.position) {
+          const novoX = pct(pos.x !== undefined ? pos.x : pos.left);
+          const novoY = pct(pos.y !== undefined ? pos.y : pos.top);
+          const velhoX = pct(record.position.x !== undefined
+            ? record.position.x : record.position.left);
+          const velhoY = pct(record.position.y !== undefined
+            ? record.position.y : record.position.top);
+          if (novoX !== null && velhoX !== null) dx = novoX - velhoX;
+          if (novoY !== null && velhoY !== null) dy = novoY - velhoY;
+        }
+        record.position = Object.assign({}, record.position || {}, pos);
+        if (dx !== 0 || dy !== 0) syncGroupMovement(id, record, dx, dy);
+        // apos transicao de resize (600ms), reencaixa graficos ECharts
+        if (record.mountResult && record.mountResult.instance &&
+            typeof record.mountResult.instance.resize === 'function') {
+          setTimeout(() => {
+            try { record.mountResult.instance.resize(); } catch (e) {}
+          }, 660);
+        }
       }
 
-      // Re-renderiza o corpo do card mantendo o DOM base
-      const bodyEl = record.dom.querySelector('.spatial-card-body');
-      if (bodyEl) {
-        if (record.mountResult && typeof record.mountResult.cleanup === 'function') {
-          record.mountResult.cleanup();
-        }
-        const built = buildCardContent(record.type, record.props);
-        bodyEl.innerHTML = built.html;
-        if (typeof built.mount === 'function') {
-          try {
-            const res = built.mount(record.dom);
-            if (res) state.activeInstances.set(id, res);
-          } catch (err) {
-            console.warn('[Spatial] re-mount falhou (conteudo estatico mantido):', err);
+      // ---- Estado: expanded (zoom) / minimized / focused ----
+      if (updates.state !== undefined) {
+        record.state = updates.state || 'visible';
+        setStateClass(record.dom, record.state);
+      }
+
+      // ---- Grupo: agrupar / separar ----
+      if (updates.group !== undefined) {
+        record.group = updates.group ? String(updates.group) : null;
+        registerGroup(record.group, id);
+        setGroupClass(record.dom, record.group);
+      }
+
+      // Re-renderiza o corpo SO quando o conteudo (props) mudou -
+      // mover/estado/grupo/z-index nao precisam destruir e recriar o visual
+      // (evita matar graficos e inputs em foco).
+      if (updates.props) {
+        const bodyEl = record.dom.querySelector('.spatial-card-body');
+        if (bodyEl) {
+          if (record.mountResult && typeof record.mountResult.cleanup === 'function') {
+            record.mountResult.cleanup();
+          }
+          const built = buildCardContent(record.type, record.props);
+          bodyEl.innerHTML = built.html;
+          if (typeof built.mount === 'function') {
+            try {
+              const res = built.mount(record.dom);
+              if (res) {
+                state.activeInstances.set(id, res);
+                record.mountResult = res;
+              }
+            } catch (err) {
+              console.warn('[Spatial] re-mount falhou (conteudo estatico mantido):', err);
+            }
           }
         }
       }
@@ -1635,7 +1837,14 @@
     buildNewsCard,
     buildWeatherCard,
     buildWhatsappCard,
-    esc
+    esc,
+    state,            // para semear records fake nos testes de manipulacao
+    resolvePosition,
+    applyGeomTo,
+    setStateClass,
+    setGroupClass,
+    registerGroup,
+    pct
   };
 
   if (typeof window !== 'undefined') {

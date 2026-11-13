@@ -4057,30 +4057,32 @@ TOOLS += [
             "type": "function",
             "function": {
                 "name": "spatial_workspace_action",
-                "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espaços visuais contínuos onde múltiplos componentes independentes coexistem e se transformam em tempo real (gráficos interativos Apache ECharts, diagramas estruturados, painéis de inteligência, métricas e visualizações 3D sem depender de slides ou caixas estáticas).",
+                "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espacos visuais onde multiplos componentes coexistem, e MANIPULAR os cards no palco: mover (x,y em %), redimensionar, ampliar/zoom (expand), minimizar, agrupar/separar, ordenar sobreposicao (z-index), destacar, salvar/restaurar layouts e limpar. Cards unicos criados na hora, animados via transicoes CSS.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["compose", "create", "add_component", "update_component", "move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component", "highlight_component", "remove_component", "clear"],
-                            "description": "Ação espacial a executar."
+                            "enum": ["compose", "create", "add_component", "update_component", "move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component", "highlight_component", "z_index_component", "remove_component", "save_layout", "load_layout", "clear"],
+                            "description": "Acao espacial a executar."
                         },
-                        "title": {"type": "string", "description": "Título principal da composição espacial."},
-                        "subtitle": {"type": "string", "description": "Subtítulo ou contexto da explicação."},
-                        "layout": {"type": "string", "enum": ["freeform", "hero_focus", "diagram", "immersive"], "description": "Composição espacial livre; não use grade de cartões."},
+                        "title": {"type": "string", "description": "Titulo principal da composicao espacial."},
+                        "subtitle": {"type": "string", "description": "Subtitulo ou contexto da explicacao."},
+                        "layout": {"type": "string", "enum": ["freeform", "hero_focus", "diagram", "immersive"], "description": "Composicao espacial livre; nao use grade de cartoes."},
                         "components": {
                             "type": "array",
-                            "description": "Lista de componentes para compor no espaço (usado na ação compose).",
+                            "description": "Lista de componentes para compor no espaco (usado na acao compose).",
                             "items": {"type": "object"}
                         },
-                        "component_id": {"type": "string", "description": "ID do componente para ações específicas."},
+                        "component_id": {"type": "string", "description": "ID do componente para acoes especificas (move/resize/expand/minimize/group/z_index/highlight/remove)."},
                         "component_type": {"type": "string", "description": "Tipo: relationship_map, echarts, three_view, smart_canvas, narrative, annotation, media, metric_dock ou signal_list."},
-                        "position": {"type": "object", "description": "Geometria independente: x, y, width, height, depth, zIndex, layer, importance, responsive e allowOverlap; valores em porcentagem do palco."},
+                        "position": {"type": "object", "description": "Geometria: x, y (%% do palco) para mover; width/height (%%) para redimensionar; zIndex para sobreposicao; tambem aceita left/top em string."},
                         "props": {"type": "object", "description": "Propriedades ricas do componente."},
-                        "updates": {"type": "object", "description": "Atualizações pontuais para update_component."}
+                        "updates": {"type": "object", "description": "Atualizacoes pontuais para update_component (props/position/state/group)."}
                         ,"target_id": {"type": "string", "description": "Componente de destino para connect_component."}
-                        ,"group_id": {"type": "string", "description": "Grupo lógico para group_component."}
+                        ,"group_id": {"type": "string", "description": "Nome do grupo para group_component/separate_component - cards do mesmo grupo movem juntos."}
+                        ,"z_mode": {"type": "string", "enum": ["front", "back", "up", "down"], "description": "z_index_component: front=trazer para frente, back=mandar para tras, up/down=ajuste fino de sobreposicao."}
+                        ,"layout_name": {"type": "string", "description": "save_layout/load_layout: nome do layout a salvar ou restaurar."}
                     },
                     "required": ["action"]
                 }
@@ -6572,14 +6574,21 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
                     updates=args.get("updates", {}),
                     animate=bool(args.get("animate", True))
                 )
-            elif act in {"move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component"}:
+            elif act in {"move_component", "resize_component", "focus_component", "expand_component", "minimize_component", "group_component", "separate_component", "connect_component", "z_index_component"}:
                 operation = act.replace("_component", "")
                 params = dict(args.get("updates") or args.get("position") or {})
                 if args.get("target_id"):
                     params["target_id"] = args["target_id"]
                 if args.get("group_id"):
                     params["group_id"] = args["group_id"]
+                if args.get("z_mode"):
+                    params["mode"] = args["z_mode"]
                 return pe.apply_spatial_operation(args.get("component_id"), operation, params)
+            elif act in {"save_layout", "load_layout"}:
+                nome = args.get("layout_name") or args.get("name") or "padrao"
+                if act == "save_layout":
+                    return pe.save_spatial_layout(nome)
+                return pe.load_spatial_layout(nome)
             elif act == "highlight_component":
                 return pe.highlight_spatial_component(
                     component_id=args.get("component_id"),

@@ -203,5 +203,147 @@ check("compose: components dict do backend nao quebra (fonte)", () => {
             "guard antigo (|| []) voltou");
 });
 
+// ------------------------------------------- manipulacao de cards (DOM fake)
+function fakeDom() {
+  const classes = new Set();
+  return {
+    style: {},
+    dataset: {},
+    classList: {
+      add: (...cs) => cs.forEach(c => classes.add(c)),
+      remove: (...cs) => cs.forEach(c => classes.delete(c)),
+      contains: c => classes.has(c),
+      toggle: c => (classes.has(c) ? classes.delete(c) : classes.add(c))
+    },
+    querySelector: () => null,
+    _classes: classes
+  };
+}
+
+function seedRecord(id, overrides) {
+  const dom = fakeDom();
+  const rec = Object.assign({
+    dom,
+    type: "annotation",
+    position: { x: 10, y: 10, width: 30, height: 30 },
+    props: { title: id },
+    mountResult: null,
+    state: "visible",
+    group: null
+  }, overrides || {});
+  T.state.components.set(id, rec);
+  T.state.groups = {};
+  return rec;
+}
+
+check("mover: aplica left/top/width/height/zIndex (geometria completa)", () => {
+  T.state.components.clear();
+  const rec = seedRecord("m1");
+  const ok = engine.updateSpatialComponent("m1", {
+    position: { x: 50, y: 25, width: 40, height: 45, zIndex: 7 }
+  }, false);
+  assert.ok(ok, "update retornou false");
+  assert.strictEqual(rec.dom.style.left, "50%");
+  assert.strictEqual(rec.dom.style.top, "25%");
+  assert.strictEqual(rec.dom.style.width, "40%");
+  assert.strictEqual(rec.dom.style.height, "45%",
+                     "height nao aplicado (resize vertical quebrado)");
+  assert.strictEqual(rec.dom.style.zIndex, 7, "zIndex nao aplicado");
+});
+
+check("z-index parcial: so zIndex, NAO teleporta o card", () => {
+  T.state.components.clear();
+  const rec = seedRecord("z1");
+  rec.dom.style.left = "10%";
+  engine.updateSpatialComponent("z1", { position: { zIndex: 9 } }, false);
+  assert.strictEqual(rec.dom.style.zIndex, 9);
+  assert.strictEqual(rec.dom.style.left, "10%",
+                     "card teleportou ao mudar z-index");
+  assert.strictEqual(rec.position.zIndex, 9, "position nao registrou zIndex");
+});
+
+check("minimizar: classe de estado aplicada/removida", () => {
+  T.state.components.clear();
+  const rec = seedRecord("n1");
+  engine.updateSpatialComponent("n1", { state: "minimized" }, false);
+  assert.ok(rec.dom.classList.contains("spatial-state-minimized"),
+            "sem classe minimized");
+  assert.strictEqual(rec.state, "minimized");
+  // restaura
+  engine.updateSpatialComponent("n1", { state: "visible" }, false);
+  assert.ok(!rec.dom.classList.contains("spatial-state-minimized"),
+            "classe nao removida ao restaurar");
+});
+
+check("expand: classe + zIndex do payload", () => {
+  T.state.components.clear();
+  const rec = seedRecord("e1");
+  engine.updateSpatialComponent("e1", {
+    state: "expanded",
+    position: { x: 12, y: 8, width: 76, height: 78, zIndex: 20 }
+  }, false);
+  assert.ok(rec.dom.classList.contains("spatial-state-expanded"));
+  assert.strictEqual(rec.dom.style.zIndex, 20);
+  assert.strictEqual(rec.dom.style.width, "76%");
+});
+
+check("agrupar: classe visual + registro + rotulo data-group", () => {
+  T.state.components.clear();
+  const a = seedRecord("ga");
+  engine.updateSpatialComponent("ga", { group: "marketing" }, false);
+  assert.ok(a.dom.classList.contains("spatial-grouped"));
+  assert.strictEqual(a.dom.dataset.group, "marketing");
+  assert.deepStrictEqual(T.state.groups["marketing"], ["ga"]);
+  // separar
+  engine.updateSpatialComponent("ga", { group: null }, false);
+  assert.ok(!a.dom.classList.contains("spatial-grouped"));
+  assert.ok(!("marketing" in T.state.groups) ||
+            !T.state.groups["marketing"].includes("ga"));
+});
+
+check("sincronia: mover 1 card do grupo move os pares (delta %)", () => {
+  T.state.components.clear();
+  const a = seedRecord("s1");
+  const b = seedRecord("s2");
+  engine.updateSpatialComponent("s1", { group: "g1" }, false);
+  engine.updateSpatialComponent("s2", { group: "g1" }, false);
+  // s1 em (10,10); s2 em (10,10). Move s1 para (40,30) -> dx=30, dy=20
+  engine.updateSpatialComponent("s1", { position: { x: 40, y: 30 } }, false);
+  assert.strictEqual(a.position.x, 40);
+  assert.strictEqual(b.position.x, 40, "par nao acompanhou o movimento em X");
+  assert.strictEqual(b.position.y, 30, "par nao acompanhou o movimento em Y");
+  assert.strictEqual(b.dom.style.left, "40%");
+  assert.strictEqual(b.dom.style.top, "30%");
+});
+
+check("re-render so acontece quando props mudam", () => {
+  T.state.components.clear();
+  const rec = seedRecord("r1", { props: { title: "antes", content: "x" } });
+  engine.updateSpatialComponent("r1", { position: { x: 20, y: 20 } }, false);
+  assert.strictEqual(rec.props.title, "antes");
+  engine.updateSpatialComponent(
+    "r1", { props: { title: "depois" } }, false);
+  assert.strictEqual(rec.props.title, "depois");
+});
+
+check("fonte: CSS de estados + grupos presentes", () => {
+  const fs = require("fs");
+  const src = fs.readFileSync(
+    require("path").join(__dirname, "..", "web", "jarvis_presentation_engine.js"),
+    "utf8");
+  for (const marca of [
+    "spatial-state-expanded",
+    "spatial-state-minimized",
+    "spatial-state-focused",
+    "spatial-grouped",
+    "content: attr(data-group)"
+  ]) {
+    assert.ok(src.includes(marca), `CSS/fonte sem: ${marca}`);
+  }
+  // minimizado esconde o corpo
+  assert.ok(/spatial-state-minimized[\s\S]{0,200}spatial-card-body\s*\{\s*display:\s*none/
+    .test(src), "minimized nao esconde o body");
+});
+
 console.log("\n" + pass + " passaram, " + fail + " falharam");
 process.exit(fail ? 1 : 0);
