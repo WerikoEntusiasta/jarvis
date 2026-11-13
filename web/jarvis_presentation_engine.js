@@ -855,10 +855,12 @@
 
   // BUILDER: TEXTO simples - resposta pura da IA com botao copiar
   function buildTextCard(p, cRaw) {
-    const texto = String(
-      p.copy_text || p.answer || p.text ||
-      (typeof cRaw === 'string' ? cRaw : (cRaw && (cRaw.text || cRaw.answer)) || p.content || '')
-    ).trim();
+    const candidatos = [
+      p.copy_text, p.answer, p.text,
+      typeof cRaw === 'string' ? cRaw : (cRaw && (cRaw.text || cRaw.answer)),
+      typeof p.content === 'string' ? p.content : ''
+    ];
+    const texto = String(candidatos.find(v => v && String(v).trim()) || '').trim();
     if (!texto) return null;
     const cid = 'txt_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
     return {
@@ -1403,6 +1405,16 @@
     isOpen() {
       return state.components.size > 0;
     }
+  };
+
+  // Exposto apenas para testes automatizados (Node) - nao afeta o runtime
+  engine._test = {
+    normalizeChartOptions,
+    buildCardContent,
+    buildTextCard,
+    buildNewsCard,
+    buildWeatherCard,
+    esc
   };
 
   if (typeof window !== 'undefined') {
