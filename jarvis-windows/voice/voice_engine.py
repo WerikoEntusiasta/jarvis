@@ -454,11 +454,18 @@ class JarvisVoiceEngine(threading.Thread):
 
     # ------------------------------------------------------------------ controle de turnos
     def trigger_manual_listen(self):
-        """Hotkey/wake word: interrompe a fala atual (barge-in) e começa a ouvir."""
+        """Hotkey/wake word: ativa o ÚNICO sistema de voz (QwenLiveVoice no HUD).
+
+        Unificação de voz (2026-11-13): este engine virou apenas DETECTOR de
+        gatilho — nao grava audio nem roda STT/LLM/TTS locais (que geravam a
+        'voz masculina' duplicada junto com a do Qwen). Ele toca o chime e
+        emite on_wake_word (sinal Qt cross-thread) para o HUD ligar a
+        conversa ao vivo com o Qwen. Sem pipeline proprio, state permanece
+        em WAKEWORD e a detecção continua ativa.
+        """
         if self.state == "RECORDING" and not self.followup_mode:
             return
-        self.speaker.stop()
-        self._begin_recording(followup=False)
+        self.speaker.stop()  # barge-in: cala qualquer TTS local pendente
         if self.on_wake_word:
             self.on_wake_word()
         self._play_wake_chime()

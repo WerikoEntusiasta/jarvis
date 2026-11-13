@@ -271,18 +271,15 @@ def main():
         voice.on_hotkey = _on_hotkey
 
     def _on_wake():
-        from PyQt6.QtCore import QTimer
-        def _act():
-            if not hud.isVisible() or hud.isMinimized():
-                hud.showMaximized()
-            hud.raise_()
-            hud.activateWindow()
-            try:
-                ctypes.windll.user32.SetForegroundWindow(int(hud.winId()))
-            except Exception:
-                pass
-            hud.web_view.page().runJavaScript("if (window.showJarvisToast) window.showJarvisToast('🎙 J.A.R.V.I.S. Ouvindo...');")
-        QTimer.singleShot(0, _act)
+        # Wake word chega da thread de voz: QTimer.singleShot(0) NAO dispara
+        # em threads sem event loop (causa raiz da voz duplicada - o HUD nunca
+        # era acionado e o pipeline local STT->LLM->TTS falava sozinho). Usa o
+        # sinal Qt (auto->queued), seguro cross-thread, que mostra o HUD e
+        # ativa o QwenLiveVoice (unico sistema de voz).
+        try:
+            hud.wake_requested.emit()
+        except Exception as e:
+            print(f"[JarvisDesktop] Erro ao emitir wake_requested: {e}")
     if voice:
         voice.on_wake_word = _on_wake
 

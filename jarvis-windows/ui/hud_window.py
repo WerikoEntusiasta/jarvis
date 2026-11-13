@@ -38,6 +38,11 @@ class JarvisWebPage(QWebEnginePage):
         _log(f"[JS Console] {message} (linha {line_number} em {source_id})")
 
 class JarvisHUDWindow(QMainWindow):
+    # Emitido da thread de voz (wake word/hotkey) -> slot queued na GUI thread.
+    # Substitui o QTimer.singleShot(0, ...) que NUNCA disparava de threads sem
+    # event loop (causa raiz: acionamento do HUD morto em silêncio no wake word).
+    wake_requested = pyqtSignal()
+
     def __init__(self, network_client=None, voice_engine=None):
         super().__init__()
         self.network = network_client
@@ -48,6 +53,34 @@ class JarvisHUDWindow(QMainWindow):
         self._init_ui()
         self._setup_shortcuts()
         self._start_bridge_timer()
+        self.wake_requested.connect(self._handle_wake_requested)
+
+    def _handle_wake_requested(self):
+        """GUI thread: traz o HUD e ativa o ÚNICO sistema de voz (Qwen ao vivo)."""
+        try:
+            if not self.isVisible() or self.isMinimized():
+                self.showMaximized()
+            self.raise_()
+            self.activateWindow()
+            try:
+                import ctypes
+                ctypes.windll.user32.SetForegroundWindow(int(self.winId()))
+            except Exception:
+                pass
+            # QwenLiveVoice.start() e idempotente: se ja ativo, nao faz nada;
+            # se indisponivel, apenas informa (NUNCA cai para voz local
+            # duplicada - era ela que respondia em voz masculina no wake word).
+            self.web_view.page().runJavaScript(
+                "if (window.showJarvisToast) window.showJarvisToast('🎙 J.A.R.V.I.S. Ouvindo...'); "
+                "if (window.QwenLiveVoice) { "
+                "  QwenLiveVoice.start().then(function(ok){ "
+                "    if (!ok && window.showJarvisToast) "
+                "      window.showJarvisToast('⚠ Conversa ao vivo indisponível (ponte Qwen)'); "
+                "  }); "
+                "}"
+            )
+        except Exception as e:
+            _log(f"[HUD] Erro ao processar wake_requested: {e}")
 
     def _setup_window_flags(self):
         self.setWindowTitle("J.A.R.V.I.S. High-Tech Interface - Stark HUD")
