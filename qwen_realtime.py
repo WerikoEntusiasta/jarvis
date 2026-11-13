@@ -232,7 +232,15 @@ JARVIS_REALTIME_INSTRUCTIONS = (
     "SOUL.md p/ persona, config.json p/ instrucoes), apresente a mudanca proposta "
     "e aguarde a aprovacao dele; so entao action='approve' com o approval_id "
     "EXATO (reject descarta). A config dos agentes e lida ao vivo: mudanca "
-    "aprovada vale na proxima conversa, sem reiniciar nada."
+    "aprovada vale na proxima conversa, sem reiniciar nada. "
+    "(12) TV LG DO AMBIENTE: 'tv_lg' controla a TV webOS (192.168.3.9). "
+    "'liga a tv' -> on (Wake-on-LAN, confirma em ~10s); 'desliga a tv' -> off "
+    "(se pedir pareamento, DIGA ao Senhor: olhe para a TV e aperte OK/PERMITIR "
+    "no aviso 'Antigravity Remote' em ate 5 min - ao confirmar a TV desliga e "
+    "nunca mais pede); 'volume'/('aumenta'/'abaixa' o volume)/'muda'/"
+    "'desmuda' -> set_volume/volume_up/volume_down/mute/unmute; 'abre o "
+    "PurpleFlix na tv' -> launch (list_apps para outros apps); 'como esta a "
+    "tv?' -> status. NUNCA afirme que ligou/desligou sem ok=true do tool."
 )
 
 

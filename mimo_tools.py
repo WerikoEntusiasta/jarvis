@@ -4142,6 +4142,42 @@ TOOLS += [
         {
             "type": "function",
             "function": {
+                "name": "tv_lg",
+                "description": (
+                    "Controle da TV LG webOS do ambiente (192.168.3.9). Acoes: "
+                    "'status' (TV ligada? pareada?), 'on' (liga via Wake-on-LAN e "
+                    "confirma na rede), 'off' (desliga; se ainda nao pareada, "
+                    "dispara o pareamento - DIGA AO SENHOR: olhe para a TV e "
+                    "aperte OK/PERMITIR em 'Permitir Antigravity Remote?' em ate "
+                    "5 min; ao confirmar a TV desliga e a chave fica salva - "
+                    "depois disso desliga sem prompt), 'pair_status' (pareamento "
+                    "em andamento?), 'volume_up'/'volume_down'/'set_volume' (level "
+                    "0-100)/'get_volume'/'mute'/'unmute', 'launch' (abre app; "
+                    "padrao com.lgtv.purpleflix - PurpleFlix TV; use 'list_apps' "
+                    "para ver os app ids). NAO use luna-send/systemctl para power "
+                    "- nesta TV so o SSAP pareado funciona."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["status", "on", "off", "pair_status",
+                                     "volume_up", "volume_down", "set_volume",
+                                     "get_volume", "mute", "unmute",
+                                     "launch", "list_apps"],
+                            "description": "Acao na TV."
+                        },
+                        "level": {"type": "integer", "description": "set_volume: 0-100."},
+                        "app_id": {"type": "string", "description": "launch: id do app (padrao com.lgtv.purpleflix)."}
+                    },
+                    "required": ["action"]
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "spatial_workspace_action",
                 "description": "Controle do Spatial Intelligence Workspace do J.A.R.V.I.S. Permite criar espacos visuais onde multiplos componentes coexistem, e MANIPULAR os cards no palco: mover (x,y em %), redimensionar, ampliar/zoom (expand), minimizar, agrupar/separar, ordenar sobreposicao (z-index), destacar, salvar/restaurar layouts e limpar. Cards unicos criados na hora, animados via transicoes CSS.",
                 "parameters": {
@@ -6641,6 +6677,11 @@ def execute_tool(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
             # com aprovacao, backup e auditoria (agent_dynamic).
             import agent_dynamic
             return agent_dynamic.handle_tool(args)
+
+        if name == "tv_lg":
+            # TV LG webOS: WoL para ligar, SSAP pareado p/ desligar/volume/apps
+            import tv_lg_control
+            return tv_lg_control.handle_tool(args)
 
         if name == "spatial_workspace_action":
             import dynamic_presentation_engine as pe
