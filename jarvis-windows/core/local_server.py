@@ -944,7 +944,6 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 import waha_client as _wa
                 sess = "jarvis"
                 if "?" in path:
-                    from urllib.parse import urlparse, parse_qs
                     qs = parse_qs(urlparse(path).query)
                     sess = (qs.get("session") or ["jarvis"])[0]
                 self._send_json(_wa.get_qr(sess))
@@ -957,7 +956,6 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 import waha_client as _wa
                 limite = 10
                 if "?" in path:
-                    from urllib.parse import urlparse, parse_qs
                     qs = parse_qs(urlparse(path).query)
                     try:
                         limite = int((qs.get("limit") or ["10"])[0])
