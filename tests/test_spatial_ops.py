@@ -20,6 +20,16 @@ from unittest.mock import patch
 import mimo_tools
 
 
+def setUpModule():
+    # Nada de relay para o HUD real: estes testes criam/varrem cards e o
+    # broadcast cross-process injetaria tudo no palco do app rodando.
+    os.environ["JARVIS_NO_RELAY"] = "1"
+
+
+def tearDownModule():
+    os.environ.pop("JARVIS_NO_RELAY", None)
+
+
 class TestSchemaEspacial(unittest.TestCase):
     def test_enum_contem_todas_as_actions(self):
         alvo = [t for t in mimo_tools.TOOLS

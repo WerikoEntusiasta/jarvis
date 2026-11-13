@@ -31,7 +31,15 @@ def set_cards_dirty(value: bool = True) -> None:
     _CARDS_DIRTY = bool(value)
 
 def _broadcast_to_hud(event_type: str, data: dict) -> bool:
-    """Envia evento para o barramento SSE do HUD local com tolerância ao path de execução."""
+    """Envia evento para o barramento SSE do HUD local com tolerância ao path de execução.
+
+    JARVIS_NO_RELAY=1 desliga TUDO (incluindo o relay cross-process via
+    /api/hud/broadcast). Testes setam esta env para NAO injetar cards/
+    eventos no HUD real do app rodando - o relay transformava cada
+    unittest em 'spam de cards' no palco do usuario.
+    """
+    if os.environ.get("JARVIS_NO_RELAY") == "1":
+        return False
     try:
         try:
             from core.local_server import broadcast_hud_event

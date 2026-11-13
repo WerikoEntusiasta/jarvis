@@ -19,6 +19,17 @@ from qwen_realtime import (
 )
 
 
+def setUpModule():
+    # Testes NUNCA devem enviar eventos ao HUD real do app. O broadcast
+    # tem relay cross-process (POST /api/hud/broadcast) que, rodando fora
+    # do processo do app, despejava cards de teste no palco do usuario.
+    os.environ["JARVIS_NO_RELAY"] = "1"
+
+
+def tearDownModule():
+    os.environ.pop("JARVIS_NO_RELAY", None)
+
+
 def _pcm16(freq_hz: float, segundos: float, taxa: int = 16000) -> bytes:
     t = np.linspace(0, segundos, int(taxa * segundos), endpoint=False)
     onda = (0.4 * np.sin(2 * np.pi * freq_hz * t) * 32767).astype("<i2")
@@ -792,6 +803,12 @@ class TestWebIntel(unittest.TestCase):
 class TestWhatsApp(unittest.TestCase):
     """WhatsApp via WAHA self-hosted (ZimaOS) - tools + card + endpoints."""
 
+    def setUp(self):
+        # cache de status/QR contaminaria entre testes (e com o estado
+        # real do WAHA que muda: SCAN/WORKING/FAILED)
+        import waha_client as wa
+        wa._CACHE.clear()
+
     def test_tools_whatsapp_no_catalogo_e_no_qwen(self):
         import mimo_tools
         from qwen_realtime import carregar_tools_conversa, _TOOLS_DELEGADAS
@@ -818,12 +835,95 @@ class TestWhatsApp(unittest.TestCase):
         self.assertEqual(nomes["Businees"]["status"], "WORKING")
 
     def test_qr_pessoal_dataurl(self):
+        # MOCK: nao depende do estado real do WAHA (que pode estar
+        # FAILED/WORKING a qualquer momento e muda entre execucoes)
         import waha_client as wa
-        r = wa.get_qr("jarvis")
+        png = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+
+        def fake(path, method="GET", payload=None, timeout=25, raw=False):
+            if path == "/api/sessions":
+                return 200, [{"name": "jarvis", "status": "SCAN_QR_CODE",
+                              "me": {}}], ""
+            if path == "/api/jarvis/auth/qr":
+                if raw:
+                    return 200, png, "image/png"
+                return 200, {"mimetype": "image/png", "data": ""}, ""
+            return 404, f"nao mockado: {method} {path}", "err"
+
+        with patch.object(wa, "_api", new=fake):
+            wa._CACHE.clear()
+            r = wa.get_qr("jarvis")
         self.assertTrue(r.get("ok"), r)
         if r.get("connected"):
-            return  # conectado nao precisa de QR
-        self.assertTrue(r["qr"].startswith("data:image/"), "QR nao e dataURL")
+            return
+        self.assertTrue(r["qr"].startswith("data:image/png;base64,"),
+                        f"QR nao e dataURL: {str(r.get('qr'))[:40]}")
+
+    def test_qr_session_failed_reinicia_auto(self):
+        # REGRESSAO UX: session FAILED (pareamento falhou) ficava presa em
+        # "failed" sem saida - agora stop+start automatico -> STARTING.
+        import waha_client as wa
+        chamadas = []
+
+        def fake(path, method="GET", payload=None, timeout=25, raw=False):
+            if path == "/api/sessions":
+                return 200, [{"name": "jarvis", "status": "FAILED",
+                              "me": {}}], ""
+            if path == "/api/sessions/stop":
+                chamadas.append(("stop", dict(payload or {})))
+                return 201, {}, ""
+            if path == "/api/sessions/start":
+                chamadas.append(("start", dict(payload or {})))
+                return 201, {"name": "jarvis", "status": "STARTING"}, ""
+            return 404, f"nao mockado: {method} {path}", "err"
+
+        with patch.object(wa, "_api", new=fake):
+            wa._CACHE.clear()
+            r = wa.get_qr("jarvis")
+
+        self.assertTrue(r.get("ok"), r)
+        self.assertEqual(r.get("status"), "STARTING")
+        self.assertTrue(r.get("reconnecting"))
+        acoes = [c[0] for c in chamadas]
+        self.assertIn("stop", acoes, "recover nao chamou stop")
+        self.assertIn("start", acoes, "recover nao chamou start")
+        self.assertEqual(chamadas[1][1].get("name"), "jarvis")
+        # nao devolve QR ainda (STARTING) - o polling busca em seguida
+        self.assertNotIn("qr", r)
+
+    def test_qr_starting_devolve_mensagem_de_reconexao(self):
+        import waha_client as wa
+
+        def fake(path, method="GET", payload=None, timeout=25, raw=False):
+            if path == "/api/sessions":
+                return 200, [{"name": "jarvis", "status": "STARTING",
+                              "me": {}}], ""
+            return 404, f"nao mockado: {method} {path}", "err"
+
+        with patch.object(wa, "_api", new=fake):
+            wa._CACHE.clear()
+            r = wa.get_qr("jarvis")
+        self.assertTrue(r.get("ok"), r)
+        self.assertIn("Reconectando", r.get("message", ""))
+
+    def test_qr_recover_falha_retorna_erro_claro(self):
+        import waha_client as wa
+
+        def fake(path, method="GET", payload=None, timeout=25, raw=False):
+            if path == "/api/sessions":
+                return 200, [{"name": "jarvis", "status": "FAILED",
+                              "me": {}}], ""
+            if path == "/api/sessions/stop":
+                return 201, {}, ""
+            if path == "/api/sessions/start":
+                return 500, "boom", ""
+            return 404, f"nao mockado: {method} {path}", "err"
+
+        with patch.object(wa, "_api", new=fake):
+            wa._CACHE.clear()
+            r = wa.get_qr("jarvis")
+        self.assertFalse(r.get("ok"))
+        self.assertIn("reiniciar", r.get("error", ""))
 
     def test_unread_shape(self):
         import waha_client as wa
@@ -851,8 +951,21 @@ class TestWhatsApp(unittest.TestCase):
 
     def test_tool_qr_broadcast_sem_base64_ao_modelo(self):
         # a tool nao deve devolver o dataURL ao modelo (gasta tokens)
+        import waha_client as wa
         from mimo_tools import execute_tool
-        r = execute_tool("whatsapp_qr", {"session": "jarvis"})
+        png = b"\x89PNG\r\n\x1a\n" + b"1" * 64
+
+        def fake(path, method="GET", payload=None, timeout=25, raw=False):
+            if path == "/api/sessions":
+                return 200, [{"name": "jarvis", "status": "SCAN_QR_CODE",
+                              "me": {}}], ""
+            if path == "/api/jarvis/auth/qr":
+                return (200, png, "image/png") if raw else (200, {}, "")
+            return 404, f"nao mockado: {method} {path}", "err"
+
+        with patch.object(wa, "_api", new=fake):
+            wa._CACHE.clear()
+            r = execute_tool("whatsapp_qr", {"session": "jarvis"})
         self.assertTrue(r.get("ok"), r)
         self.assertNotIn("qr", r, "dataURL vazou para o modelo")
         self.assertIn("message", r)
@@ -897,6 +1010,20 @@ class TestWhatsApp(unittest.TestCase):
         self.assertEqual(
             internos, [],
             f"imports internos de urllib.parse quebram o handler: {internos}")
+
+    def test_frontend_sem_cache_no_server(self):
+        # REGRESSAO: sem no-store, o cache do QtWebEngine serve JS/HTML
+        # stale entre execucoes do app - fixes nao pegavam no boot
+        # (ex: "comps.forEach is not a function" apos o guard Array.isArray).
+        from pathlib import Path
+        src = Path(r"C:\JARVIS\jarvis-windows\core\local_server.py").read_text(
+            encoding="utf-8", errors="replace")
+        self.assertIn("def end_headers(self):", src)
+        self.assertIn('path.endswith((".js", ".css", ".html"))', src)
+        self.assertIn('"no-store, no-cache, must-revalidate"', src)
+        # o cache de audio (max-age) e o no-cache do SSE continuam la
+        self.assertIn('"public, max-age=3600"', src)
+        self.assertIn('send_header("Cache-Control", "no-cache")', src)
 
     def test_qr_handler_le_query_de_parsed_query(self):
         # REGRESSAO: path no do_GET e so parsed.path (SEM query string).

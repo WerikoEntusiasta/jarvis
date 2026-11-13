@@ -312,6 +312,23 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
+
+
+
+    def end_headers(self):
+        """Frontend sempre fresh.
+
+        Builds frequentes de JS/HTML + o cache persistente do
+        QtWebEngine entre execucoes do app causavam o bug classico
+        'mexi no disco e nao pegou' (JS stale -> handlers antigos
+        quebrando apos fixes, ex: comps.forEach nao e funcao).
+        So forcamos no-store em estaticos de frontend; audio (max-age)
+        e SSE (no-cache) mantem seus headers proprios."""
+        path = (self.path or "").split("?")[0].lower()
+        if path.endswith((".js", ".css", ".html")) or path in ("/", ""):
+            self.send_header("Cache-Control",
+                             "no-store, no-cache, must-revalidate")
+        super().end_headers()
 
 
 

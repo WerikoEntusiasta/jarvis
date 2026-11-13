@@ -162,11 +162,33 @@ def get_sessions() -> Dict[str, Any]:
     return _put(key, {"ok": True, "sessions": saida})
 
 
+def _recover_session(session: str) -> str:
+    """Recupera uma session FAILED/STOPPED (conexao quebrou no pareamento).
+
+    Sequencia validada empiricamente contra o WAHA:
+      - POST /api/sessions/stop {name}  -> 201 (remove a session parada;
+        restart/nao-existente sao erros inofensivos aqui)
+      - POST /api/sessions/start {name} -> 201 STARTING -> SCAN_QR_CODE
+    Retorna o novo status ou 'ERRO:<http>'.
+    """
+    _api("/api/sessions/stop", method="POST", payload={"name": session})
+    st, data, _ = _api("/api/sessions/start", method="POST",
+                       payload={"name": session})
+    _CACHE.pop("sessions", None)  # invalida o cache de status
+    if st in (200, 201):
+        if isinstance(data, dict) and data.get("status"):
+            return str(data["status"])
+        return "STARTING"
+    return f"ERRO:{st}"
+
+
 def get_qr(session: str = "jarvis") -> Dict[str, Any]:
     """QR de pareamento da session como dataURL pronto p/ <img src>.
 
-    So funciona quando a session esta em SCAN_QR_CODE; caso contrario
-    devolve status para o HUD exibir 'conectado'.
+    AUTO-RECOVERY: se a session esta FAILED/STOPPED (pareamento falhou ou
+    foi parada), reinicia sozinha (stop+start) e devolve 'STARTING' - o
+    polling do painel entao busca o QR novo automaticamente, sem travar
+    no 'failed' sem saida.
     """
     session = str(session or "jarvis").strip() or "jarvis"
 
@@ -180,7 +202,24 @@ def get_qr(session: str = "jarvis") -> Dict[str, Any]:
                 "connected": True,
                 "push_name": (atual or {}).get("push_name", ""),
                 "message": "Conectado - QR não necessário."}
-    if status not in ("SCAN_QR_CODE", "STARTING", "NOT_CREATED"):
+
+    # AUTO-RECOVERY de session quebrada
+    if status in ("FAILED", "STOPPED", "CONFLICT"):
+        logger.warning(f"[WahaClient] session '{session}' em {status}; "
+                       f"reiniciando (stop+start)...")
+        status = _recover_session(session)
+        if status.startswith("ERRO"):
+            return {"ok": False, "session": session, "status": "FAILED",
+                    "error": f"falha ao reiniciar a session (HTTP {status[5:]})"}
+        # invalida o cache lido antes do recover
+        _CACHE.pop("sessions", None)
+
+    if status == "STARTING":
+        return {"ok": True, "session": session, "status": "STARTING",
+                "connected": False, "reconnecting": True,
+                "message": "Reconectando a session... QR em instantes."}
+
+    if status not in ("SCAN_QR_CODE", "NOT_CREATED"):
         return {"ok": False, "session": session, "status": status,
                 "error": f"session {session} em estado {status}"}
 

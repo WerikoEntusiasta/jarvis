@@ -3133,6 +3133,13 @@
         if (line) line.innerText = 'Session ativa - sem necessidade de QR.';
         return;
       }
+      // Session reiniciando apos falha (FAILED -> stop+start do WAHA):
+      // mostra estado de reconexao e o polling busca o QR em seguida.
+      if (status === 'STARTING' || status === 'RECONNECTING') {
+        slot.innerHTML = '<span class="text-[11px] text-amber-500 font-bold font-mono-code">🔄 RECONECTANDO...</span>';
+        if (line) line.innerText = 'Session reiniciada - novo QR em instantes...';
+        return;
+      }
       if (qrDataUrl) {
         slot.innerHTML = '';
         const img = document.createElement('img');
