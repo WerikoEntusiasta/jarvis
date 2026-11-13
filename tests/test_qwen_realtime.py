@@ -881,6 +881,23 @@ class TestWhatsApp(unittest.TestCase):
         self.assertIn('"/api/whatsapp/unread"', src)
         self.assertIn('"/api/whatsapp/reply"', src)
 
+    def test_sem_import_interno_urlparse_no_local_server(self):
+        # REGRESSAO: 'from urllib.parse import urlparse' declarado DENTRO de
+        # um metodo transforma urlparse em variavel LOCAL da funcao inteira;
+        # a linha inicial do do_GET (parsed = urlparse(self.path)) entao lanca
+        # UnboundLocalError e TODOS os GET do HUD morrem com conexao fechada.
+        from pathlib import Path
+        import re
+        src = Path(r"C:\JARVIS\jarvis-windows\core\local_server.py").read_text(
+            encoding="utf-8", errors="replace")
+        internos = [
+            ln for ln in src.splitlines()
+            if re.match(r"^\s+from urllib\.parse import", ln)
+        ]
+        self.assertEqual(
+            internos, [],
+            f"imports internos de urllib.parse quebram o handler: {internos}")
+
 
 if __name__ == "__main__":
     unittest.main()
