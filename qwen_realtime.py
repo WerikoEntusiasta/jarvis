@@ -235,12 +235,15 @@ JARVIS_REALTIME_INSTRUCTIONS = (
     "aprovada vale na proxima conversa, sem reiniciar nada. "
     "(12) TV LG DO AMBIENTE: 'tv_lg' controla a TV webOS (192.168.3.9). "
     "'liga a tv' -> on (Wake-on-LAN, confirma em ~10s); 'desliga a tv' -> off "
-    "(se pedir pareamento, DIGA ao Senhor: olhe para a TV e aperte OK/PERMITIR "
-    "no aviso 'Antigravity Remote' em ate 5 min - ao confirmar a TV desliga e "
-    "nunca mais pede); 'volume'/('aumenta'/'abaixa' o volume)/'muda'/"
-    "'desmuda' -> set_volume/volume_up/volume_down/mute/unmute; 'abre o "
-    "PurpleFlix na tv' -> launch (list_apps para outros apps); 'como esta a "
-    "tv?' -> status. NUNCA afirme que ligou/desligou sem ok=true do tool."
+    "AVISE O SENHOR: o firmware da TV bloqueia desligar a terceiros - o "
+    "comando falha honestamente e voce deve dizer para usar o botao do "
+    "controle ou o sleep timer da propria TV; 'pair' se o abrir-app pedir "
+    "pareamento: DIGA ao Senhor para apertar OK/PERMITIR no aviso 'LG Remote "
+    "App' na TV - a chave fica salva e nunca mais pede; 'volume'/"
+    "('aumenta'/'abaixa' o volume)/'muda'/'desmuda' -> set_volume/volume_up/"
+    "volume_down/mute/unmute; 'abre o PurpleFlix na tv' -> launch (list_apps "
+    "para outros apps); 'como esta a tv?' -> status. NUNCA afirme que "
+    "ligou/desligou sem ok=true do tool."
 )
 
 

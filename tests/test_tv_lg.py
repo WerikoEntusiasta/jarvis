@@ -1,13 +1,18 @@
 """
-Testes OFFLINE do controle da TV LG (tv_lg_control.py): WoL, frames SSAP,
-despacho de tool e comportamento com TV inalcancavel — sem tocar na TV real.
-Config vem por env (TV_LG_IP etc.), apontando para portas fechadas aqui.
+Testes OFFLINE do controle da TV LG (tv_lg_control.py) — arquitetura 2026-11-13:
+
+- WoL nativo (magic packet, envios) — sem rede real.
+- Pontes Node (ssap_bridge / nova_luna / ssap_pair_bridge) MOCKADAS: valida
+  o contrato de entrada/saida, o fluxo de cada acao e os fallbacks
+  (mute = setVolume 0 + restaurar; desligar = sleep timer).
+- TV inalcancavel (IP localhost/porta fechada) sem tocar na TV real.
 """
 import json
 import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for p in (ROOT, os.path.join(ROOT, "jarvis-windows")):
@@ -15,31 +20,6 @@ for p in (ROOT, os.path.join(ROOT, "jarvis-windows")):
         sys.path.insert(0, p)
 
 import tv_lg_control as tv
-
-
-class _OfflineTV(unittest.TestCase):
-    """TV 'desligada': IP localhost com porta SSAP fechada; chave inexistente."""
-
-    def setUp(self):
-        self._old = {k: os.environ.get(k) for k in
-                     ("TV_LG_IP", "TV_LG_SSAAP_PORT", "TV_LG_KEY_FILE",
-                      "TV_LG_BIND_IP", "TV_LG_MAC", "TV_LG_BROADCAST")}
-        os.environ["TV_LG_IP"] = "127.0.0.1"
-        os.environ["TV_LG_SSAAP_PORT"] = "1"      # porta fechada
-        os.environ["TV_LG_MAC"] = "78:dd:12:38:4f:8e"
-        os.environ["TV_LG_BROADCAST"] = "127.0.0.255"
-        os.environ["TV_LG_BIND_IP"] = ""           # deixa o SO escolher
-        self._key_tmp = Path(os.environ.get("TEMP", "/tmp")) / "no_such_ssap_key.json"
-        os.environ["TV_LG_KEY_FILE"] = str(self._key_tmp)
-        if self._key_tmp.exists():
-            self._key_tmp.unlink()
-
-    def tearDown(self):
-        for k, v in self._old.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
 
 
 class TestWakeOnLan(unittest.TestCase):
@@ -59,87 +39,188 @@ class TestWakeOnLan(unittest.TestCase):
             tv._magic_packet("zz:dd:12:38:4f:8e")
 
     def test_send_wol_conta_envios(self):
-        """3 destinos x 2 portas = ate 6 envios (redundancia do guia)."""
+        """destinos x portas => envios (redundancia do guia)."""
         sent = tv._send_wol("78:dd:12:38:4f:8e", "",
                             ["255.255.255.255", "127.0.0.1"], [9, 7])
         self.assertGreaterEqual(sent, 1)
 
 
-class TestFramesSSAP(unittest.TestCase):
-    def test_register_com_pareamento_prompt(self):
-        f = tv._register_frame("", "PROMPT")
-        self.assertEqual(f["type"], "register")
-        self.assertEqual(f["payload"]["pairingType"], "PROMPT")
-        self.assertIn("manifest", f["payload"])
-        perms = f["payload"]["manifest"]["signed"]["permissions"]
-        self.assertIn("CONTROL_POWER", perms)
+class TestPontesIndisponiveis(unittest.TestCase):
+    """node/C:/LGTV ausente => falhas amigaveis (nunca excecao crua)."""
 
-    def test_register_com_chave_salva_sem_prompt(self):
-        f = tv._register_frame("minha-chave", "")
-        self.assertNotIn("pairingType", f["payload"])
-        self.assertEqual(f["payload"]["client-key"], "minha-chave")
+    def setUp(self):
+        self._old_dir = os.environ.get("TV_LG_NODE_DIR")
+        os.environ["TV_LG_NODE_DIR"] = r"C:\nao_existe_nada\123"
 
-    def test_request_frame(self):
-        f = tv._request_frame("ssap://system/turnOff")
-        self.assertEqual(f["type"], "request")
-        self.assertEqual(f["uri"], "ssap://system/turnOff")
-        f2 = tv._request_frame("ssap://audio/setVolume", {"volume": 30})
-        self.assertEqual(f2["payload"], {"volume": 30})
+    def tearDown(self):
+        if self._old_dir is None:
+            os.environ.pop("TV_LG_NODE_DIR", None)
+        else:
+            os.environ["TV_LG_NODE_DIR"] = self._old_dir
+
+    def test_node_script_none(self):
+        self.assertIsNone(tv._node_script("ssap_bridge.js"))
+
+    def test_luna_sem_ponte(self):
+        r = tv._luna("com.webos.audio/getVolume", "{}")
+        self.assertFalse(r.get("ok"))
+        self.assertIn("indisponivel", r["error"])
+
+    def test_ssap_sem_ponte(self):
+        r = tv._launch_ssap("com.lgtv.purpleflix")
+        self.assertFalse(r.get("ok"))
+        self.assertIn("indisponivel", r["error"])
+
+    def test_volume_up_sem_ponte(self):
+        r = tv.volume_up()
+        self.assertFalse(r.get("ok"))
 
 
-class TestOffline(_OfflineTV):
+class TestFluxosComPonteMockada(unittest.TestCase):
+    def setUp(self):
+        self._old = {k: os.environ.get(k) for k in
+                     ("TV_LG_IP", "TV_LG_SSAAP_PORT", "TV_LG_KEY_FILE",
+                      "TV_LG_BIND_IP", "TV_LG_MAC", "TV_LG_BROADCAST")}
+        os.environ["TV_LG_IP"] = "127.0.0.1"
+        os.environ["TV_LG_SSAAP_PORT"] = "1"
+        os.environ["TV_LG_MAC"] = "78:dd:12:38:4f:8e"
+        os.environ["TV_LG_BROADCAST"] = "127.0.0.255"
+        os.environ["TV_LG_BIND_IP"] = ""
+        self._key_tmp = Path(os.environ.get("TEMP", "/tmp")) / "no_such_ssap_key.json"
+        os.environ["TV_LG_KEY_FILE"] = str(self._key_tmp)
+        if self._key_tmp.exists():
+            self._key_tmp.unlink()
+
+    def tearDown(self):
+        for k, v in self._old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # ---- status ---------------------------------------------------------- #
+
     def test_tv_desligada_status(self):
         s = tv.status()
         self.assertFalse(s["tv_on"])
         self.assertFalse(s["paired"])
         self.assertTrue(s["ok"])
+        self.assertTrue(s["power_blocked"])
+        self.assertEqual(s["off_method"], "firmware_blocked")
 
-    def test_turn_off_com_tv_desligada_nao_inicia_pareamento(self):
+    def test_status_tv_ligada_sem_chave(self):
+        with patch.object(tv, "is_on", return_value=True):
+            s = tv.status()
+            self.assertTrue(s["tv_on"])
+            self.assertFalse(s["paired"])
+            self.assertFalse(s["can_power_off"])
+            self.assertTrue(s["power_blocked"])
+            self.assertEqual(s["off_method"], "firmware_blocked")
+
+    # ---- desligar (firmware bloqueia) ------------------------------------- #
+
+    def test_turn_off_tv_desligada(self):
         r = tv.turn_off()
         self.assertFalse(r.get("ok"))
         self.assertIn("ligue", r.get("error", ""))
-        self.assertFalse(tv.pair_status()["running"])
 
-    def test_turn_off_sem_chave_com_tv_ligada_dispara_pareamento(self):
-        """TV 'ligada' (porta aberta) sem chave => pareamento PROMPT em background."""
-        # abre um "servidor" fake na porta 3000 para parecer TV ligada
-        import socket
-        srv = socket.socket()
-        srv.bind(("127.0.0.1", 0))
-        srv.listen(1)
-        port = srv.getsockname()[1]
-        os.environ["TV_LG_SSAAP_PORT"] = str(port)
-        try:
+    def test_turn_off_ssap_aceito(self):
+        """Se um firmware futuro liberar turnOff, a acao funciona."""
+        with patch.object(tv, "is_on", return_value=True), \
+             patch.object(tv, "_ssap_bridge") as br:
+            br.return_value = {"ok": True, "last": {}}
             r = tv.turn_off()
-            self.assertTrue(r.get("pairing_started"))
-            self.assertIn("OK/PERMITIR", r["message"])
-            ps = tv.pair_status()
-            self.assertTrue(ps["running"])
-            tv._PAIR_STATE["running"] = False  # encerra o loop de fundo
-        finally:
-            srv.close()
+            self.assertTrue(r["ok"])
+            self.assertEqual(br.call_args[0][0][0]["uri"], "ssap://system/turnOff")
 
-    def test_paired_request_sem_chave(self):
-        r = tv.volume_up()
-        self.assertFalse(r.get("ok"))
-        self.assertIn("pareamento", r.get("error", ""))
+    def test_turn_off_firmware_bloqueia_honesto(self):
+        """Firmware nega => ok=False, firmware_blocked=True, alternativas."""
+        with patch.object(tv, "is_on", return_value=True), \
+             patch.object(tv, "_ssap_bridge") as br:
+            br.return_value = {"ok": False, "error": "401 insufficient permissions"}
+            r = tv.turn_off()
+            self.assertFalse(r["ok"])
+            self.assertTrue(r["firmware_blocked"])
+            self.assertIn("alternatives", r)
+            self.assertTrue(any("controle" in a for a in r["alternatives"]))
+
+    def test_power_info_consolida_diagnostico(self):
+        r = tv.power_blocked_info()
+        self.assertTrue(r["blocked"])
+        self.assertTrue(len(r["tested"]) >= 5)
+        self.assertIn("ligar via WoL", r["working"])
+
+    # ---- launch ----------------------------------------------------------- #
+
+    def test_launch_sem_chave(self):
+        with patch.object(tv, "is_on", return_value=True):
+            r = tv.handle_tool({"action": "launch"})
+            self.assertFalse(r.get("ok"))
+            self.assertIn("pareamento", r["error"])
+
+    def test_launch_formato_uri(self):
+        """Com chave: payload {id} (formato que funciona; ?target= era 404)."""
+        with open(os.environ["TV_LG_KEY_FILE"], "w", encoding="utf-8") as f:
+            json.dump({"clientKey": "k"}, f)
+        with patch.object(tv, "_ssap_bridge") as br:
+            br.return_value = {"ok": True, "last": {"returnValue": True}}
+            r = tv.launch_app("com.lgtv.purpleflix")
+            self.assertTrue(r["ok"])
+            reqs = br.call_args[0][0]
+            self.assertEqual(reqs[0]["uri"], "ssap://system.launcher/open")
+            self.assertEqual(reqs[0]["payload"], {"id": "com.lgtv.purpleflix"})
+
+    # ---- volume / mute ----------------------------------------------------- #
+
+    def test_set_volume_clamp_e_payload(self):
+        with patch.object(tv, "_luna") as luna:
+            luna.return_value = {"ok": True, "data": {}}
+            r = tv.set_volume(250)
+            self.assertTrue(r["ok"])
+            self.assertEqual(r["volume"], 100)
+            self.assertEqual(json.loads(luna.call_args[0][1]), {"volume": 100})
+            r2 = tv.set_volume(-5)
+            self.assertEqual(json.loads(luna.call_args_list[1][0][1]), {"volume": 0})
+            self.assertEqual(r2["volume"], 0)
+
+    def test_mute_guarda_e_zera_unmute_restaura(self):
+        tmp_mute = Path(os.environ.get("TEMP", "/tmp")) / "test_tv_mute.json"
+        with patch.object(tv, "_MUTE_FILE", str(tmp_mute)):
+            with patch.object(tv, "_luna") as luna:
+                def luna_fake(method, payload):
+                    if method.endswith("getVolume"):
+                        return {"ok": True, "data": {"volume": 22, "muted": False}}
+                    return {"ok": True, "data": {}}
+                luna.side_effect = luna_fake
+                r = tv.set_mute(True)
+                self.assertTrue(r["ok"])
+                self.assertTrue(r["muted"])
+                payload = json.loads(luna.call_args_list[-1][0][1])
+                self.assertEqual(payload, {"volume": 0})
+                salvo = json.loads(tmp_mute.read_text())
+                self.assertEqual(salvo["volume"], 22)
+
+                r2 = tv.set_mute(False)
+                self.assertFalse(r2["muted"])
+                payload2 = json.loads(luna.call_args_list[-1][0][1])
+                self.assertEqual(payload2, {"volume": 22})
+
+    # ---- pareamento --------------------------------------------------------- #
 
     def test_handle_tool_acoes_e_erro(self):
         self.assertFalse(tv.handle_tool({"action": "rebobinar"}).get("ok"))
         self.assertTrue(tv.handle_tool({"action": "status"}).get("ok"))
         self.assertTrue(tv.handle_tool({"action": "pair_status"}).get("ok"))
 
-    def test_launch_app_default_purpleflix(self):
-        """Sem TV, launch falha amigavel (mas monta a URI certa com a chave)."""
-        r = tv.handle_tool({"action": "launch"})
-        self.assertFalse(r.get("ok"))  # sem chave nem TV
-        # validacao do app_id padrao via _cfg
-        self.assertEqual(tv._cfg()["default_app"], "com.lgtv.purpleflix")
-
-    def test_set_volume_limites(self):
-        """set_volume fora de 0-100 e clampeado (validacao de frame, offline)."""
-        self.assertEqual(max(0, min(100, 250)), 100)
-        self.assertEqual(max(0, min(100, -5)), 0)
+    def test_start_pairing_dispara_background(self):
+        with patch.object(tv, "is_on", return_value=True), \
+             patch.object(tv, "_pair_loop") as loop:
+            r = tv.start_pairing()
+            self.assertTrue(r.get("pairing_started"))
+            self.assertIn("OK/PERMITIR", r["message"])
+            ps = tv.pair_status()
+            self.assertTrue(ps["running"])
+            tv._PAIR_STATE["running"] = False
 
 
 if __name__ == "__main__":

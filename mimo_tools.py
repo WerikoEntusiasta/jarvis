@@ -4146,23 +4146,24 @@ TOOLS += [
                 "description": (
                     "Controle da TV LG webOS do ambiente (192.168.3.9). Acoes: "
                     "'status' (TV ligada? pareada?), 'on' (liga via Wake-on-LAN e "
-                    "confirma na rede), 'off' (desliga; se ainda nao pareada, "
-                    "dispara o pareamento - DIGA AO SENHOR: olhe para a TV e "
-                    "aperte OK/PERMITIR em 'Permitir Antigravity Remote?' em ate "
-                    "5 min; ao confirmar a TV desliga e a chave fica salva - "
-                    "depois disso desliga sem prompt), 'pair_status' (pareamento "
-                    "em andamento?), 'volume_up'/'volume_down'/'set_volume' (level "
-                    "0-100)/'get_volume'/'mute'/'unmute', 'launch' (abre app; "
-                    "padrao com.lgtv.purpleflix - PurpleFlix TV; use 'list_apps' "
-                    "para ver os app ids). NAO use luna-send/systemctl para power "
-                    "- nesta TV so o SSAP pareado funciona."
+                    "confirma na rede), 'off' (ATENCAO: o firmware da TV BLOQUEIA "
+                    "desligar a terceiros - a acao falha honestamente; AVISE o "
+                    "Senhor para usar o botao do controle ou o sleep timer da "
+                    "propria TV), 'pair' (1a vez: dispara pareamento na TV - DIGA "
+                    "AO SENHOR: olhe para a TV e aperte OK/PERMITIR em 'Permitir "
+                    "LG Remote App?' em ate 5 min; a chave fica salva para "
+                    "sempre), 'pair_status' (pareamento em andamento?), "
+                    "'volume_up'/'volume_down'/'set_volume' (level 0-100)/"
+                    "'get_volume'/'mute'/'unmute', 'launch' (abre app; padrao "
+                    "com.lgtv.purpleflix - PurpleFlix TV; abre sem prompt com a "
+                    "chave pareada), 'list_apps' (pode ser negado pelo firmware)."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["status", "on", "off", "pair_status",
+                            "enum": ["status", "on", "off", "pair", "pair_status",
                                      "volume_up", "volume_down", "set_volume",
                                      "get_volume", "mute", "unmute",
                                      "launch", "list_apps"],

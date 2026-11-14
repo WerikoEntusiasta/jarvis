@@ -1277,7 +1277,7 @@
           <p class="text-[10px] text-slate-500">IP: 192.168.3.9 · SSAP :3000 · WoL <span class="font-mono-code">78:dd:12:38:4f:8e</span></p>
           <div class="grid grid-cols-2 gap-2 pt-1">
             <button onclick="tvAction('on')" id="tv-btn-on" class="py-2 px-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400/50 text-emerald-200 text-[10px] font-mono-code font-bold transition-all text-center">⚡ LIGAR (WoL)</button>
-            <button onclick="tvAction('off')" id="tv-btn-off" class="py-2 px-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-400/50 text-rose-200 text-[10px] font-mono-code font-bold transition-all text-center">⏻ DESLIGAR</button>
+            <button onclick="tvAction('off')" title="Firmware da TV bloqueia desligar a terceiros (testado exaustivamente)" id="tv-btn-off" class="py-2 px-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-400/50 text-rose-200 text-[10px] font-mono-code font-bold transition-all text-center">⏻ DESLIGAR ⛔</button>
             <button onclick="tvAction('volume_down')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔉 VOL −</button>
             <button onclick="tvAction('volume_up')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔊 VOL +</button>
             <button onclick="tvAction('mute')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔇 MUDO</button>
@@ -1285,7 +1285,7 @@
           </div>
           <div class="grid grid-cols-2 gap-2">
             <button onclick="tvAction('launch')" class="py-2 px-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-[10px] font-mono-code font-bold transition-all text-center">🚀 ABRIR PURPLEFLIX</button>
-            <button onclick="refreshTvPanel(true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">⟳ STATUS</button>
+            <button onclick="tvAction('pair')" class="py-2 px-2 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-400/50 text-amber-200 text-[10px] font-mono-code transition-all text-center">🔗 PAREAR (OK na TV)</button>
           </div>
           <div id="tv-feedback" class="text-[9px] font-mono-code text-slate-500 min-h-[14px] leading-relaxed"></div>
         </div>
@@ -3224,8 +3224,8 @@
     function tvStatusText(d) {
       if (!d || d.ok === false) return 'erro ao consultar a TV';
       if (d.pairing_running) return '⏳ PAREAMENTO: aperte OK/PERMITIR na TV (5 min)';
-      if (d.tv_on && d.paired) return '✅ TV LIGADA · pareada · controle total';
-      if (d.tv_on) return '🟢 TV LIGADA · sem chave: desligar pede OK na TV';
+      if (d.tv_on && d.paired) return '✅ TV LIGADA · pareada · volume + apps';
+      if (d.tv_on) return '🟢 TV LIGADA · volume OK · abrir app pede pareamento';
       return '⬛ TV DESLIGADA · liga por WoL';
     }
 
@@ -3255,13 +3255,17 @@
         });
         const d = await r.json();
         let msg = (d && (d.message || d.error)) || (d && d.ok ? 'comando enviado.' : 'falhou.');
-        // Desligar 1a vez: pareamento pede OK na TV (loop em background desliga ao confirmar)
+        // Desligar bloqueado pelo firmware: mensagem honesta com alternativas
+        if (action === 'off' && d && d.ok === false) {
+          msg = '⛔ Firmware da TV bloqueia desligar a terceiros. Use o botão do controle ou o sleep timer da TV (Configurações > Timer).';
+        }
+        // Pareamento 1a vez: aparece 'Permitir LG Remote App?' na TV
         if (d && d.pairing_started) msg += ' — OLHE PARA A TV e aperte OK/PERMITIR (5 min).';
         if (fb) fb.innerText = msg;
         // 'on' pode levar ~10-20s para subir: reconsulta 2x
         refreshTvPanel(false);
         if (action === 'on') setTimeout(refreshTvPanel, 8000);
-        if (action === 'off' && d && d.pairing_started) {
+        if (action === 'pair' && d && d.pairing_started) {
           const poll = setInterval(async () => {
             const st = await (await fetch('/api/tv/lg', { cache: 'no-store' })).json();
             if (st.paired || !st.pairing_running) {
