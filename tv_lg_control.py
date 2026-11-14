@@ -179,6 +179,28 @@ def _request_frame(uri: str, payload: Optional[Dict[str, Any]] = None) -> Dict[s
             "uri": uri, "payload": payload or {}}
 
 
+def _recv_json(ws, deadline: float) -> Optional[Dict[str, Any]]:
+    """Recebe frames ate chegar um JSON valido.
+
+    webOS envia 'earth' (texto puro) ao abrir o WebSocket ANTES de qualquer
+    JSON — JSONDecodeError nele e normal e NAO e erro: so pule o frame.
+    """
+    while time.time() < deadline:
+        try:
+            raw = ws.recv()
+        except Exception:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", "replace")
+        try:
+            msg = json.loads(raw)
+        except Exception:
+            continue  # frame nao-JSON ('earth', ping) — ignora
+        if isinstance(msg, dict):
+            return msg
+    return None
+
+
 def _ssap_exchange(requests: List[Dict[str, Any]], use_prompt: bool = False,
                    timeout: float = 10.0) -> Dict[str, Any]:
     """Abre SSAP, registra (com chave salva, ou PROMPT se pareamento) e executa
@@ -200,15 +222,11 @@ def _ssap_exchange(requests: List[Dict[str, Any]], use_prompt: bool = False,
         results: List[Dict[str, Any]] = []
         pending = list(requests)
         deadline = time.time() + timeout + 3
-        while pending and time.time() < deadline:
-            try:
-                raw = ws.recv()
-            except Exception as e:
+        sent_pending = False
+        while time.time() < deadline:
+            msg = _recv_json(ws, deadline)
+            if msg is None:
                 break
-            try:
-                msg = json.loads(raw)
-            except Exception:
-                continue
             mtype = msg.get("type", "")
             if mtype == "error":
                 return {"ok": False,
@@ -221,13 +239,13 @@ def _ssap_exchange(requests: List[Dict[str, Any]], use_prompt: bool = False,
                 for req in pending:
                     try:
                         ws.send(json.dumps(req))
-                    except Exception as e:
+                    except Exception:
                         break
-                pending = [] if not use_prompt else pending
+                sent_pending = True
                 continue
-            if mtype == "response":
+            if mtype == "response" and sent_pending:
                 results.append(msg.get("payload", {}))
-                if not pending:
+                if pending and len(results) >= len(pending):
                     break
         last = results[-1] if results else {}
         return {"ok": True, "new_client_key": new_key, "responses": results,
@@ -269,9 +287,12 @@ def _pair_loop(max_wait_s: float = 300.0, retry_s: float = 25.0) -> None:
             confirmed = False
             try:
                 ws.send(json.dumps(_register_frame("", "PROMPT")))
-                raw = ws.recv()  # aguarda ate o usuario confirmar (timeout do socket)
-                msg = json.loads(raw)
-                if msg.get("type") == "registered":
+                # recebe ate um JSON valido ('earth' do webOS vem antes e e
+                # texto puro - ignorar, NAO e erro de parse)
+                msg = _recv_json(ws, time.time() + retry_s + 5)
+                if msg is None:
+                    _PAIR_STATE["last_error"] = "sem resposta JSON da TV (timeout)"
+                elif msg.get("type") == "registered":
                     key = str(msg.get("payload", {}).get("client-key", "") or "")
                     if key:
                         with open(c["key_file"], "w", encoding="utf-8") as f:

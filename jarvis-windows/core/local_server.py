@@ -475,6 +475,15 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(e)}, status=500)
             return
 
+        if path == "/api/tv/lg":
+            # TV LG webOS: status (TV ligada? pareada?) — leitura para o card.
+            try:
+                import tv_lg_control as tvc
+                self._send_json(tvc.status())
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
 
 
         # 1. Server-Sent Events (SSE) para o HUD
@@ -2290,6 +2299,21 @@ class JarvisLocalRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Relay cross-process de eventos SSE (tela/canvas/apresentacao):
         # usado por processos externos (ponte de voz) que executam tools.
+        if path == "/api/tv/lg":
+            # TV LG webOS: acoes on/off/volume/mute/launch/status via POST.
+            try:
+                import tv_lg_control as tvc
+                data = json.loads(body.decode("utf-8", errors="ignore") or "{}") if body else {}
+                res = tvc.handle_tool({
+                    "action": str(data.get("action", "status")),
+                    "level": data.get("level", 20),
+                    "app_id": str(data.get("app_id", "")),
+                })
+                self._send_json(res)
+            except Exception as e:
+                self._send_json({"ok": False, "error": str(e)}, status=500)
+            return
+
         if path == "/api/hud/broadcast":
             try:
                 data = json.loads(_decode_body(body)) if body else {}

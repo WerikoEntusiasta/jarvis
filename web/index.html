@@ -1270,21 +1270,24 @@
             <span class="text-xl">📺</span>
             <div>
               <div class="text-[9px] font-mono-code text-cyan-400 uppercase font-bold">SMART TV LG WEBOS</div>
-              <div class="text-xs font-bold text-white">Painel da Sala de Estar</div>
+              <div id="tv-status-line" class="text-[11px] font-bold text-white">verificando TV...</div>
             </div>
+            <button onclick="refreshTvPanel(true)" class="ml-auto text-[9px] font-mono-code px-2 py-1 rounded-lg border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15 transition-all">⟳</button>
           </div>
-          <p class="text-[10px] text-slate-400">IP: 192.168.3.9 | MAC: 78:dd:12:38:4f:8e | Porta 9922</p>
+          <p class="text-[10px] text-slate-500">IP: 192.168.3.9 · SSAP :3000 · WoL <span class="font-mono-code">78:dd:12:38:4f:8e</span></p>
           <div class="grid grid-cols-2 gap-2 pt-1">
-            <button onclick="executeCanvasAction('power_on_tv', '', this)" class="py-2 px-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-[10px] font-mono-code font-bold transition-all text-center">
-              ⚡ LIGAR TV (WoL)
-            </button>
-            <button onclick="executeCanvasAction('launch_tv_app', '', this)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">
-              🚀 ABRIR APP TV
-            </button>
+            <button onclick="tvAction('on')" id="tv-btn-on" class="py-2 px-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400/50 text-emerald-200 text-[10px] font-mono-code font-bold transition-all text-center">⚡ LIGAR (WoL)</button>
+            <button onclick="tvAction('off')" id="tv-btn-off" class="py-2 px-2 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-400/50 text-rose-200 text-[10px] font-mono-code font-bold transition-all text-center">⏻ DESLIGAR</button>
+            <button onclick="tvAction('volume_down')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔉 VOL −</button>
+            <button onclick="tvAction('volume_up')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔊 VOL +</button>
+            <button onclick="tvAction('mute')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔇 MUDO</button>
+            <button onclick="tvAction('unmute')" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">🔈 SOM</button>
           </div>
-          <button onclick="executeCanvasAction('test_tv_projection', '', this)" class="w-full py-1.5 rounded-xl bg-sky-950/50 hover:bg-sky-900/60 border border-sky-500/40 text-sky-200 text-[10px] font-mono-code transition-all">
-            📡 PROJETAR TELA DE TESTE
-          </button>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="tvAction('launch')" class="py-2 px-2 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400/50 text-cyan-200 text-[10px] font-mono-code font-bold transition-all text-center">🚀 ABRIR PURPLEFLIX</button>
+            <button onclick="refreshTvPanel(true)" class="py-2 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-mono-code transition-all text-center">⟳ STATUS</button>
+          </div>
+          <div id="tv-feedback" class="text-[9px] font-mono-code text-slate-500 min-h-[14px] leading-relaxed"></div>
         </div>
 
         <div class="glass-card-stark rounded-xl p-3 w-full space-y-2">
@@ -2198,6 +2201,10 @@
         // WhatsApp: busca status + QRs e inicia polling (QR expira sozinho)
         if (tabId === 'whatsapp' && typeof refreshWhatsappPanel === 'function') {
           refreshWhatsappPanel(true);
+        }
+        // TV LG: atualiza status do card ao abrir a aba
+        if (tabId === 'settings' && typeof refreshTvPanel === 'function') {
+          refreshTvPanel(false);
         }
       }
 
@@ -3207,6 +3214,66 @@
       } catch (err) {
         renderWhatsappQR(session, null, 'erro ao buscar QR');
       }
+    }
+
+    // ================================================================
+    // CARD DA TV LG (webOS) — controle real via /api/tv/lg (tv_lg_control)
+    // ================================================================
+    let _tvBusy = false;
+
+    function tvStatusText(d) {
+      if (!d || d.ok === false) return 'erro ao consultar a TV';
+      if (d.pairing_running) return '⏳ PAREAMENTO: aperte OK/PERMITIR na TV (5 min)';
+      if (d.tv_on && d.paired) return '✅ TV LIGADA · pareada · controle total';
+      if (d.tv_on) return '🟢 TV LIGADA · sem chave: desligar pede OK na TV';
+      return '⬛ TV DESLIGADA · liga por WoL';
+    }
+
+    async function refreshTvPanel(showFeedback) {
+      const line = document.getElementById('tv-status-line');
+      const fb = document.getElementById('tv-feedback');
+      try {
+        const r = await fetch('/api/tv/lg', { cache: 'no-store' });
+        const d = await r.json();
+        if (line) line.innerText = tvStatusText(d);
+        if (showFeedback && fb) fb.innerText = 'status: ' + (d.message || tvStatusText(d));
+      } catch (err) {
+        if (line) line.innerText = 'erro de conexão com o servidor';
+      }
+    }
+
+    async function tvAction(action, extra) {
+      const fb = document.getElementById('tv-feedback');
+      if (_tvBusy) return;
+      _tvBusy = true;
+      if (fb) fb.innerText = 'executando ' + action + ' na TV...';
+      try {
+        const r = await fetch('/api/tv/lg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({ action: action }, extra || {})),
+        });
+        const d = await r.json();
+        let msg = (d && (d.message || d.error)) || (d && d.ok ? 'comando enviado.' : 'falhou.');
+        // Desligar 1a vez: pareamento pede OK na TV (loop em background desliga ao confirmar)
+        if (d && d.pairing_started) msg += ' — OLHE PARA A TV e aperte OK/PERMITIR (5 min).';
+        if (fb) fb.innerText = msg;
+        // 'on' pode levar ~10-20s para subir: reconsulta 2x
+        refreshTvPanel(false);
+        if (action === 'on') setTimeout(refreshTvPanel, 8000);
+        if (action === 'off' && d && d.pairing_started) {
+          const poll = setInterval(async () => {
+            const st = await (await fetch('/api/tv/lg', { cache: 'no-store' })).json();
+            if (st.paired || !st.pairing_running) {
+              clearInterval(poll);
+              refreshTvPanel(true);
+            }
+          }, 10000);
+        }
+      } catch (err) {
+        if (fb) fb.innerText = 'erro de conexão com o servidor';
+      }
+      _tvBusy = false;
     }
 
     function connectHudEvents() {
